@@ -1,4 +1,6 @@
 # ChatForYou v2 - WebRTC 화상채팅 & 게임 플랫폼
+## 2025.06.12 현재 브렌치는 앞으로 작업 전 백업용 브렌치
+
 [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FSeJonJ%2FChatForYou_v2&count_bg=%233310C8&title_bg=%2316C86B&icon=&icon_color=%23E7E7E7&title=HITS&edge_flat=true)](https://hits.seeyoufarm.com)
 
 ## 📋 프로젝트 개요
