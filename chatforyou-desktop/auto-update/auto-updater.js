@@ -143,7 +143,10 @@ class AutoUpdateManager {
       resizable: false,
       modal: true,
       parent: this.mainWindow,
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default'
+      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      closable: false,        // X 버튼 비활성화
+      minimizable: false,     // 최소화 방지
+      maximizable: false      // 최대화 방지
     });
 
     const updateUrl = `file://${path.join(__dirname, 'update_popup.html')}?version=${updateVersion}`;
@@ -176,6 +179,13 @@ class AutoUpdateManager {
     if (this.updateWindow) {
       this.updateWindow.close();
       this.updateWindow = null;
+    }
+    
+    // 강제 업데이트: 업데이트 창을 닫으면 앱 종료
+    if (this.updateInfo && typeof this.updateInfo === 'object') {
+      this.logger.info('강제 업데이트: 사용자가 업데이트를 거부하여 앱 종료');
+      const { app } = require('electron');
+      app.quit();
     }
   }
 
