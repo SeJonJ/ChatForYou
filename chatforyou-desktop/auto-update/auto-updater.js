@@ -146,7 +146,8 @@ class AutoUpdateManager {
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       closable: false,        // X 버튼 비활성화
       minimizable: false,     // 최소화 방지
-      maximizable: false      // 최대화 방지
+      maximizable: false,      // 최대화 방지,
+      autoHideMenuBar: true,   // 메뉴바 자동 숨기기
     });
 
     const updateUrl = `file://${path.join(__dirname, 'update_popup.html')}?version=${updateVersion}`;
