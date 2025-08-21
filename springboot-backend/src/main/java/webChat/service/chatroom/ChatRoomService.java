@@ -20,6 +20,8 @@ import webChat.model.room.in.ChatRoomInVo;
 import webChat.service.analysis.AnalysisService;
 import webChat.service.chatroom.SseService;
 import webChat.service.file.FileService;
+import webChat.service.kafka.ChatKafkaProducer;
+import webChat.service.kafka.KafkaService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 
@@ -42,13 +44,16 @@ public class ChatRoomService {
 
     private final SseService sseService;
 
+    private final KafkaService kafkaService;
+    private final ChatKafkaProducer chatKafkaProducer;
+
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
 
     private final List<RoomState> ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED);
 
     // roomName 로 채팅방 만들기
-    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo) throws BadRequestException {
+    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo) throws Exception {
 
         this.validateRoomInfo(chatRoomInVo.getRoomName(), chatRoomInVo.getMaxUserCnt());
 
@@ -57,6 +62,8 @@ public class ChatRoomService {
             ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(chatRoomInVo);
             // 새로운 방 생성 시 모든 클라이언트에 이벤트 전송
             sseService.sendRoomCreatedEvent(chatRoom);
+//            kafkaService.sendMessage("createRoom", chatRoom);
+            chatKafkaProducer.sendCreateRoomEvent(chatRoom);
             return chatRoom;
         } else {
             throw new BadRequestException("room type is not exist : " + chatRoomInVo.getRoomType());

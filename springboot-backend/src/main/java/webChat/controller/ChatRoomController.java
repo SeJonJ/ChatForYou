@@ -52,7 +52,7 @@ public class ChatRoomController {
     // 채팅방 생성 후 다시 / 로 return
     @PostMapping("/room")
     public ResponseEntity<ChatForYouResponse> createRoom(
-            @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
+            @RequestBody ChatRoomInVo chatRoomInVo) throws Exception {
 
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
         ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo);
