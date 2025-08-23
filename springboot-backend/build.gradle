@@ -4,7 +4,6 @@ plugins {
 	id 'java'
 }
 
-group = 'Terian'
 version = '6.11'
 sourceCompatibility = '17'
 targetCompatibility = '17'
