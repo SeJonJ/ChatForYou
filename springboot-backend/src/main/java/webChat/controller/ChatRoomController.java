@@ -1,18 +1,24 @@
 package webChat.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import webChat.config.InstanceProvider;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.ChatRoom;
+import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.routing.RoutingService;
 import webChat.service.social.PrincipalDetails;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +30,67 @@ import java.util.List;
 public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
+    private final RoutingService routingService;
+    private final InstanceProvider instanceProvider;
+
+    // 채팅방 생성
+    @PostMapping("/room")
+    public ResponseEntity<ChatForYouResponse> createRoom(
+            HttpServletResponse response,
+            @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
+
+        // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
+        ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo);
+        // cookie 설정
+        routingService.setRoomCookie(room.getRoomId(), room.getInstanceId(), response);
+        if(RoomState.REDIRECT.equals(room.getRoomState())){
+            // 2. 현재 서버가 선택된 서버가 아니면 리다이렉트
+            return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
+                    .header("Location", "/chatforyou/api/chat/room")
+                    .build();
+        }
+
+        log.info("CREATE Chat Room Id[{}] :: Room Name [{}] :: InstanceId [{}]", room.getRoomName(), room.getRoomName(), room.getInstanceId());
+
+        return ResponseEntity.ok(ChatForYouResponse.ofCreateRoom(room));
+    }
+
+    // 채팅방 입장
+    @GetMapping("/room/{roomId}")
+    public ResponseEntity<ChatForYouResponse> joinRoom(
+            Model model,
+            @PathVariable String roomId,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @AuthenticationPrincipal PrincipalDetails principalDetails) throws BadRequestException {
+
+        // 1. 쿠키에서 instnaceId 확인
+        String cookieInstanceId = routingService.getInstanceIdFromCookie(roomId, request);
+        if ((cookieInstanceId != null && !instanceProvider.isHealthy(cookieInstanceId))
+                || !instanceProvider.getInstanceId().equals(cookieInstanceId)) {
+            // 2. roomId 에 매칭되는 instanceId 세팅
+            routingService.setRoomCookie(roomId, response);
+            return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
+                    .header("Location", "/chatforyou/api/chat/room/" + roomId)
+                    .build();
+        }
+
+        // principalDetails 가 null 이 아니라면 로그인 된 상태!!
+        if (principalDetails != null) {
+            // 세션에서 로그인 유저 정보를 가져옴
+            model.addAttribute("user", principalDetails.getUser());
+        }
+
+        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+
+        model.addAttribute("room", chatRoom);
+
+        if (ChatType.MSG.equals(chatRoom.getChatType())) {
+            return ResponseEntity.ok(null);
+        }else{
+            return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom));
+        }
+    }
 
     @GetMapping("/room/list")
     public ResponseEntity<List<ChatRoomOutVo>> goChatRooms(
@@ -46,46 +113,6 @@ public class ChatRoomController {
             responses.add(ChatRoomOutVo.of(room));
         });
         return ResponseEntity.ok(responses);
-    }
-
-    // 채팅방 생성
-    // 채팅방 생성 후 다시 / 로 return
-    @PostMapping("/room")
-    public ResponseEntity<ChatForYouResponse> createRoom(
-            @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
-
-        // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
-        ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo);
-
-        log.info("CREATE Chat Room [{}]", room);
-
-        return ResponseEntity.ok(ChatForYouResponse.ofCreateRoom(room));
-    }
-
-    // 채팅방 입장
-    @GetMapping("/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> roomDetail(
-            Model model,
-            @PathVariable String roomId,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) throws BadRequestException {
-
-        log.info("roomId {}", roomId);
-
-        // principalDetails 가 null 이 아니라면 로그인 된 상태!!
-        if (principalDetails != null) {
-            // 세션에서 로그인 유저 정보를 가져옴
-            model.addAttribute("user", principalDetails.getUser());
-        }
-
-        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
-
-        model.addAttribute("room", chatRoom);
-
-        if (ChatType.MSG.equals(chatRoom.getChatType())) {
-            return ResponseEntity.ok(null);
-        }else{
-            return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom));
-        }
     }
 
     // 채팅방 비밀번호 확인

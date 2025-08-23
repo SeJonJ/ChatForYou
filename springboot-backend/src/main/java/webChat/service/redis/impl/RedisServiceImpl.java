@@ -26,6 +26,7 @@ import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.service.redis.RedisService;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -305,7 +306,7 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
-    public void insertChatRoom(ChatRoom chatRoom) {
+    public void saveChatRoom(ChatRoom chatRoom) {
         String redisKey = "roomId:" + chatRoom.getRoomId();
         // 채팅방 객체 저장
         masterTemplate.opsForHash().put(redisKey, DataType.CHATROOM.getType(), chatRoom);
@@ -438,13 +439,25 @@ public class RedisServiceImpl implements RedisService {
                     try {
                         return slaveTemplate.opsForHash().get(key, "roomName");
                     } catch (Exception e) {
-                        // 로깅 처리
+                        // TODO 로깅 처리
                         return null;
                     }
                 })
                 .filter(Objects::nonNull)
                 .map(Object::toString)
                 .anyMatch(roomName::equals);
+    }
+
+    @Override
+    public void saveRoomServerMapping(String roomId, String instanceId) {
+        masterTemplate.opsForValue().set("room:mapping:" + roomId, instanceId);
+        // 서버 삭제 타이밍 고려할 것
+        masterTemplate.expire("room:mapping:" + roomId, Duration.ofHours(24));
+    }
+
+    @Override
+    public String getServerByRoomId(String roomId) {
+        return (String)slaveTemplate.opsForValue().get("room:mapping:" + roomId);
     }
 
 }

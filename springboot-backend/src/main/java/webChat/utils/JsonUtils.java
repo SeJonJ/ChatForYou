@@ -31,4 +31,12 @@ public class JsonUtils {
         }
     }
 
+    public static String objToJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to convert Object to JSON", e);
+        }
+    }
+
 }

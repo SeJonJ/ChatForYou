@@ -8,6 +8,7 @@ import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import webChat.config.InstanceProvider;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
@@ -22,6 +23,7 @@ import webChat.service.chatroom.SseService;
 import webChat.service.file.FileService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
+import webChat.service.routing.RoutingService;
 
 import java.util.*;
 
@@ -41,6 +43,8 @@ public class ChatRoomService {
     private final AnalysisService analysisService;
 
     private final SseService sseService;
+    private final InstanceProvider instanceProvider;
+    private final RoutingService routingService;
 
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
@@ -53,10 +57,23 @@ public class ChatRoomService {
         this.validateRoomInfo(chatRoomInVo.getRoomName(), chatRoomInVo.getMaxUserCnt());
 
         if(ChatType.RTC.equals(chatRoomInVo.getRoomType())) {
-            analysisService.increaseDailyRoomCnt();
-            ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(chatRoomInVo);
+
+            String roomId = UUID.randomUUID().toString();
+            // instanceId - roomId 매핑 저장
+            String selectedInstanceId = routingService.saveRoomInstanceId(roomId);
+
+            // 현재 서버의 instanceId 확인
+            // 만약 현재 instanceId 와 다를 시 리다이렉트
+            if(!instanceProvider.getInstanceId().equals(selectedInstanceId)) {
+                return ChatRoom.ofRedirect(roomId, selectedInstanceId);
+            }
+
+            ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(roomId, selectedInstanceId, chatRoomInVo);
+
             // 새로운 방 생성 시 모든 클라이언트에 이벤트 전송
             sseService.sendRoomCreatedEvent(chatRoom);
+
+            analysisService.increaseDailyRoomCnt();
             return chatRoom;
         } else {
             throw new BadRequestException("room type is not exist : " + chatRoomInVo.getRoomType());

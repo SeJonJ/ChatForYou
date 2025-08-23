@@ -42,7 +42,7 @@ public interface RedisService {
 
     List<KurentoRoom> getChatRoomListForDelete(int searchCount) throws BadRequestException;
 
-    void insertChatRoom(ChatRoom chatRoom);
+    void saveChatRoom(ChatRoom chatRoom);
 
     <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz) throws BadRequestException;
 
@@ -55,4 +55,18 @@ public interface RedisService {
     void updateChatRoom(ChatRoom chatRoom);
 
     boolean checkRoomName(String roomName);
+
+    /**
+     * roomID 를 기준으로 instanceId 를 저장
+     * @param roomId 방 id
+     * @param instanceId 서버 instanceId
+     */
+    void saveRoomServerMapping(String roomId, String instanceId);
+
+    /**
+     * roomId 를 기준으로 서버 instanceId 를 가져옴
+     * @param roomId 방 id
+     * @return 서버 instanceID
+     */
+    String getServerByRoomId(String roomId);
 }
