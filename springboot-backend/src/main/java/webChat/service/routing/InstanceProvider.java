@@ -1,4 +1,4 @@
-package webChat.config;
+package webChat.service.routing;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 @Getter
 @Slf4j
 @RequiredArgsConstructor
-public class InstanceProvider {
+public abstract class InstanceProvider {
     // kafka 토픽 설정
     private final String TOPIC_SERVER_EVENTS = "server-lifecycle-events";
     // 서버당 가상 노드 수
@@ -66,7 +66,7 @@ public class InstanceProvider {
         // 3. Kafka를 통해 다른 서버들에게 자신의 시작을 알림
         publishServerEvent(ServerEvent.SERVER_STARTED, instanceId);
 
-        log.info("Instance {} initialized and announced to cluster", instanceId);
+        log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
     }
 
     /**
@@ -78,7 +78,7 @@ public class InstanceProvider {
             String eventJson = JsonUtils.objToJson(event);
 
             kafkaTemplate.send(TOPIC_SERVER_EVENTS, instanceId, eventJson);
-            log.debug("Published {} event for server {}", eventType, instanceId);
+            log.info("===== Published {} event for server {} =====", eventType, instanceId);
 
         } catch (Exception e) {
             log.error("Failed to publish server event: {} for {}", eventType, instanceId, e);
@@ -111,12 +111,14 @@ public class InstanceProvider {
             switch (event.getEventType()) {
                 case SERVER_STARTED:
                     addServer(event.getInstanceId());
-                    log.info("Added server {} to hash ring via Kafka event", event.getInstanceId());
+                    log.info("===== Added server {} to hash ring via Kafka event", event.getInstanceId());
+                    // 다른 서버에 '나' 에 해당하는 instanceId 전파
+                    publishServerEvent(ServerEvent.SERVER_STARTED, instanceId);
                     break;
 
                 case SERVER_STOPPED:
                     removeServer(event.getInstanceId());
-                    log.info("Removed server {} from hash ring via Kafka event", event.getInstanceId());
+                    log.info("===== Removed server {} from hash ring via Kafka event", event.getInstanceId());
                     break;
 
                 default:
@@ -146,7 +148,7 @@ public class InstanceProvider {
         long targetHash = tailMap.isEmpty() ? hashRing.firstKey() : tailMap.firstKey();
 
         String selectedServer = hashRing.get(targetHash);
-        log.debug("Room {} mapped to server {}", roomId, selectedServer);
+        log.info("===== Room {} mapped to server {}", roomId, selectedServer);
 
         return selectedServer;
     }
@@ -170,7 +172,7 @@ public class InstanceProvider {
         activeServers.add(instanceId);
         serverHashCache.put(instanceId, hashes);
 
-        log.info("Added server: {} with {} virtual nodes", instanceId, hashes.size());
+        log.info("===== Added server: {} with {} virtual nodes", instanceId, hashes.size());
     }
 
     /**
@@ -235,7 +237,7 @@ public class InstanceProvider {
      * @param input 입력 문자열
      * @return 64비트 해시 값
      */
-    private long computeHash(String input) {
+    protected long computeHash(String input) {
         return hashFunction.hashString(input, StandardCharsets.UTF_8).asLong();
     }
 

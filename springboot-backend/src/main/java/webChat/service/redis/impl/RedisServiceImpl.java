@@ -10,6 +10,8 @@ import io.github.dengliming.redismodule.redisearch.index.Document;
 import io.github.dengliming.redismodule.redisearch.search.SearchOptions;
 import io.github.dengliming.redismodule.redisearch.search.SortBy;
 import io.lettuce.core.RedisException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
@@ -44,6 +46,12 @@ public class RedisServiceImpl implements RedisService {
     private final ObjectMapper objectMapper;
     private final RediSearchClient rediSearchClient;
     private final long REDIS_TIMEOUT = 1L;
+
+    private final String ROOM_ID_PREFIX = "roomId:";
+    private final String USER_ID_PREFIX = "userId:";
+    private static final String INSTANCE_COOKIE_PREFIX = "instance-cookie:"; // 인스턴스 - 쿠키 매핑
+    private static final String COOKIE_INSTANCE_PREFIX = "cookie-instance:"; // 쿠키 - 인스턴스 매핑
+    private static final long INSTANCE_MAPPING_TTL = 86400L; // 24시간
 
     public RedisServiceImpl(
             @Qualifier("masterRedisTemplate") RedisTemplate<String, Object> masterTemplate,
@@ -117,7 +125,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void setObjectOpsHash(@NonNull String roomId, DataType dataType, Object o) {
-        String redisKey = "roomId:" + roomId;
+        String redisKey = ROOM_ID_PREFIX + roomId;
 
         // Redis에 객체 저장
         masterTemplate.opsForHash().put(redisKey, dataType.getType(), o);
@@ -188,6 +196,18 @@ public class RedisServiceImpl implements RedisService {
     public void decrementUserCount(KurentoRoom kurentoRoom) {
         kurentoRoom.setUserCount(kurentoRoom.getUserCount() - 1);
         this.updateChatRoom(kurentoRoom);
+    }
+
+    @Override
+    public long increment(String key, long delta) {
+        return Optional.ofNullable(masterTemplate.opsForValue().increment(key, delta))
+                .orElse(0L);
+    }
+
+    @Override
+    public long decrement(String key, long delta) {
+        return Optional.ofNullable(masterTemplate.opsForValue().decrement(key, delta))
+                .orElse(0L);
     }
 
     /**
@@ -265,7 +285,7 @@ public class RedisServiceImpl implements RedisService {
      * @return 정리된 키
      */
     private String cleanKey(String key) {
-        return key.replace("\"", "").replace("roomId:", "");
+        return key.replace("\"", "").replace(ROOM_ID_PREFIX, "");
     }
 
     @Override
@@ -299,7 +319,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void updateChatRoom(ChatRoom chatRoom) {
-        String redisKey = "roomId:" + chatRoom.getRoomId();
+        String redisKey = ROOM_ID_PREFIX + chatRoom.getRoomId();
         masterTemplate.opsForHash().put(redisKey, DataType.CHATROOM.getType(), chatRoom);
         masterTemplate.opsForHash().put(redisKey, "roomName", chatRoom.getRoomName());
         masterTemplate.opsForHash().put(redisKey, "state", chatRoom.getRoomState());
@@ -307,7 +327,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void saveChatRoom(ChatRoom chatRoom) {
-        String redisKey = "roomId:" + chatRoom.getRoomId();
+        String redisKey = ROOM_ID_PREFIX + chatRoom.getRoomId();
         // 채팅방 객체 저장
         masterTemplate.opsForHash().put(redisKey, DataType.CHATROOM.getType(), chatRoom);
         masterTemplate.opsForHash().put(redisKey, "roomId", chatRoom.getRoomId());
@@ -345,7 +365,7 @@ public class RedisServiceImpl implements RedisService {
 
     @NotNull
     private String makeRedisKey(String roomId) {
-        return roomId.contains("roomId:") ? roomId : "roomId:" + roomId;
+        return roomId.contains(ROOM_ID_PREFIX) ? roomId : ROOM_ID_PREFIX + roomId;
     }
 
     @Override
@@ -403,7 +423,7 @@ public class RedisServiceImpl implements RedisService {
 //            case LOGIN_USER:
 //                if (!StringUtil.isNullOrEmpty(keyword)) {
 //                    // 검색어가 있을 때: userId 또는 nickName 필드 검색
-//                    queryParam = "((@userId:*" + keyword + "*) | (@nickName:*" + keyword + "*))";
+//                    queryParam = "((@USER_ID_PREFIX*" + keyword + "*) | (@nickName:*" + keyword + "*))";
 //                }
 //                searchOptions = new SearchOptions()
 //                        .page(pageNum * pageSize, pageSize)  // 페이지 설정
@@ -429,7 +449,7 @@ public class RedisServiceImpl implements RedisService {
             return false; // 유효하지 않은 입력
         }
 
-        Set<String> keys = slaveTemplate.keys("roomId:*");
+        Set<String> keys = slaveTemplate.keys(ROOM_ID_PREFIX+"*");
         if (keys == null || keys.isEmpty()) {
             return false;
         }
@@ -458,6 +478,81 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public String getServerByRoomId(String roomId) {
         return (String)slaveTemplate.opsForValue().get("room:mapping:" + roomId);
+    }
+
+    // instanceId와 nginx 쿠키 매핑 저장 (양방향)
+    @Override
+    public void saveInstanceCookieMapping(String instanceId, String nginxCookieValue) {
+        try {
+            // instanceId → nginxCookie 매핑
+            masterTemplate.opsForValue().set(
+                    INSTANCE_COOKIE_PREFIX + instanceId,
+                    nginxCookieValue,
+                    INSTANCE_MAPPING_TTL,
+                    TimeUnit.SECONDS
+            );
+
+            // nginxCookie → instanceId 역방향 매핑
+            masterTemplate.opsForValue().set(
+                    COOKIE_INSTANCE_PREFIX + nginxCookieValue,
+                    instanceId,
+                    INSTANCE_MAPPING_TTL,
+                    TimeUnit.SECONDS
+            );
+
+            log.info("Saved instance-cookie mapping: {} <-> {}", instanceId, nginxCookieValue);
+        } catch (Exception e) {
+            log.error("Failed to save instance-cookie mapping", e);
+        }
+    }
+
+    // instanceId로 nginx 쿠키 조회
+    @Override
+    public String getCookieByInstanceId(String instanceId) {
+        try {
+            String nginxCookie = (String)slaveTemplate.opsForValue().get(INSTANCE_COOKIE_PREFIX + instanceId);
+            if (nginxCookie != null) {
+                log.info("Found nginx cookie for instanceId {}: {}", instanceId, nginxCookie);
+                return nginxCookie;
+            }
+            log.debug("No nginx cookie found for instanceId: {}", instanceId);
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get nginx cookie for instanceId: {}", instanceId, e);
+            return null;
+        }
+    }
+
+    // nginx 쿠키로 instanceId 역조회
+    @Override
+    public String getInstanceIdByCookie(String nginxCookie) {
+        try {
+            String instanceId = (String) masterTemplate.opsForValue().get(COOKIE_INSTANCE_PREFIX + nginxCookie);
+            if (instanceId != null) {
+                log.debug("Found instanceId for nginx cookie {}: {}", nginxCookie, instanceId);
+                return instanceId;
+            }
+            log.debug("No instanceId found for nginx cookie: {}", nginxCookie);
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get instanceId for nginx cookie: {}", nginxCookie, e);
+            return null;
+        }
+    }
+
+    @Override
+    public long getInstanceRoomCount(String key) {
+        return Optional.ofNullable(slaveTemplate.opsForValue().get(key))
+                .map(val -> {
+                    if (val instanceof String s) { // 문자열로 저장된 경우
+                        return Long.parseLong(s);
+                    } else if (val instanceof Number n) { // 이미 숫자 타입으로 들어온 경우
+                        return n.longValue();
+                    } else {
+                        return 0L;
+                    }
+                })
+                .orElse(0L);
     }
 
 }

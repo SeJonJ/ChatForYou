@@ -7,8 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
-import webChat.config.InstanceProvider;
+import webChat.service.routing.InstanceProvider;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
@@ -19,10 +18,10 @@ import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.service.analysis.AnalysisService;
-import webChat.service.chatroom.SseService;
 import webChat.service.file.FileService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
+import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
 
 import java.util.*;
@@ -43,7 +42,7 @@ public class ChatRoomService {
     private final AnalysisService analysisService;
 
     private final SseService sseService;
-    private final InstanceProvider instanceProvider;
+    private final RoutingInstanceProvider instanceProvider;
     private final RoutingService routingService;
 
     @Value("${chatforyou.room.max_user_count}")
@@ -62,8 +61,7 @@ public class ChatRoomService {
             // instanceId - roomId 매핑 저장
             String selectedInstanceId = routingService.saveRoomInstanceId(roomId);
 
-            // 현재 서버의 instanceId 확인
-            // 만약 현재 instanceId 와 다를 시 리다이렉트
+            // 현재 서버가 선택된 서버가 아니면 리다이렉트
             if(!instanceProvider.getInstanceId().equals(selectedInstanceId)) {
                 return ChatRoom.ofRedirect(roomId, selectedInstanceId);
             }
@@ -72,7 +70,8 @@ public class ChatRoomService {
 
             // 새로운 방 생성 시 모든 클라이언트에 이벤트 전송
             sseService.sendRoomCreatedEvent(chatRoom);
-
+            // 방 생성 후 방 개수 증가
+            instanceProvider.incrementInstanceRoomCount();
             analysisService.increaseDailyRoomCnt();
             return chatRoom;
         } else {
@@ -179,6 +178,7 @@ public class ChatRoomService {
         }
         // 방 삭제 시 모든 클라이언트에 이벤트 전송
         sseService.sendRoomDeletedEvent(kurentoRoom);
+
         log.info("Room {} state changed {}", kurentoRoom.getRoomId(), RoomState.INACTIVE.getType());
         return true;
     }

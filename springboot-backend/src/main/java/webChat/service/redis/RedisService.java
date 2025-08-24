@@ -2,6 +2,7 @@ package webChat.service.redis;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.dengliming.redismodule.redisearch.index.Document;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import org.apache.coyote.BadRequestException;
 import webChat.model.redis.DataType;
@@ -37,6 +38,9 @@ public interface RedisService {
 
     void decrementUserCount(KurentoRoom kurentoRoom);
 
+    long increment(String key, long delta);
+
+    long decrement(String key, long delta);
 
     Set<String> getKeysByPattern(String pattern);
 
@@ -69,4 +73,10 @@ public interface RedisService {
      * @return 서버 instanceID
      */
     String getServerByRoomId(String roomId);
+
+    void saveInstanceCookieMapping(String instanceId, String nginxCookieValue);
+    String getCookieByInstanceId(String instanceId);
+    String getInstanceIdByCookie(String nginxCookie);
+    long getInstanceRoomCount(String key);
+
 }

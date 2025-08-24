@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
-import webChat.config.InstanceProvider;
+import webChat.service.routing.InstanceProvider;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.RoomState;
@@ -18,6 +18,7 @@ import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
 import webChat.service.social.PrincipalDetails;
 import java.util.ArrayList;
@@ -31,18 +32,19 @@ public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
     private final RoutingService routingService;
-    private final InstanceProvider instanceProvider;
+    private final RoutingInstanceProvider instanceProvider;
 
     // 채팅방 생성
     @PostMapping("/room")
     public ResponseEntity<ChatForYouResponse> createRoom(
+            HttpServletRequest request,
             HttpServletResponse response,
             @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
 
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
         ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo);
         // cookie 설정
-        routingService.setRoomCookie(room.getRoomId(), room.getInstanceId(), response);
+        routingService.setRoomCookie(request, response, room.getInstanceId());
         if(RoomState.REDIRECT.equals(room.getRoomState())){
             // 2. 현재 서버가 선택된 서버가 아니면 리다이렉트
             return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
@@ -65,11 +67,11 @@ public class ChatRoomController {
             @AuthenticationPrincipal PrincipalDetails principalDetails) throws BadRequestException {
 
         // 1. 쿠키에서 instnaceId 확인
-        String cookieInstanceId = routingService.getInstanceIdFromCookie(roomId, request);
+        String cookieInstanceId = routingService.getInstanceIdFromCookie(request);
         if ((cookieInstanceId != null && !instanceProvider.isHealthy(cookieInstanceId))
                 || !instanceProvider.getInstanceId().equals(cookieInstanceId)) {
             // 2. roomId 에 매칭되는 instanceId 세팅
-            routingService.setRoomCookie(roomId, response);
+            routingService.setRoomCookie(request, response, cookieInstanceId);
             return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
                     .header("Location", "/chatforyou/api/chat/room/" + roomId)
                     .build();
