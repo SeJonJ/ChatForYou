@@ -30,17 +30,17 @@ public class CookieCheckEvent {
     @Value("${server.port:8080}")
     private int serverPort;
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Async
-    public void collectOwnCookieAsync() {
-        try {
-            Thread.sleep(5000);
-            collectOwnCookie();
-        } catch (Exception e) {
-            this.handleLocalEnvironment();
-            log.error("Failed to collect own cookie", e);
-        }
-    }
+//    @EventListener(ApplicationReadyEvent.class)
+//    @Async
+//    public void collectOwnCookieAsync() {
+//        try {
+//            Thread.sleep(5000);
+//            collectOwnCookie();
+//        } catch (Exception e) {
+//            this.handleLocalEnvironment();
+//            log.error("Failed to collect own cookie", e);
+//        }
+//    }
 
     private void collectOwnCookie() {
         try {
