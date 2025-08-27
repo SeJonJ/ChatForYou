@@ -87,6 +87,8 @@ const RoomPopup = {
         const $btn = $('#modalCreateRoomBtn');
         let originalText = $btn.html();
         if (self.createRoom()) {
+            setCookie('room-id', '', -1); // 쿠키 삭제
+
             // 로딩 UI 적용
             $btn.prop('disabled', true);
             $btn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 생성 중...');

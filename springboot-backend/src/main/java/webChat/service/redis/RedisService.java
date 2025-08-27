@@ -2,13 +2,13 @@ package webChat.service.redis;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.dengliming.redismodule.redisearch.index.Document;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import org.apache.coyote.BadRequestException;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
+import webChat.model.routing.RoomRoutingInfo;
 
 import java.util.List;
 import java.util.Map;
@@ -61,22 +61,16 @@ public interface RedisService {
     boolean checkRoomName(String roomName);
 
     /**
-     * roomID 를 기준으로 instanceId 를 저장
-     * @param roomId 방 id
-     * @param instanceId 서버 instanceId
+     * roomID 를 기준으로 instanceId 및 cookie 를 저장
+     * @param roomRoutingInfo roomId, instanceId, cookie 가 매핑된 객체
      */
-    void saveRoomServerMapping(String roomId, String instanceId);
-
+    void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo);
     /**
-     * roomId 를 기준으로 서버 instanceId 를 가져옴
-     * @param roomId 방 id
-     * @return 서버 instanceID
+     * roomID 를 기준으로 roomRoutinginfo 객체 확인
+     * @param roomId 방Id
      */
-    String getServerByRoomId(String roomId);
+    RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId);
 
-    void saveInstanceCookieMapping(String instanceId, String nginxCookieValue);
-    String getCookieByInstanceId(String instanceId);
-    String getInstanceIdByCookie(String nginxCookie);
     long getInstanceRoomCount(String key);
 
 }

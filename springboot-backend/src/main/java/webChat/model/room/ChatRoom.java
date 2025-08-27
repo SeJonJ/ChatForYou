@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
 import webChat.model.chat.ChatType;
+import webChat.model.room.in.ChatRoomInVo;
 
 import java.util.Objects;
 
@@ -45,9 +46,15 @@ public class ChatRoom {
     }
 
     @JsonIgnore
-    public static ChatRoom ofRedirect(@NotNull String roomId, @NotNull String instanceId){
+    public static ChatRoom ofRedirect(@NotNull ChatRoomInVo chatRoomInVo, @NotNull String roomId, @NotNull String instanceId){
         return ChatRoom.builder()
                 .roomId(roomId)
+                .roomName(chatRoomInVo.getRoomName())
+                .userCount(chatRoomInVo.getUserCount())
+                .maxUserCnt(chatRoomInVo.getMaxUserCnt())
+                .roomPwd(chatRoomInVo.getRoomPwd())
+                .secretChk(chatRoomInVo.isSecretChk())
+                .chatType(chatRoomInVo.getRoomType())
                 .instanceId(instanceId)
                 .roomState(RoomState.REDIRECT)
                 .build();

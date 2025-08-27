@@ -4,7 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
+import webChat.utils.StringUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +45,16 @@ public class RoutingInstanceProvider extends InstanceProvider {
         return redisService.getInstanceRoomCount(key);
     }
 
-    // 기존 getServerForRoom 메서드 오버라이드
     @Override
     public String getServerForRoom(String roomId) {
         if (getHashRing().isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
+        }
+
+        RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
+        if(roomRoutingInfo != null && !StringUtil.isNullOrEmpty(roomRoutingInfo.getInstanceId())) {
+            return roomRoutingInfo.getInstanceId();
         }
 
         // 1. Consistent hashing 으로 후보 서버들 선택 (상위 3개)

@@ -23,6 +23,7 @@ import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
+import webChat.utils.StringUtil;
 
 import java.util.*;
 
@@ -51,19 +52,19 @@ public class ChatRoomService {
     private final List<RoomState> ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED);
 
     // roomName 로 채팅방 만들기
-    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo) throws BadRequestException {
+    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo, String roomId) throws BadRequestException {
 
         this.validateRoomInfo(chatRoomInVo.getRoomName(), chatRoomInVo.getMaxUserCnt());
 
         if(ChatType.RTC.equals(chatRoomInVo.getRoomType())) {
 
-            String roomId = UUID.randomUUID().toString();
+            roomId = StringUtil.isNullOrEmpty(roomId) ? UUID.randomUUID().toString() : roomId;
             // instanceId - roomId 매핑 저장
-            String selectedInstanceId = routingService.saveRoomInstanceId(roomId);
+            String selectedInstanceId = instanceProvider.getServerForRoom(roomId);
 
             // 현재 서버가 선택된 서버가 아니면 리다이렉트
             if(!instanceProvider.getInstanceId().equals(selectedInstanceId)) {
-                return ChatRoom.ofRedirect(roomId, selectedInstanceId);
+                return ChatRoom.ofRedirect(chatRoomInVo, roomId, selectedInstanceId);
             }
 
             ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(roomId, selectedInstanceId, chatRoomInVo);
@@ -171,6 +172,7 @@ public class ChatRoomService {
         KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         if(kurentoRoom.getUserCount() <= 0) {
+            // 채팅방 state 를 deactive 로 업데이트 -> batch 로 삭제
             kurentoRoom.deactivate();
             redisService.updateChatRoom(kurentoRoom);
         } else {
@@ -178,6 +180,7 @@ public class ChatRoomService {
         }
         // 방 삭제 시 모든 클라이언트에 이벤트 전송
         sseService.sendRoomDeletedEvent(kurentoRoom);
+        instanceProvider.decrementInstanceRoomCount();
 
         log.info("Room {} state changed {}", kurentoRoom.getRoomId(), RoomState.INACTIVE.getType());
         return true;

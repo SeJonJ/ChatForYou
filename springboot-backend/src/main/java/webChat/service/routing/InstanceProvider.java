@@ -103,8 +103,8 @@ public abstract class InstanceProvider {
         try {
             KafkaServerEvent event = JsonUtils.jsonToObj(record.value(), KafkaServerEvent.class);
 
-            // 자신이 발행한 이벤트는 무시
-            if (event.getInstanceId().equals(instanceId)) {
+            // 자신이 발행한 이벤트이거나 이미 ActiveServers 에 속한 서버인 경우 무시
+            if (event.getInstanceId().equals(instanceId) || this.isHealthy(event.getInstanceId())) {
                 return;
             }
 

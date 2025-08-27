@@ -4,8 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 public interface RoutingService {
-    String saveRoomInstanceId(String roomId);
-//    String getRoomInstanceId(String roomId);
-   String getInstanceIdFromCookie(HttpServletRequest request);
-    void setRoomCookie(HttpServletRequest request, HttpServletResponse response, String instanceId);
+    String getNginxCookie(HttpServletRequest request);
+    String getRoomIdCookie(HttpServletRequest request);
+    void setRoomCookie(HttpServletRequest request, HttpServletResponse response, String roomId, String selectedInstanceId);
+    void setRoomCookie(HttpServletResponse response, String roomId, String nginxCookie);
 }

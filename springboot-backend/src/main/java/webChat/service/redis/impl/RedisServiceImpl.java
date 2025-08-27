@@ -10,8 +10,6 @@ import io.github.dengliming.redismodule.redisearch.index.Document;
 import io.github.dengliming.redismodule.redisearch.search.SearchOptions;
 import io.github.dengliming.redismodule.redisearch.search.SortBy;
 import io.lettuce.core.RedisException;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
@@ -26,6 +24,7 @@ import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -51,6 +50,7 @@ public class RedisServiceImpl implements RedisService {
     private final String USER_ID_PREFIX = "userId:";
     private static final String INSTANCE_COOKIE_PREFIX = "instance-cookie:"; // 인스턴스 - 쿠키 매핑
     private static final String COOKIE_INSTANCE_PREFIX = "cookie-instance:"; // 쿠키 - 인스턴스 매핑
+    private static final String ROOM_ROUTING_PREFIX = "room:mapping:";
     private static final long INSTANCE_MAPPING_TTL = 86400L; // 24시간
 
     public RedisServiceImpl(
@@ -450,7 +450,7 @@ public class RedisServiceImpl implements RedisService {
         }
 
         Set<String> keys = slaveTemplate.keys(ROOM_ID_PREFIX+"*");
-        if (keys == null || keys.isEmpty()) {
+        if (keys.isEmpty()) {
             return false;
         }
 
@@ -469,75 +469,13 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
-    public void saveRoomServerMapping(String roomId, String instanceId) {
-        masterTemplate.opsForValue().set("room:mapping:" + roomId, instanceId);
-        // 서버 삭제 타이밍 고려할 것
-        masterTemplate.expire("room:mapping:" + roomId, Duration.ofHours(24));
+    public void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo) {
+        masterTemplate.opsForValue().set(ROOM_ROUTING_PREFIX+roomRoutingInfo.getRoomId(), roomRoutingInfo);
     }
 
     @Override
-    public String getServerByRoomId(String roomId) {
-        return (String)slaveTemplate.opsForValue().get("room:mapping:" + roomId);
-    }
-
-    // instanceId와 nginx 쿠키 매핑 저장 (양방향)
-    @Override
-    public void saveInstanceCookieMapping(String instanceId, String nginxCookieValue) {
-        try {
-            // instanceId → nginxCookie 매핑
-            masterTemplate.opsForValue().set(
-                    INSTANCE_COOKIE_PREFIX + instanceId,
-                    nginxCookieValue,
-                    INSTANCE_MAPPING_TTL,
-                    TimeUnit.SECONDS
-            );
-
-            // nginxCookie → instanceId 역방향 매핑
-            masterTemplate.opsForValue().set(
-                    COOKIE_INSTANCE_PREFIX + nginxCookieValue,
-                    instanceId,
-                    INSTANCE_MAPPING_TTL,
-                    TimeUnit.SECONDS
-            );
-
-            log.info("Saved instance-cookie mapping: {} <-> {}", instanceId, nginxCookieValue);
-        } catch (Exception e) {
-            log.error("Failed to save instance-cookie mapping", e);
-        }
-    }
-
-    // instanceId로 nginx 쿠키 조회
-    @Override
-    public String getCookieByInstanceId(String instanceId) {
-        try {
-            String nginxCookie = (String)slaveTemplate.opsForValue().get(INSTANCE_COOKIE_PREFIX + instanceId);
-            if (nginxCookie != null) {
-                log.info("Found nginx cookie for instanceId {}: {}", instanceId, nginxCookie);
-                return nginxCookie;
-            }
-            log.debug("No nginx cookie found for instanceId: {}", instanceId);
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to get nginx cookie for instanceId: {}", instanceId, e);
-            return null;
-        }
-    }
-
-    // nginx 쿠키로 instanceId 역조회
-    @Override
-    public String getInstanceIdByCookie(String nginxCookie) {
-        try {
-            String instanceId = (String) masterTemplate.opsForValue().get(COOKIE_INSTANCE_PREFIX + nginxCookie);
-            if (instanceId != null) {
-                log.debug("Found instanceId for nginx cookie {}: {}", nginxCookie, instanceId);
-                return instanceId;
-            }
-            log.debug("No instanceId found for nginx cookie: {}", nginxCookie);
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to get instanceId for nginx cookie: {}", nginxCookie, e);
-            return null;
-        }
+    public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) {
+        return (RoomRoutingInfo) slaveTemplate.opsForValue().get(ROOM_ROUTING_PREFIX + roomId);
     }
 
     @Override

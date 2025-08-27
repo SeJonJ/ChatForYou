@@ -12,6 +12,7 @@ public class ChatForYouResponse {
     private String message;
     private Object data;
     private static final String SUCCESS_RESULT = "success";
+    private static final String REDIRECT = "success";
 
     public static ChatForYouResponse ofSuccess(String data) {
         return ChatForYouResponse.builder()
