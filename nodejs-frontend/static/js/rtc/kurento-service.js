@@ -228,11 +228,31 @@ function register() {
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (result) => {
             if (result?.data) {
-                if(result.data.roomState === 'REDIRECT'){
+                kurentoRoomInfo = result.data;
+                if(kurentoRoomInfo.roomState === 'REDIRECT'){
                     console.log('room redirect to : ', result.data.roomId);
                     location.reload();
                 }
-                kurentoRoomInfo = result.data;
+                
+                // 방 정보가 있으면 필요한 데이터 할당
+                if (kurentoRoomInfo) {
+                    userId = kurentoRoomInfo.userId || kurentoRoomInfo.uuid;
+                    nickName = kurentoRoomInfo.nickName;
+                    roomId = kurentoRoomInfo.roomId;
+                    roomName = kurentoRoomInfo.roomName;
+                    // 추가 정보: userCount, maxUserCnt, roomPwd, secretChk, roomType 등
+                }
+
+                $('#room-header').text('ROOM ' + roomName);
+                $('#room').css('display', 'block');
+
+                let message = {
+                    id: 'joinRoom',
+                    nickName : nickName,
+                    userId: userId,
+                    roomId: roomId,
+                }
+                sendMessageToServer(message);
             }
         };
         const errorCallback = (error) => {
@@ -240,28 +260,9 @@ function register() {
         };
         // AJAX 요청 실행
         ajax(url, 'GET', false, '', successCallback, errorCallback);
-        // 방 정보가 있으면 필요한 데이터 할당
-        if (kurentoRoomInfo) {
-            userId = kurentoRoomInfo.userId || kurentoRoomInfo.uuid;
-            nickName = kurentoRoomInfo.nickName;
-            roomId = kurentoRoomInfo.roomId;
-            roomName = kurentoRoomInfo.roomName;
-            // 추가 정보: userCount, maxUserCnt, roomPwd, secretChk, roomType 등
-        }
     } catch (e) {
         console.error('kurentoRoomInfo 파싱 오류:', e);
     }
-
-    document.getElementById('room-header').innerText = 'ROOM ' + roomName;
-    document.getElementById('room').style.display = 'block';
-
-    let message = {
-        id: 'joinRoom',
-        nickName : nickName,
-        userId: userId,
-        roomId: roomId,
-    }
-    sendMessageToServer(message);
 }
 
 function onNewParticipant(request) {

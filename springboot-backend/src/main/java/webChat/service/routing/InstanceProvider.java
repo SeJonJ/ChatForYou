@@ -12,8 +12,6 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
-import webChat.utils.JsonUtils;
-
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -105,8 +103,7 @@ public abstract class InstanceProvider {
 
     @KafkaListener(
             topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
-            groupId = "server-lifecycle-listener", // 고정
-            clientIdPrefix = "ChatForYou-"  // 각 인스턴스 식별용
+            groupId = "server-lifecycle-listener-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
     )
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
