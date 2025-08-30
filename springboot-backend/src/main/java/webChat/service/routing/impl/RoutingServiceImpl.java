@@ -47,7 +47,9 @@ public class RoutingServiceImpl implements RoutingService {
                 currentNginxCookie = instanceProvider.getInstanceId();
             }
 
-            redisService.saveRoomRoutingInfo(RoomRoutingInfo.of(roomId, selectedInstanceId, currentNginxCookie, System.currentTimeMillis()));
+            // 3. selectedInstanceId 를 현재 instanceId 로 수정
+            // -> 결국, selectedInstanceId 의 cookie 를 알 수 없음으로 cookie 확인 가능한 instance 로 수정
+            redisService.saveRoomRoutingInfo(RoomRoutingInfo.of(roomId, instanceProvider.getInstanceId(), currentNginxCookie, System.currentTimeMillis()));
             log.info("roomId : [{}] instanceId : [{}] : cookie : [{}] saved", roomId, selectedInstanceId, currentNginxCookie);
             Cookie nginxCookie = new Cookie(CHATFORYOU_SERVER_COOKIE, currentNginxCookie);
             nginxCookie.setPath("/");

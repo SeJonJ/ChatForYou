@@ -26,7 +26,6 @@ public class ChatRoom {
     private ChatType chatType; //  채팅 타입 여부
     private Long createDate; // 생성일
     private RoomState roomState;
-    @JsonIgnore
     @NotNull
     private String instanceId; // room 이 배치된 서버 ID
 

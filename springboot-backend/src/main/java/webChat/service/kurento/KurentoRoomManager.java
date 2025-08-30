@@ -215,7 +215,7 @@ public class KurentoRoomManager {
 
   public ChatRoom createKurentoRoom(String roomId, String instanceId, ChatRoomInVo chatRoomInVo) {
 
-    KurentoRoom room = new KurentoRoom(roomId, chatRoomInVo.getRoomName(), chatRoomInVo.getCreator(), chatRoomInVo.getRoomPwd(), chatRoomInVo.isSecretChk(), 0, chatRoomInVo.getMaxUserCnt(), chatRoomInVo.getRoomType(), instanceId);;
+    KurentoRoom room = new KurentoRoom(roomId, chatRoomInVo.getRoomName(), chatRoomInVo.getCreator(), chatRoomInVo.getRoomPwd(), chatRoomInVo.isSecretChk(), 0, chatRoomInVo.getMaxUserCnt(), chatRoomInVo.getRoomType(), instanceId);
 
     // redis 에 저장
     redisService.saveChatRoom(room);

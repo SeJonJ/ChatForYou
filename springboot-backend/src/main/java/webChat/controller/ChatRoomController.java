@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.model.response.common.ChatForYouResponse;
@@ -69,17 +70,19 @@ public class ChatRoomController {
             @PathVariable String roomId,
             HttpServletResponse response) throws BadRequestException {
 
-        RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
-        if (StringUtil.isNullOrEmpty(roomRoutingInfo.getInstanceId()) || !instanceProvider.isHealthy(roomRoutingInfo.getInstanceId())){
-            // TODO 예외처리 어떻게할지 서버가 죽었을때 어떻게...?
-        }
-
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
 
-        if (!instanceProvider.getInstanceId().equals(roomRoutingInfo.getInstanceId())) {
+        if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
+            // TODO 서버가 죽었을때 예외처리 필요 :: 임시 조치로 메인 대시보드로 이동
+            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
+        }
+
+
+        if (!instanceProvider.getInstanceId().equals(chatRoom.getInstanceId())) {
+            RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
             // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
             routingService.setRoomCookie(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
-            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom));
+            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));
         }
 
         model.addAttribute("room", chatRoom);
