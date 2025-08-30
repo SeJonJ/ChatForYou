@@ -2,12 +2,13 @@ package webChat.service.routing;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,7 @@ public abstract class InstanceProvider {
 
     private String instanceId;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     public void initInstanceId() {
         log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
 
@@ -60,10 +61,10 @@ public abstract class InstanceProvider {
         // 2. 자신을 해시 링에 먼저 추가 (부팅 시 즉시 사용 가능하도록)
         addServer(instanceId);
 
-        // 2. Discovery 요청 발행 (기존 서버들에게 자신의 존재를 알림)
+        // 3. Discovery 요청 발행 (기존 서버들에게 자신의 존재를 알림)
         publishServerEvent(ServerEvent.SERVER_DISCOVERY_REQUEST, instanceId);
 
-        // 3. Kafka를 통해 다른 서버들에게 자신의 시작을 알림
+        // 4. Kafka를 통해 다른 서버들에게 자신의 시작을 알림
         // 이때 약간의 지연 후 정식 시작 알림 (다른 서버들의 응답을 받을 시간 확보)
         CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
                 .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
@@ -103,7 +104,7 @@ public abstract class InstanceProvider {
 
     @KafkaListener(
             topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
-            groupId = "server-lifecycle-listener-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
+            groupId = "server-lifecycle-group-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
     )
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
