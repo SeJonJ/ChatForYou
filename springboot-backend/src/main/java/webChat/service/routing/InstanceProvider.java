@@ -11,23 +11,22 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-import webChat.model.kafka.KafkaServerEvent;
-import webChat.model.kafka.ServerEvent;
+import webChat.model.kafka.*;
 import webChat.utils.JsonUtils;
 
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Getter
 @Slf4j
 @RequiredArgsConstructor
 public abstract class InstanceProvider {
-    // kafka 토픽 설정
-    private final String TOPIC_SERVER_EVENTS = "server-lifecycle-events";
     // 서버당 가상 노드 수
     private final int DEFAULT_VIRTUAL_NODES = 150;
     // Thread-safe 해시 링
@@ -39,7 +38,7 @@ public abstract class InstanceProvider {
     // 현재 활성 서버들
     private final Set<String> activeServers = ConcurrentHashMap.newKeySet();
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
 
     private String instanceId;
 
@@ -63,8 +62,13 @@ public abstract class InstanceProvider {
         // 2. 자신을 해시 링에 먼저 추가 (부팅 시 즉시 사용 가능하도록)
         addServer(instanceId);
 
+        // 2. Discovery 요청 발행 (기존 서버들에게 자신의 존재를 알림)
+        publishServerEvent(ServerEvent.SERVER_DISCOVERY_REQUEST, instanceId);
+
         // 3. Kafka를 통해 다른 서버들에게 자신의 시작을 알림
-        publishServerEvent(ServerEvent.SERVER_STARTED, instanceId);
+        // 이때 약간의 지연 후 정식 시작 알림 (다른 서버들의 응답을 받을 시간 확보)
+        CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
+                .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
 
         log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
     }
@@ -75,9 +79,8 @@ public abstract class InstanceProvider {
     private void publishServerEvent(ServerEvent eventType, String instanceId) {
         try {
             KafkaServerEvent event = KafkaServerEvent.of(eventType, instanceId, System.currentTimeMillis());
-            String eventJson = JsonUtils.objToJson(event);
 
-            kafkaTemplate.send(TOPIC_SERVER_EVENTS, instanceId, eventJson);
+            kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
             log.info("===== Published {} event for server {} =====", eventType, instanceId);
 
         } catch (Exception e) {
@@ -95,30 +98,53 @@ public abstract class InstanceProvider {
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }
 
+
     /**
      * Kafka에서 서버 이벤트 수신
      */
-    @KafkaListener(topics = TOPIC_SERVER_EVENTS, groupId = "consistent-hash-group")
-    public void handleServerEvent(ConsumerRecord<String, String> record) {
-        try {
-            KafkaServerEvent event = JsonUtils.jsonToObj(record.value(), KafkaServerEvent.class);
 
-            // 자신이 발행한 이벤트이거나 이미 ActiveServers 에 속한 서버인 경우 무시
-            if (event.getInstanceId().equals(instanceId) || this.isHealthy(event.getInstanceId())) {
+    @KafkaListener(
+            topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
+            groupId = "server-lifecycle-listener", // 고정
+            clientIdPrefix = "ChatForYou-"  // 각 인스턴스 식별용
+    )
+    public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
+        try {
+            KafkaServerEvent event = KafkaEvent.of(record.value());
+
+            // 자신이 발행한 이벤트는 무시
+            if (event.getInstanceId().equals(instanceId)) {
                 return;
             }
 
             switch (event.getEventType()) {
+                case SERVER_DISCOVERY_REQUEST:
+                    // 새로운 서버가 discovery 요청 → 해당 서버를 등록하고 자신의 존재를 알림
+                    if (!this.isHealthy(event.getInstanceId())) {
+                        addServer(event.getInstanceId());
+                        log.info("===== New server discovered via discovery request: {}", event.getInstanceId());
+                    }
+                    publishServerEvent(ServerEvent.SERVER_DISCOVERY_RESPONSE, instanceId);
+                    break;
+
+                case SERVER_DISCOVERY_RESPONSE:
+                    // 기존 서버의 응답 → 해당 서버를 등록
+                    if (!this.isHealthy(event.getInstanceId())) {
+                        addServer(event.getInstanceId());
+                        log.info("===== Added existing server via discovery response: {}", event.getInstanceId());
+                    }
+                    break;
+
                 case SERVER_STARTED:
-                    addServer(event.getInstanceId());
-                    log.info("===== Added server {} to hash ring via Kafka event", event.getInstanceId());
-                    // 다른 서버에 '나' 에 해당하는 instanceId 전파
-                    publishServerEvent(ServerEvent.SERVER_STARTED, instanceId);
+                    if (!this.isHealthy(event.getInstanceId())) {
+                        addServer(event.getInstanceId());
+                        log.info("===== Added server via SERVER_STARTED event: {}", event.getInstanceId());
+                    }
                     break;
 
                 case SERVER_STOPPED:
                     removeServer(event.getInstanceId());
-                    log.info("===== Removed server {} from hash ring via Kafka event", event.getInstanceId());
+                    log.info("===== Removed server via SERVER_STOPPED event: {}", event.getInstanceId());
                     break;
 
                 default:

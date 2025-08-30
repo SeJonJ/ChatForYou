@@ -67,29 +67,20 @@ public class ChatRoomController {
     public ResponseEntity<ChatForYouResponse> joinRoom(
             Model model,
             @PathVariable String roomId,
-            HttpServletResponse response,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) throws BadRequestException {
+            HttpServletResponse response) throws BadRequestException {
 
         RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
         if (StringUtil.isNullOrEmpty(roomRoutingInfo.getInstanceId()) || !instanceProvider.isHealthy(roomRoutingInfo.getInstanceId())){
             // TODO 예외처리 어떻게할지 서버가 죽었을때 어떻게...?
         }
 
+        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+
         if (!instanceProvider.getInstanceId().equals(roomRoutingInfo.getInstanceId())) {
             // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
             routingService.setRoomCookie(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
-            return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
-                    .header("Location", "/chatforyou/api/chat/room/" + roomId)
-                    .build();
+            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom));
         }
-
-        // principalDetails 가 null 이 아니라면 로그인 된 상태!!
-        if (principalDetails != null) {
-            // 세션에서 로그인 유저 정보를 가져옴
-            model.addAttribute("user", principalDetails.getUser());
-        }
-
-        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
 
         model.addAttribute("room", chatRoom);
 

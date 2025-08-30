@@ -228,6 +228,10 @@ function register() {
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (result) => {
             if (result?.data) {
+                if(result.data.roomState === 'REDIRECT'){
+                    console.log('room redirect to : ', result.data.roomId);
+                    location.reload();
+                }
                 kurentoRoomInfo = result.data;
             }
         };

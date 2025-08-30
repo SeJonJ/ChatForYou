@@ -4,10 +4,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import webChat.model.kafka.KafkaEvent;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
@@ -21,7 +21,7 @@ public class RoutingInstanceProvider extends InstanceProvider {
     private final String ROOM_COUNT_PREFIX = "server-room-count:";
     private final int CANDIDATE_SERVER_COUNT = 3;
 
-    public RoutingInstanceProvider(KafkaTemplate<String, String> kafkaTemplate) {
+    public RoutingInstanceProvider(KafkaTemplate<String, KafkaEvent> kafkaTemplate) {
         super(kafkaTemplate);
     }
 

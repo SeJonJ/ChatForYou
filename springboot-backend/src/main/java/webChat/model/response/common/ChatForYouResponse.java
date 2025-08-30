@@ -34,4 +34,11 @@ public class ChatForYouResponse {
                 .data(ChatRoomOutVo.ofJoin(chatRoom))
                 .build();
     }
+
+    public static ChatForYouResponse ofRedirectRoom(ChatRoom chatRoom) {
+        return ChatForYouResponse.builder()
+                .result(REDIRECT)
+                .data(ChatRoomOutVo.ofRedirect(chatRoom))
+                .build();
+    }
 }

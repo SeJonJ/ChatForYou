@@ -52,4 +52,17 @@ public class ChatRoomOutVo {
                 .roomState(chatRoom.getRoomState())
                 .build();
     }
+
+    public static ChatRoomOutVo ofRedirect(ChatRoom chatRoom) {
+        return ChatRoomOutVo.builder()
+                .roomId(chatRoom.getRoomId())
+                .roomName(chatRoom.getRoomName())
+                .userCount(chatRoom.getUserCount())
+                .maxUserCnt(chatRoom.getMaxUserCnt())
+                .roomPwd(chatRoom.getRoomPwd())
+                .secretChk(chatRoom.isSecretChk())
+                .roomType(chatRoom.getChatType())
+                .roomState(RoomState.REDIRECT)
+                .build();
+    }
 }
