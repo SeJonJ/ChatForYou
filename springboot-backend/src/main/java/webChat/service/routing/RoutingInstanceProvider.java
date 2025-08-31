@@ -1,10 +1,12 @@
 package webChat.service.routing;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import webChat.model.kafka.KafkaEvent;
+import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
@@ -46,13 +48,13 @@ public class RoutingInstanceProvider extends InstanceProvider {
     }
 
     @Override
-    public String getServerForRoom(String roomId) {
+    public String getServerForRoom(String roomId) throws BadRequestException {
         if (getHashRing().isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
         }
 
-        RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
+        RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
         if(roomRoutingInfo != null && !StringUtil.isNullOrEmpty(roomRoutingInfo.getInstanceId())) {
             return roomRoutingInfo.getInstanceId();
         }

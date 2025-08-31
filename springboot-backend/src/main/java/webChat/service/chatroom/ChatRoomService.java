@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.routing.InstanceProvider;
 import webChat.controller.ExceptionController;
@@ -61,7 +62,7 @@ public class ChatRoomService {
             // 1. roomId 확인
             roomId = StringUtil.isNullOrEmpty(roomId) ? UUID.randomUUID().toString() : roomId;
             // 2. roomId 로 저장된 routing 정보 확인
-            RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
+            RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
             // 3. 최적의 instanceId 확인
             String selectedInstanceId = instanceProvider.getServerForRoom(roomId);
             if(roomRoutingInfo != null) {

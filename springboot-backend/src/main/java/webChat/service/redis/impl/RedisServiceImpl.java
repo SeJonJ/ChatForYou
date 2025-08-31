@@ -354,6 +354,10 @@ public class RedisServiceImpl implements RedisService {
 //                return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.USER_REFRESH_TOKEN.getType()));
 //            case USER_LAST_LOGIN_DATE:
 //                return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.USER_LAST_LOGIN_DATE.getType()));
+            case ROOM_ROUTING:
+                return clazz.cast(slaveTemplate.opsForValue().get(key));
+            case INSTANCE_COOKIE:
+                return clazz.cast(slaveTemplate.opsForValue().get(key));
             default:
                 throw new BadRequestException("Dose Not Exist DataType");
         }
@@ -470,11 +474,6 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
-    public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) {
-        return (RoomRoutingInfo) slaveTemplate.opsForValue().get(ROOM_ROUTING_PREFIX.getPrefix() + roomId);
-    }
-
-    @Override
     public long getInstanceRoomCount(String key) {
         return Optional.ofNullable(slaveTemplate.opsForValue().get(key))
                 .map(val -> {
@@ -492,6 +491,12 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public void delInstanceInfo(String instanceId) {
         masterTemplate.delete(ROOM_COUNT_PREFIX.getPrefix() + instanceId);
+        masterTemplate.delete(INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId);
+    }
+
+    @Override
+    public void saveInstanceCookieMapping(String currentInstanceId, String cookie) {
+        masterTemplate.opsForSet().add(INSTANCE_COOKIE_PREFIX.getPrefix() + currentInstanceId, cookie);
     }
 
 }

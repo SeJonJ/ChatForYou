@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import webChat.model.redis.DataType;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.routing.RoutingCookie;
@@ -80,7 +82,7 @@ public class ChatRoomController {
 
 
         if (!instanceProvider.getInstanceId().equals(chatRoom.getInstanceId())) {
-            RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
+            RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix()+roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
             // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
             routingService.setRoutingInfo(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
             return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));

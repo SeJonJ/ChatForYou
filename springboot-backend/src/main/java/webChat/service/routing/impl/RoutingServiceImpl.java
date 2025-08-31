@@ -5,7 +5,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.stereotype.Service;
+import webChat.model.redis.DataType;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.routing.RoutingCookie;
 import webChat.service.redis.RedisService;
@@ -24,31 +27,29 @@ public class RoutingServiceImpl implements RoutingService {
     private final RoutingInstanceProvider instanceProvider;
 
     @Override
-    public void setRoutingInfo(HttpServletRequest request, HttpServletResponse response, String roomId, String selectedInstanceId) {
+    public void setRoutingInfo(HttpServletRequest request, HttpServletResponse response, String roomId, String selectedInstanceId) throws BadRequestException {
         // 1. roomId 기준 roomRoutingInfo 객체 조회
-        RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
+        RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
 
         if (roomRoutingInfo != null) { // 2. redis 조회해서 nginxCookie 가 있다면 세팅
             this.setServerCookie(response, roomRoutingInfo.getNginxCookie());
             this.setRoomIdCookie(response, roomId);
-
         } else {
-            // TODO 정보가 없을때 무조건 현재 instnaceID 를 매칭하면 다른 서버에서 방 생성 안됨 ㅁㅊ
-            // 2. redis 조회 시 없다면 request 에서 cookie 가져와서 세팅
-            String currentNginxCookie = this.getNginxCookie(request);
-            if(currentNginxCookie == null) {
-                currentNginxCookie = instanceProvider.getInstanceId();
-            }
-
             String roomRedirectCookie = this.getCookie(request, ROOM_REDIRECT_COOKIE);
             int redirectCount = StringUtil.isNullOrEmpty(roomRedirectCookie) ? 0 : Integer.parseInt(roomRedirectCookie);
             if(redirectCount > 3) { // 리다이렉트가 3번 초과시에만 selectedInstanceId 를 현재 instanceId 로 수정
+                String currentNginxCookie = this.getNginxCookie(request);
+                if(currentNginxCookie == null) {
+                    currentNginxCookie = instanceProvider.getInstanceId();
+                }
                 // 결국 selectedInstanceId 의 cookie 를 알 수 없음으로 cookie 확인 가능한 instance 로 수정
                 redisService.saveRoomRoutingInfo(RoomRoutingInfo.of(roomId, instanceProvider.getInstanceId(), currentNginxCookie, System.currentTimeMillis()));
                 this.setServerCookie(response, instanceProvider.getInstanceId());
                 this.setRoomIdCookie(response, roomId);
-                this.setRoomRedirectCookie(response, 0, 0);
+                this.setRoomRedirectCookie(response, 1, 0);
             } else {
+                String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + roomId, DataType.INSTANCE_COOKIE, String.class);
+                this.setServerCookie(response, instanceCookie);
                 this.setRoomIdCookie(response, roomId);
                 this.setRoomRedirectCookie(response, redirectCount + 1, 60);
             }

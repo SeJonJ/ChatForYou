@@ -65,11 +65,6 @@ public interface RedisService {
      * @param roomRoutingInfo roomId, instanceId, cookie 가 매핑된 객체
      */
     void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo);
-    /**
-     * roomID 를 기준으로 roomRoutinginfo 객체 확인
-     * @param roomId 방Id
-     */
-    RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId);
 
     long getInstanceRoomCount(String key);
 
@@ -79,4 +74,5 @@ public interface RedisService {
      */
     void delInstanceInfo(String instanceId);
 
+    void saveInstanceCookieMapping(String currentInstanceId, String cookie);
 }

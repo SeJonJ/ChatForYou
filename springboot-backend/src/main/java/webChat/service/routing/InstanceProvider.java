@@ -5,6 +5,7 @@ import com.google.common.hash.Hashing;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -72,6 +73,7 @@ public abstract class InstanceProvider {
                 .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
 
         // 5. heartbeat 시작
+        checkInactiveServers();
         startHeartbeat();
 
         log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
@@ -108,7 +110,7 @@ public abstract class InstanceProvider {
         }
 
         // Redis에서 heartbeat 키 삭제
-        String heartbeatKey = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + instanceId;
+        String heartbeatKey = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
         redisService.delete(heartbeatKey);
         isShutdown = true;
 
@@ -191,7 +193,7 @@ public abstract class InstanceProvider {
      * @param roomId 방 ID
      * @return 최적 서버 ID, 서버가 없으면 null
      */
-    public String getServerForRoom(String roomId) {
+    public String getServerForRoom(String roomId) throws BadRequestException {
         if (hashRing.isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
@@ -334,7 +336,7 @@ public abstract class InstanceProvider {
     }
 
     private void sendHeartbeat() {
-        String key = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + instanceId;
+        String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
         redisService.setObject(key, System.currentTimeMillis(), 90, TimeUnit.SECONDS); // 90초 TTL
     }
 
@@ -343,7 +345,7 @@ public abstract class InstanceProvider {
 
         for (String serverId : getActiveServers()) {
             if (!serverId.equals(instanceId)) { // 자신은 제외
-                String key = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + serverId;
+                String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + serverId;
                 String lastHeartbeat = redisService.getObject(key, String.class);
 
                 if (lastHeartbeat == null) {
@@ -358,5 +360,8 @@ public abstract class InstanceProvider {
         for (String serverId : serversToRemove) {
             removeServer(serverId);
         }
+
+        log.info("===== {} inactive servers removed =====", serversToRemove.size());
+        log.info("===== Active servers: {} =====", getActiveServers().size());
     }
 }
