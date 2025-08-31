@@ -73,7 +73,6 @@ public abstract class InstanceProvider {
                 .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
 
         // 5. heartbeat 시작
-        checkInactiveServers();
         startHeartbeat();
 
         log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
@@ -327,6 +326,8 @@ public abstract class InstanceProvider {
     }
 
     private void startHeartbeat() {
+        sendHeartbeat();
+        checkInactiveServers();
         heartbeatScheduler.scheduleAtFixedRate(() -> {
             sendHeartbeat();
             checkInactiveServers();

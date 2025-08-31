@@ -24,9 +24,6 @@ public class CookieCheckEvent {
     private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
 
-    @Value("${server.port:8080}")
-    private int serverPort;
-
     @Value("${server.local:true}")
     private boolean isLocal;
 
