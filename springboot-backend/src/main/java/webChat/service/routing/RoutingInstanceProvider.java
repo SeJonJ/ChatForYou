@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import webChat.model.kafka.KafkaEvent;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
@@ -18,30 +19,29 @@ public class RoutingInstanceProvider extends InstanceProvider {
     @Autowired
     private RedisService redisService;
 
-    private final String ROOM_COUNT_PREFIX = "server-room-count:";
     private final int CANDIDATE_SERVER_COUNT = 3;
 
-    public RoutingInstanceProvider(KafkaTemplate<String, KafkaEvent> kafkaTemplate) {
-        super(kafkaTemplate);
+    public RoutingInstanceProvider(KafkaTemplate<String, KafkaEvent> kafkaTemplate, RedisService redisService) {
+        super(kafkaTemplate, redisService);
     }
 
     // 방 생성 시 현재 서버의 방 개수 증가
     public void incrementInstanceRoomCount() {
-        String key = ROOM_COUNT_PREFIX + this.getInstanceId();
+        String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
         Long newCount = redisService.increment(key, 1);
         log.info("Server {} room count increased to: {}", this.getInstanceId(), newCount);
     }
 
     // 방 삭제 시 현재 서버의 방 개수 감소
     public void decrementInstanceRoomCount() {
-        String key = ROOM_COUNT_PREFIX + this.getInstanceId();
+        String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
         Long newCount = redisService.decrement(key, 1);
         log.info("Server {} room count decreased to: {}", this.getInstanceId(), newCount);
     }
 
     // 서버의 현재 활성 방 개수 조회
     private long getRoomCount(String instanceId) {
-        String key = ROOM_COUNT_PREFIX + instanceId;
+        String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + instanceId;
         return redisService.getInstanceRoomCount(key);
     }
 
@@ -100,7 +100,7 @@ public class RoutingInstanceProvider extends InstanceProvider {
         long minRoomCount = Integer.MAX_VALUE;
 
         for (String candidate : candidates) {
-            String key = ROOM_COUNT_PREFIX + candidate;
+            String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + candidate;
             long roomCount = redisService.getInstanceRoomCount(key);
             log.info("Server {} has {} active rooms", candidate, roomCount);
 

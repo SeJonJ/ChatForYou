@@ -73,4 +73,10 @@ public interface RedisService {
 
     long getInstanceRoomCount(String key);
 
+    /**
+     * redis 에서 instanceId 와 관련된 정보 모두 삭제
+     * @param instanceId
+     */
+    void delInstanceInfo(String instanceId);
+
 }

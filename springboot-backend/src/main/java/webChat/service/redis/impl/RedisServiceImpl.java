@@ -27,9 +27,10 @@ import webChat.model.room.RoomState;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+
+import static webChat.model.redis.RedisKeyPrefix.*;
 
 /**
  * redis 사용을 위한 서비스 클래스
@@ -46,11 +47,6 @@ public class RedisServiceImpl implements RedisService {
     private final RediSearchClient rediSearchClient;
     private final long REDIS_TIMEOUT = 1L;
 
-    private final String ROOM_ID_PREFIX = "roomId:";
-    private final String USER_ID_PREFIX = "userId:";
-    private static final String INSTANCE_COOKIE_PREFIX = "instance-cookie:"; // 인스턴스 - 쿠키 매핑
-    private static final String COOKIE_INSTANCE_PREFIX = "cookie-instance:"; // 쿠키 - 인스턴스 매핑
-    private static final String ROOM_ROUTING_PREFIX = "room:mapping:";
     private static final long INSTANCE_MAPPING_TTL = 86400L; // 24시간
 
     public RedisServiceImpl(
@@ -125,7 +121,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void setObjectOpsHash(@NonNull String roomId, DataType dataType, Object o) {
-        String redisKey = ROOM_ID_PREFIX + roomId;
+        String redisKey = ROOM_ID_PREFIX.getPrefix() + roomId;
 
         // Redis에 객체 저장
         masterTemplate.opsForHash().put(redisKey, dataType.getType(), o);
@@ -285,7 +281,7 @@ public class RedisServiceImpl implements RedisService {
      * @return 정리된 키
      */
     private String cleanKey(String key) {
-        return key.replace("\"", "").replace(ROOM_ID_PREFIX, "");
+        return key.replace("\"", "").replace(ROOM_ID_PREFIX.getPrefix(), "");
     }
 
     @Override
@@ -319,7 +315,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void updateChatRoom(ChatRoom chatRoom) {
-        String redisKey = ROOM_ID_PREFIX + chatRoom.getRoomId();
+        String redisKey = ROOM_ID_PREFIX.getPrefix() + chatRoom.getRoomId();
         masterTemplate.opsForHash().put(redisKey, DataType.CHATROOM.getType(), chatRoom);
         masterTemplate.opsForHash().put(redisKey, "roomName", chatRoom.getRoomName());
         masterTemplate.opsForHash().put(redisKey, "state", chatRoom.getRoomState());
@@ -327,7 +323,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void saveChatRoom(ChatRoom chatRoom) {
-        String redisKey = ROOM_ID_PREFIX + chatRoom.getRoomId();
+        String redisKey = ROOM_ID_PREFIX.getPrefix() + chatRoom.getRoomId();
         // 채팅방 객체 저장
         masterTemplate.opsForHash().put(redisKey, DataType.CHATROOM.getType(), chatRoom);
         masterTemplate.opsForHash().put(redisKey, "roomId", chatRoom.getRoomId());
@@ -365,7 +361,7 @@ public class RedisServiceImpl implements RedisService {
 
     @NotNull
     private String makeRedisKey(String roomId) {
-        return roomId.contains(ROOM_ID_PREFIX) ? roomId : ROOM_ID_PREFIX + roomId;
+        return roomId.contains(ROOM_ID_PREFIX.getPrefix()) ? roomId : ROOM_ID_PREFIX.getPrefix() + roomId;
     }
 
     @Override
@@ -449,7 +445,7 @@ public class RedisServiceImpl implements RedisService {
             return false; // 유효하지 않은 입력
         }
 
-        Set<String> keys = slaveTemplate.keys(ROOM_ID_PREFIX+"*");
+        Set<String> keys = slaveTemplate.keys(ROOM_ID_PREFIX.getPrefix()+"*");
         if (keys.isEmpty()) {
             return false;
         }
@@ -470,12 +466,12 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo) {
-        masterTemplate.opsForValue().set(ROOM_ROUTING_PREFIX+roomRoutingInfo.getRoomId(), roomRoutingInfo);
+        masterTemplate.opsForValue().set(ROOM_ROUTING_PREFIX.getPrefix()+roomRoutingInfo.getRoomId(), roomRoutingInfo);
     }
 
     @Override
     public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) {
-        return (RoomRoutingInfo) slaveTemplate.opsForValue().get(ROOM_ROUTING_PREFIX + roomId);
+        return (RoomRoutingInfo) slaveTemplate.opsForValue().get(ROOM_ROUTING_PREFIX.getPrefix() + roomId);
     }
 
     @Override
@@ -491,6 +487,11 @@ public class RedisServiceImpl implements RedisService {
                     }
                 })
                 .orElse(0L);
+    }
+
+    @Override
+    public void delInstanceInfo(String instanceId) {
+        masterTemplate.delete(ROOM_COUNT_PREFIX.getPrefix() + instanceId);
     }
 
 }

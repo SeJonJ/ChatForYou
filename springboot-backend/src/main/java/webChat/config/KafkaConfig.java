@@ -63,4 +63,30 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         return factory;
     }
+
+    @Bean
+    public ConsumerFactory<String, KafkaEvent> serverEventConsumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "server-event-group"+ "_" + System.currentTimeMillis() % 1000000000L);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+
+        // 가장 처음 kafka 메시지 부터 확인
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // 역직렬화 대상 클래스 지정
+        JsonDeserializer<KafkaEvent> deserializer = new JsonDeserializer<>(KafkaEvent.class);
+        deserializer.addTrustedPackages("webChat.model.kafka");
+
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), deserializer);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> kafkaServerEventListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(serverEventConsumerFactory());
+        return factory;
+    }
 }

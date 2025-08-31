@@ -13,6 +13,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
+import webChat.service.redis.RedisService;
+
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -38,6 +40,7 @@ public abstract class InstanceProvider {
     private final Set<String> activeServers = ConcurrentHashMap.newKeySet();
 
     private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
+    private final RedisService redisService;
 
     private String instanceId;
 
@@ -94,6 +97,10 @@ public abstract class InstanceProvider {
     public void shutdown() {
         // 종료 시 다른 서버들에게 알림
         publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
+
+        // 현재 서버의 roomcount 초기화
+        redisService.delInstanceInfo(instanceId);
+
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }
 
@@ -104,6 +111,7 @@ public abstract class InstanceProvider {
 
     @KafkaListener(
             topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
+            containerFactory = "kafkaServerEventListenerContainerFactory",
             groupId = "server-lifecycle-group-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
     )
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
