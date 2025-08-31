@@ -2,7 +2,6 @@ package webChat.service.routing;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
-import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,15 +12,13 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.service.redis.RedisService;
 
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Component
 @Getter
@@ -41,8 +38,10 @@ public abstract class InstanceProvider {
 
     private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
     private final RedisService redisService;
+    private ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
     private String instanceId;
+    private boolean isShutdown = false;
 
     @EventListener(ApplicationReadyEvent.class)
     public void initInstanceId() {
@@ -72,6 +71,9 @@ public abstract class InstanceProvider {
         CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
                 .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
 
+        // 5. heartbeat 시작
+        startHeartbeat();
+
         log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
     }
 
@@ -93,13 +95,22 @@ public abstract class InstanceProvider {
     /**
      * 서버 종료 시 이벤트 처리
      */
-    @PreDestroy
-    public void shutdown() {
+    public synchronized void shutdown() {
         // 종료 시 다른 서버들에게 알림
         publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
 
         // 현재 서버의 roomcount 초기화
         redisService.delInstanceInfo(instanceId);
+
+        // Heartbeat 정리
+        if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown()) {
+            heartbeatScheduler.shutdown();
+        }
+
+        // Redis에서 heartbeat 키 삭제
+        String heartbeatKey = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + instanceId;
+        redisService.delete(heartbeatKey);
+        isShutdown = true;
 
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }
@@ -117,6 +128,12 @@ public abstract class InstanceProvider {
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
             KafkaServerEvent event = KafkaEvent.of(record.value());
+
+            // 1시간 이전 이벤트는 스킵
+            if (isEventTooOld(event.getPublishedAt())) {
+                log.debug("Skipping old event from {}", event.getInstanceId());
+                return;
+            }
 
             // 자신이 발행한 이벤트는 무시
             if (event.getInstanceId().equals(instanceId)) {
@@ -160,6 +177,11 @@ public abstract class InstanceProvider {
         } catch (Exception e) {
             log.error("Failed to handle server event from Kafka", e);
         }
+    }
+
+    private boolean isEventTooOld(long eventTimestamp) {
+        long oneHourAgo = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1);
+        return eventTimestamp < oneHourAgo;
     }
 
 
@@ -300,5 +322,41 @@ public abstract class InstanceProvider {
 
     public boolean isHealthy(String instanceId) {
         return this.getActiveServers().contains(instanceId);
+    }
+
+    private void startHeartbeat() {
+        heartbeatScheduler.scheduleAtFixedRate(() -> {
+            sendHeartbeat();
+            checkInactiveServers();
+        }, 30, 30, TimeUnit.SECONDS); // 30초마다 실행
+
+        log.info("Heartbeat 시작됨: {}", instanceId);
+    }
+
+    private void sendHeartbeat() {
+        String key = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + instanceId;
+        redisService.setObject(key, System.currentTimeMillis(), 90, TimeUnit.SECONDS); // 90초 TTL
+    }
+
+    private void checkInactiveServers() {
+        Set<String> serversToRemove = new HashSet<>();
+
+        for (String serverId : getActiveServers()) {
+            if (!serverId.equals(instanceId)) { // 자신은 제외
+                String key = RedisKeyPrefix.SERVER_HEARTBEAT_PREFIX.getPrefix() + serverId;
+                String lastHeartbeat = redisService.getObject(key, String.class);
+
+                if (lastHeartbeat == null) {
+                    // Redis TTL로 인해 키가 없어짐 -> 서버 비활성
+                    serversToRemove.add(serverId);
+                    log.warn("비활성 서버 감지됨: {}", serverId);
+                }
+            }
+        }
+
+        // 비활성 서버들 제거
+        for (String serverId : serversToRemove) {
+            removeServer(serverId);
+        }
     }
 }

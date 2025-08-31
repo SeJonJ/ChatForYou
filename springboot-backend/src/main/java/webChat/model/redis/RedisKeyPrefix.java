@@ -9,7 +9,8 @@ public enum RedisKeyPrefix {
     USER_ID_PREFIX("userId:"),
     USER_PREFIX("user:"),
     ROOM_ROUTING_PREFIX("room:mapping:"),
-    ROOM_COUNT_PREFIX("instanceRoomCount:")
+    ROOM_COUNT_PREFIX("instanceRoomCount:"),
+    SERVER_HEARTBEAT_PREFIX("server:heartbeat:")
     ;
 
 

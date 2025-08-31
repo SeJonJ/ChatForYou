@@ -12,6 +12,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
+import webChat.model.routing.RoutingCookie;
 import webChat.service.redis.RedisService;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.ChatRoom;
@@ -46,11 +47,11 @@ public class ChatRoomController {
             HttpServletResponse response,
             @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
 
-        String roomId = routingService.getRoomIdCookie(request);
+        String roomId = routingService.getCookie(request, RoutingCookie.ROOM_ID_COOKIE);
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
         ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo, roomId);
         // cookie 설정
-        routingService.setRoomCookie(request, response, room.getRoomId(), room.getInstanceId());
+        routingService.setRoutingInfo(request, response, room.getRoomId(), room.getInstanceId());
         if(RoomState.REDIRECT.equals(room.getRoomState())){
             // 현재 서버가 선택된 서버가 아니면 리다이렉트
             return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
@@ -81,7 +82,7 @@ public class ChatRoomController {
         if (!instanceProvider.getInstanceId().equals(chatRoom.getInstanceId())) {
             RoomRoutingInfo roomRoutingInfo = redisService.getRoomRoutingInfoByRoomId(roomId);
             // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
-            routingService.setRoomCookie(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
+            routingService.setRoutingInfo(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
             return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));
         }
 
