@@ -38,7 +38,7 @@ public class CookieCheckEvent {
 
     @Value("${cookie.check.domain:https://localhost:8443}")
     private String cookieCheckDomain;
-    private final String COOKIE_CHECK_PATH = "/chatforyou/health/cookie";
+    private final String COOKIE_CHECK_PATH = "/chatforyou/api/health/cookie";
 
     private static final int MAX_RETRIES = 20;
     private static final long RETRY_INTERVAL_MS = 2000;
