@@ -1,15 +1,16 @@
 package webChat.model.kafka;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
+@ToString(callSuper = true)
 public class KafkaServerEvent extends KafkaEvent {
     private ServerEvent eventType;  // SERVER_STARTED, SERVER_STOPPED
     private String instanceId;

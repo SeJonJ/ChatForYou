@@ -1,7 +1,9 @@
 package webChat.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import webChat.model.routing.RoutingCookie;
 import webChat.service.routing.CookieCheckEvent;
 import webChat.service.routing.RoutingInstanceProvider;
+import webChat.service.routing.RoutingService;
 import webChat.utils.StringUtil;
 
 /**
@@ -18,9 +21,11 @@ import webChat.utils.StringUtil;
 @RestController
 @RequestMapping("/chatforyou/api/health")
 @RequiredArgsConstructor
+@Slf4j
 public class HealthController {
     private final RoutingInstanceProvider instanceProvider;
     private final CookieCheckEvent cookieCheckEvent;
+    private final RoutingService routingService;
 
     @Value("${cookie.check.domain:}")
     private String cookieCheckDomain;
@@ -31,10 +36,11 @@ public class HealthController {
      * @return
      */
     @GetMapping("/cookie")
-    public ResponseEntity<String> cookieHealth(HttpServletResponse response) {
+    public ResponseEntity<String> cookieHealth(HttpServletRequest request, HttpServletResponse response) {
         if (StringUtil.isNullOrEmpty(cookieCheckDomain)) {
             response.addCookie(new jakarta.servlet.http.Cookie(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName(), instanceProvider.getInstanceId()));
         }
+        log.info("cookie : [{}] :: instanceId : [{}]", routingService.getCookie(request, RoutingCookie.CHATFORYOU_SERVER_COOKIE), instanceProvider.getInstanceId());
         // nginx 가 라우팅한 후 이 응답을 돌려줌
         return ResponseEntity.ok(instanceProvider.getInstanceId());
     }

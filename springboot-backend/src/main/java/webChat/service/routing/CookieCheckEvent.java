@@ -46,11 +46,9 @@ public class CookieCheckEvent {
     @EventListener(WebServerInitializedEvent.class)
     @Async
     public void collectOwnCookieAsync() {
-        String currentInstanceId = instanceProvider.getInstanceId();
 
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                if(currentInstanceId == null) currentInstanceId = instanceProvider.getInstanceId();
 
                 HttpResponse response = HttpUtil.getWithFullResponse(cookieCheckDomain + COOKIE_CHECK_PATH, new HttpHeaders(), null);
 
@@ -59,12 +57,13 @@ public class CookieCheckEvent {
                         .map(Header::getValue)
                         .toList();
 
-                if (respInstanceId.equals(currentInstanceId)) {
+                if (respInstanceId.equals(instanceProvider.getInstanceId())) {
                     for (String cookie : cookies) {
+                        log.info("==========> cookie name :: {} cookie value :: {}", cookie.split("=")[0], cookie.split("=")[1].split(";")[0].trim());
                         if (cookie.startsWith(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName() + "=")) {
                             String cookieValue = extractCookieValue(cookie);
-                            redisService.saveInstanceCookieMapping(currentInstanceId, cookieValue);
-                            log.info("=== Collected cookie for instance {} → {}", currentInstanceId, cookieValue);
+                            redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookieValue);
+                            log.info("=== Collected cookie for instance {} → {}", instanceProvider.getInstanceId(), cookieValue);
 
                             cookieCollected = true; // readiness 통과
                             return;
@@ -75,16 +74,16 @@ public class CookieCheckEvent {
                     for (String cookie : cookies) {
                         if (cookie.startsWith(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName() + "=")) {
                             String cookieValue = extractCookieValue(cookie);
-                            redisService.saveInstanceCookieMapping(currentInstanceId, cookieValue);
-                            log.error("=== Collected cookie is FAIL ==> instanceID :: {} cookieValue :: {}", currentInstanceId, cookieValue);
+                            redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookieValue);
+                            log.error("=== Collected cookie is FAIL ==> instanceID :: {} cookieValue :: {}", instanceProvider.getInstanceId(), cookieValue);
 
                             cookieCollected = true; // readiness 통과
                             return;
                         }
                     }
                 } else {
-                    log.warn("=== Routed to another instance {} (expected {}). Retrying... [attempt {}/{}]",
-                            respInstanceId, currentInstanceId, attempt, MAX_RETRIES);
+                    log.error("=== Routed to another instance {} (expected {}). Retrying... [attempt {}/{}]",
+                            respInstanceId, instanceProvider.getInstanceId(), attempt, MAX_RETRIES);
                 }
 
                 TimeUnit.MILLISECONDS.sleep(RETRY_INTERVAL_MS);

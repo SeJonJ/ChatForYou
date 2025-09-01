@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.service.redis.RedisService;
+import webChat.utils.StringUtil;
 
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
@@ -129,6 +130,10 @@ public abstract class InstanceProvider {
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
             KafkaServerEvent event = KafkaEvent.of(record.value());
+            if (StringUtil.isNullOrEmpty(event.getInstanceId()) || event.getEventType() == null) {
+                log.warn("=== Received event from server with null or empty instance ID: {}", event);
+                return;
+            }
 
             // 1시간 이전 이벤트는 스킵
             if (isEventTooOld(event.getPublishedAt())) {
@@ -137,7 +142,7 @@ public abstract class InstanceProvider {
             }
 
             // 자신이 발행한 이벤트는 무시
-            if (event.getInstanceId().equals(instanceId)) {
+            if (instanceId.equals(event.getInstanceId())) {
                 return;
             }
 
