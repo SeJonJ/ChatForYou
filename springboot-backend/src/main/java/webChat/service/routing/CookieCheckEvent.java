@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
@@ -43,7 +43,7 @@ public class CookieCheckEvent {
     private static final int MAX_RETRIES = 20;
     private static final long RETRY_INTERVAL_MS = 2000;
 
-    @EventListener(ApplicationReadyEvent.class)
+    @EventListener(WebServerInitializedEvent.class)
     @Async
     public void collectOwnCookieAsync() {
         String currentInstanceId = instanceProvider.getInstanceId();
