@@ -496,7 +496,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void saveInstanceCookieMapping(String currentInstanceId, String cookie) {
-        masterTemplate.opsForSet().add(INSTANCE_COOKIE_PREFIX.getPrefix() + currentInstanceId, cookie);
+        masterTemplate.opsForValue().set(INSTANCE_COOKIE_PREFIX.getPrefix() + currentInstanceId, cookie);
     }
 
 }
