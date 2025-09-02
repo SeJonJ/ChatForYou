@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
@@ -18,10 +17,8 @@ import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.service.analysis.AnalysisService;
-import webChat.service.chatroom.SseService;
 import webChat.service.file.FileService;
 import webChat.service.kafka.ChatKafkaProducer;
-import webChat.service.kafka.KafkaService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 
@@ -44,7 +41,6 @@ public class ChatRoomService {
 
     private final SseService sseService;
 
-    private final KafkaService kafkaService;
     private final ChatKafkaProducer chatKafkaProducer;
 
     @Value("${chatforyou.room.max_user_count}")
@@ -60,9 +56,7 @@ public class ChatRoomService {
         if(ChatType.RTC.equals(chatRoomInVo.getRoomType())) {
             analysisService.increaseDailyRoomCnt();
             ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(chatRoomInVo);
-            // 새로운 방 생성 시 모든 클라이언트에 이벤트 전송
-            sseService.sendRoomCreatedEvent(chatRoom);
-//            kafkaService.sendMessage("createRoom", chatRoom);
+            // 새로운 채팅방 생성 이벤트를 Kafka에 발행
             chatKafkaProducer.sendCreateRoomEvent(chatRoom);
             return chatRoom;
         } else {
@@ -167,8 +161,8 @@ public class ChatRoomService {
         } else {
             throw new ExceptionController.DelRoomException("Soft Delete Room Exception");
         }
-        // 방 삭제 시 모든 클라이언트에 이벤트 전송
-        sseService.sendRoomDeletedEvent(kurentoRoom);
+        // 채팅방 삭제 이벤트를 Kafka에 발행
+        chatKafkaProducer.sendDeleteRoomEvent(kurentoRoom);
         log.info("Room {} state changed {}", kurentoRoom.getRoomId(), RoomState.INACTIVE.getType());
         return true;
     }
