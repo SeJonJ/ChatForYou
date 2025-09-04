@@ -75,4 +75,10 @@ public interface RedisService {
     void delInstanceInfo(String instanceId);
 
     void saveInstanceCookieMapping(String currentInstanceId, String cookie);
+
+    Map<String, String> getAllInstanceCookies();
+
+    boolean tryLockCookieDiscovery(String instanceId, int timeoutSeconds);
+
+    void unlockCookieDiscovery(String instanceId);
 }

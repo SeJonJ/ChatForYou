@@ -20,6 +20,7 @@ import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import webChat.model.redis.DataType;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
@@ -488,15 +489,58 @@ public class RedisServiceImpl implements RedisService {
                 .orElse(0L);
     }
 
+    /**
+     * 인스턴스 정보 삭제
+     */
     @Override
     public void delInstanceInfo(String instanceId) {
         masterTemplate.delete(ROOM_COUNT_PREFIX.getPrefix() + instanceId);
         masterTemplate.delete(INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId);
+        masterTemplate.delete(INSTANCE_INFO_PREFIX.getPrefix() + instanceId);
     }
 
     @Override
     public void saveInstanceCookieMapping(String currentInstanceId, String cookie) {
         masterTemplate.opsForValue().set(INSTANCE_COOKIE_PREFIX.getPrefix() + currentInstanceId, cookie);
+    }
+
+    /**
+     * 모든 인스턴스의 쿠키 매핑 조회
+     */
+    @Override
+    public Map<String, String> getAllInstanceCookies() {
+        String pattern = RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + "*";
+        Set<String> keys = slaveTemplate.keys(pattern);
+
+        Map<String, String> cookieMap = new HashMap<>();
+        if (keys != null && !keys.isEmpty()) {
+            for (String key : keys) {
+                String instanceId = key.replace(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix(), "");
+                String cookie = getObject(key, String.class);
+                if (cookie != null) {
+                    cookieMap.put(instanceId, cookie);
+                }
+            }
+        }
+        return cookieMap;
+    }
+
+    /**
+     * 쿠키 발견 락 설정 :: 기존 redis 에 없다면 세팅
+     */
+    @Override
+    public boolean tryLockCookieDiscovery(String instanceId, int timeoutSeconds) {
+        String lockKey = RedisKeyPrefix.COOKIE_DISCOVERY_LOCK.getPrefix() + instanceId;
+        return Boolean.TRUE.equals(masterTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeoutSeconds, TimeUnit.SECONDS));
+    }
+
+    /**
+     * 쿠키 발견 락 해제
+     */
+    @Override
+    public void unlockCookieDiscovery(String instanceId) {
+        String lockKey = RedisKeyPrefix.COOKIE_DISCOVERY_LOCK.getPrefix() + instanceId;
+        delete(lockKey);
     }
 
 }

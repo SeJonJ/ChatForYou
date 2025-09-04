@@ -44,7 +44,7 @@ public class RoomBatchJob {
             List<KurentoRoom> chatRoomListForDelete = redisService.getChatRoomListForDelete(SEARCH_COUNT);
             for (KurentoRoom kurentoRoom : chatRoomListForDelete) {
                 chatRoomService.delChatRoom(kurentoRoom);
-                if (!RoomState.INACTIVE.equals(kurentoRoom.getRoomState())) {
+                if (!RoomState.INACTIVE.equals(kurentoRoom.getRoomState()) && instanceProvider.getInstanceId().equals(kurentoRoom.getInstanceId())) {
                     instanceProvider.decrementInstanceRoomCount();
                 }
                 rtcRoomCnt.incrementAndGet();

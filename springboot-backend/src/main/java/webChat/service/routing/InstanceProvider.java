@@ -7,16 +7,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy; // 이것만 추가!
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
+import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
-
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -42,10 +42,13 @@ public abstract class InstanceProvider {
     private final RedisService redisService;
     private ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
+    @Autowired
+    @Lazy
+    private CookieCheckEvent cookieCheckEvent; // 이 어노테이션만 추가!
+
     private String instanceId;
     private boolean isShutdown = false;
 
-    @EventListener(ApplicationReadyEvent.class)
     public void initInstanceId() {
         log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
 
@@ -95,6 +98,21 @@ public abstract class InstanceProvider {
     }
 
     /**
+     * 쿠키 응답 이벤트 발행
+     */
+    public void publishCookieResponse(String requesterId, String cookie) {
+        try {
+            KafkaServerEvent event = KafkaServerEvent.createCookieResponse(instanceId, requesterId, cookie);
+
+            kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
+            log.info("쿠키 응답 이벤트 발행 완료: {} -> {}", instanceId, requesterId);
+
+        } catch (Exception e) {
+            log.error("쿠키 응답 이벤트 발행 실패: {}", e.getMessage());
+        }
+    }
+
+    /**
      * 서버 종료 시 이벤트 처리
      */
     public synchronized void shutdown() {
@@ -117,11 +135,9 @@ public abstract class InstanceProvider {
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }
 
-
     /**
      * Kafka에서 서버 이벤트 수신
      */
-
     @KafkaListener(
             topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
             containerFactory = "kafkaServerEventListenerContainerFactory",
@@ -176,6 +192,18 @@ public abstract class InstanceProvider {
                     log.info("===== Removed server via SERVER_STOPPED event: {}", event.getInstanceId());
                     break;
 
+                case SERVER_COOKIE_REQUEST:
+                    handleCookieRequest(event.getInstanceId());
+                    break;
+
+                case SERVER_COOKIE_RESPONSE:
+                    handleCookieResponse(event);
+                    break;
+
+                case SERVER_COOKIE_DISCOVERED:
+                    handleCookieDiscovered(event);
+                    break;
+
                 default:
                     log.warn("Unknown server event type: {}", event.getEventType());
             }
@@ -185,11 +213,59 @@ public abstract class InstanceProvider {
         }
     }
 
+    /**
+     * 쿠키 요청 이벤트 처리
+     */
+    private void handleCookieRequest(String requesterId) throws BadRequestException {
+        // 내가 쿠키를 가지고 있다면 응답
+        String myCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId, DataType.INSTANCE_COOKIE, String.class);
+        if (myCookie != null) {
+            publishCookieResponse(requesterId, myCookie);
+            log.info("쿠키 요청에 응답: {} -> {} (쿠키: {})", instanceId, requesterId, myCookie);
+        } else {
+            log.debug("쿠키 요청 수신했지만 내 쿠키가 없음: requester={}", requesterId);
+        }
+    }
+
+    /**
+     * 쿠키 응답 이벤트 처리 (@Lazy 덕분에 순환 참조 없음)
+     */
+    public void handleCookieResponse(KafkaServerEvent event) {
+        try {
+            // CookieCheckEvent에 위임
+            if (cookieCheckEvent != null) {
+                cookieCheckEvent.handleCookieResponse(event);
+            } else {
+                log.warn("CookieCheckEvent가 초기화되지 않음");
+            }
+        } catch (Exception e) {
+            log.error("쿠키 응답 이벤트 처리 실패: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 쿠키 발견 이벤트 처리 (@Lazy 덕분에 순환 참조 없음)
+     */
+    public void handleCookieDiscovered(KafkaServerEvent event) {
+        try {
+            // CookieCheckEvent에 위임
+            if (cookieCheckEvent != null) {
+                cookieCheckEvent.handleCookieDiscovered(event);
+            } else {
+                log.warn("CookieCheckEvent가 초기화되지 않음");
+            }
+        } catch (Exception e) {
+            log.error("쿠키 발견 이벤트 처리 실패: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 이벤트가 너무 오래된 것인지 확인
+     */
     private boolean isEventTooOld(long eventTimestamp) {
         long oneHourAgo = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1);
         return eventTimestamp < oneHourAgo;
     }
-
 
     /**
      * 방 ID에 대한 최적의 서버를 반환
@@ -330,6 +406,9 @@ public abstract class InstanceProvider {
         return this.getActiveServers().contains(instanceId);
     }
 
+    /**
+     * Heartbeat 시작
+     */
     private void startHeartbeat() {
         sendHeartbeat();
         checkInactiveServers();
@@ -341,11 +420,17 @@ public abstract class InstanceProvider {
         log.info("Heartbeat 시작됨: {}", instanceId);
     }
 
+    /**
+     * Heartbeat 전송
+     */
     private void sendHeartbeat() {
         String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
         redisService.setObject(key, System.currentTimeMillis(), 90, TimeUnit.SECONDS); // 90초 TTL
     }
 
+    /**
+     * 비활성 서버 체크
+     */
     private void checkInactiveServers() {
         Set<String> serversToRemove = new HashSet<>();
 

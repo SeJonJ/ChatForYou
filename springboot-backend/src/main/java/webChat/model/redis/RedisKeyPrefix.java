@@ -11,7 +11,9 @@ public enum RedisKeyPrefix {
     ROOM_ROUTING_PREFIX("room:mapping:"),
     ROOM_COUNT_PREFIX("instance:roomcount:"),
     INSTANCE_HEARTBEAT_PREFIX("instance:heartbeat:"),
-    INSTANCE_COOKIE_PREFIX("instance:cookie:")
+    INSTANCE_COOKIE_PREFIX("instance:cookie:"),
+    COOKIE_DISCOVERY_LOCK("cookie:discovery:lock:"),
+    INSTANCE_INFO_PREFIX("instance:info:"),
     ;
 
 
