@@ -19,6 +19,8 @@ import webChat.model.routing.RoutingCookie;
 import webChat.model.routing.RoutingCookieInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.HttpUtil;
+import webChat.utils.StringUtil;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Random;
@@ -35,7 +37,7 @@ import java.util.Random;
 public class CookieCheckEvent {
 
     private final RedisService redisService;
-    @Lazy // 이 어노테이션만 추가! 나머지는 모두 기존 그대로
+    @Lazy
     private final RoutingInstanceProvider instanceProvider;
     private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
 
@@ -51,14 +53,17 @@ public class CookieCheckEvent {
 
     @EventListener(WebServerInitializedEvent.class)
     @Async
-    public void collectOwnCookieAsync() {
+    public void collectOwnCookieAsync() throws InterruptedException {
+        // Kafka consumer 준비 대기
+        waitForKafkaConsumerReady();
+
         log.info("=== 인스턴스 init 시작 ===");
         instanceProvider.initInstanceId(); // 기존 그대로!
 
         log.info("=== 하이브리드 쿠키 수집 시작 ===");
 
         // Phase 1: 파드간 협력
-        String cookie = tryCollectFromPeers();
+        String cookie = tryCollectFromPeersWithRetry();
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
@@ -73,6 +78,26 @@ public class CookieCheckEvent {
 
         // Phase 3: Fallback
         handleFallback();
+    }
+
+    private void waitForKafkaConsumerReady() throws InterruptedException {
+        for (int i = 0; i < 20; i++) { // 최대 10초 대기
+            if (!instanceProvider.getActiveServers().isEmpty()) break;
+            Thread.sleep(500);
+        }
+    }
+
+    private String tryCollectFromPeersWithRetry() throws InterruptedException {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String cookie = tryCollectFromPeers();
+            if (cookie != null) return cookie;
+
+            // 점진적 지연: 2초, 4초, 6초
+            Thread.sleep(2000 * (attempt + 1));
+
+            log.info("쿠키 수집 재시도: {}/3", attempt + 1);
+        }
+        return null;
     }
 
     private String tryCollectFromPeers() {
@@ -90,7 +115,7 @@ public class CookieCheckEvent {
 
             if (!peerCookies.isEmpty()) {
                 String predictedCookie = predictMyCookieFromPeers(peerCookies);
-                if (predictedCookie != null && validatePredictedCookie(predictedCookie)) {
+                if (!StringUtil.isNullOrEmpty(predictedCookie)) {
                     log.info("=== Phase 1 성공: 예측된 쿠키 검증 완료 ===");
                     return predictedCookie;
                 }
@@ -203,10 +228,8 @@ public class CookieCheckEvent {
 
                 if (cookie != null && !cookie.isEmpty()) {
                     String predictedCookie = predictMyCookieFromPattern(cookie, responseFrom);
-                    if (predictedCookie != null && validatePredictedCookie(predictedCookie)) {
-                        saveCookieAndComplete(predictedCookie);
-                        log.info("쿠키 응답으로부터 성공적으로 쿠키 획득: {}", predictedCookie);
-                    }
+                    saveCookieAndComplete(predictedCookie);
+                    log.info("쿠키 응답으로부터 성공적으로 쿠키 획득: {}", predictedCookie);
                 }
             }
         } catch (Exception e) {
@@ -228,10 +251,8 @@ public class CookieCheckEvent {
                 if (cookieInfo != null && cookieInfo.isValidForDiscovery() && !cookieCollected) {
                     String discoveredCookie = cookieInfo.getCookie();
                     String predictedCookie = predictMyCookieFromPattern(discoveredCookie, discovererId);
-                    if (predictedCookie != null && validatePredictedCookie(predictedCookie)) {
-                        saveCookieAndComplete(predictedCookie);
-                        log.info("발견된 쿠키로부터 성공적으로 내 쿠키 획득: {}", predictedCookie);
-                    }
+                    saveCookieAndComplete(predictedCookie);
+                    log.info("발견된 쿠키로부터 성공적으로 내 쿠키 획득: {}", predictedCookie);
                 }
             }
         } catch (Exception e) {
@@ -247,7 +268,7 @@ public class CookieCheckEvent {
             String peerCookie = entry.getValue();
 
             String predictedCookie = predictMyCookieFromPattern(peerCookie, peerInstanceId);
-            if (predictedCookie != null && validatePredictedCookie(predictedCookie)) {
+            if (predictedCookie != null && myInstanceId.equals(peerInstanceId)) {
                 return predictedCookie;
             }
         }
@@ -255,44 +276,13 @@ public class CookieCheckEvent {
     }
 
     private String predictMyCookieFromPattern(String peerCookie, String peerInstanceId) {
-        String myInstanceId = instanceProvider.getInstanceId();
-
-        // 패턴 1: "instanceId|해시값" 형태
         if (peerCookie.contains("|")) {
-            String[] parts = peerCookie.split("\\|");
-            if (parts.length == 2 && parts[0].equals(peerInstanceId)) {
-                return myInstanceId + "|" + generateHash(myInstanceId);
+            if (peerCookie.length() > 10 && !peerCookie.equals(peerInstanceId)) {
+                return peerCookie;
             }
         }
 
-        // 패턴 2: 단순 해시값인 경우
-        if (peerCookie.length() > 10 && !peerCookie.equals(peerInstanceId)) {
-            return generateHash(myInstanceId);
-        }
-
-        // 패턴 3: instanceId 그대로 사용하는 경우
-        if (peerCookie.equals(peerInstanceId)) {
-            return myInstanceId;
-        }
-
         return null;
-    }
-
-    private boolean validatePredictedCookie(String predictedCookie) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.add("Cookie", RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName() + "=" + predictedCookie);
-
-            HttpResponse response = HttpUtil.getWithFullResponse(
-                    cookieCheckDomain + COOKIE_CHECK_PATH, headers, null);
-
-            String respInstanceId = extractResponseInstanceId(response);
-            return respInstanceId.equals(instanceProvider.getInstanceId());
-
-        } catch (Exception e) {
-            log.warn("예측 쿠키 검증 실패: {}", e.getMessage());
-            return false;
-        }
     }
 
     private int calculateOptimalRetries(int podCount, double confidence) {
@@ -332,10 +322,6 @@ public class CookieCheckEvent {
             log.warn("쿠키 값 추출 실패: {}", cookieString);
         }
         return null;
-    }
-
-    private String generateHash(String instanceId) {
-        return Integer.toHexString(instanceId.hashCode()).substring(0, 8);
     }
 
     private void saveCookieAndComplete(String cookie) {

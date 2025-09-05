@@ -513,34 +513,17 @@ public class RedisServiceImpl implements RedisService {
         Set<String> keys = slaveTemplate.keys(pattern);
 
         Map<String, String> cookieMap = new HashMap<>();
-        if (keys != null && !keys.isEmpty()) {
+        if (!CollectionUtils.isEmpty(keys)) {
             for (String key : keys) {
                 String instanceId = key.replace(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix(), "");
-                String cookie = getObject(key, String.class);
+                // Replication lag 보안을 위해 master 에서 읽어옴
+                String cookie = Objects.requireNonNull(masterTemplate.opsForValue().get(key)).toString();
                 if (cookie != null) {
                     cookieMap.put(instanceId, cookie);
                 }
             }
         }
         return cookieMap;
-    }
-
-    /**
-     * 쿠키 발견 락 설정 :: 기존 redis 에 없다면 세팅
-     */
-    @Override
-    public boolean tryLockCookieDiscovery(String instanceId, int timeoutSeconds) {
-        String lockKey = RedisKeyPrefix.COOKIE_DISCOVERY_LOCK.getPrefix() + instanceId;
-        return Boolean.TRUE.equals(masterTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeoutSeconds, TimeUnit.SECONDS));
-    }
-
-    /**
-     * 쿠키 발견 락 해제
-     */
-    @Override
-    public void unlockCookieDiscovery(String instanceId) {
-        String lockKey = RedisKeyPrefix.COOKIE_DISCOVERY_LOCK.getPrefix() + instanceId;
-        delete(lockKey);
     }
 
 }

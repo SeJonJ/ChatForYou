@@ -228,7 +228,7 @@ public abstract class InstanceProvider {
     }
 
     /**
-     * 쿠키 응답 이벤트 처리 (@Lazy 덕분에 순환 참조 없음)
+     * 쿠키 응답 이벤트 처리
      */
     public void handleCookieResponse(KafkaServerEvent event) {
         try {
@@ -244,7 +244,7 @@ public abstract class InstanceProvider {
     }
 
     /**
-     * 쿠키 발견 이벤트 처리 (@Lazy 덕분에 순환 참조 없음)
+     * 쿠키 발견 이벤트 처리
      */
     public void handleCookieDiscovered(KafkaServerEvent event) {
         try {

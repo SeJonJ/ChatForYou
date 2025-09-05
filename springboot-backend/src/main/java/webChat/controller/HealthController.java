@@ -37,7 +37,7 @@ public class HealthController {
      */
     @GetMapping("/cookie")
     public ResponseEntity<String> cookieHealth(HttpServletRequest request, HttpServletResponse response) {
-        if (StringUtil.isNullOrEmpty(cookieCheckDomain)) {
+        if (StringUtil.isNullOrEmpty(cookieCheckDomain)) { // 운영환경은 세팅, 로컬은 빈값
             response.addCookie(new jakarta.servlet.http.Cookie(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName(), instanceProvider.getInstanceId()));
         }
         log.info("cookie : [{}] :: instanceId : [{}]", routingService.getCookie(request, RoutingCookie.CHATFORYOU_SERVER_COOKIE), instanceProvider.getInstanceId());
