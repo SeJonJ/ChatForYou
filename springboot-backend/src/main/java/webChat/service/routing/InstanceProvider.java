@@ -430,7 +430,7 @@ public abstract class InstanceProvider {
     private void sendHeartbeat() {
         String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
         redisService.setObject(key, System.currentTimeMillis(), 90, TimeUnit.SECONDS); // 90초 TTL
-        log.info("===== Sent heartbeat to server {} =====", instanceId);
+        log.debug("===== Sent heartbeat to server {} =====", instanceId);
     }
 
     /**
@@ -447,17 +447,18 @@ public abstract class InstanceProvider {
                 if (lastHeartbeat == null) {
                     // Redis TTL로 인해 키가 없어짐 -> 서버 비활성
                     serversToRemove.add(serverId);
-                    log.info("비활성 서버 감지됨: {}", serverId);
+                    log.debug("비활성 서버 감지됨: {}", serverId);
                 }
             }
         }
 
         // 비활성 서버들 제거
         for (String serverId : serversToRemove) {
+            redisService.delInstanceInfo(serverId);
             removeServer(serverId);
         }
 
-        log.info("===== {} inactive servers removed =====", serversToRemove.size());
+        log.debug("===== {} inactive servers removed =====", serversToRemove.size());
         log.info("===== Active servers: {} =====", getActiveServers().size());
     }
 }

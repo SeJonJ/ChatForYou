@@ -36,8 +36,7 @@ public class RoutingServiceImpl implements RoutingService {
             this.setServerCookie(response, roomRoutingInfo.getNginxCookie());
             this.setRoomIdCookie(response, roomId);
         } else {
-            String roomRedirectCount = this.getCookie(request, ROOM_REDIRECT_COUNT);
-            int redirectCount = StringUtil.isNullOrEmpty(roomRedirectCount) ? 0 : Integer.parseInt(roomRedirectCount);
+            int redirectCount = this.getRedirectCount(request);
             if(redirectCount > 3) { // 리다이렉트가 3번 초과시에만 selectedInstanceId 를 현재 instanceId 로 수정
                 String currentNginxCookie = this.getNginxCookie(request);
                 if(currentNginxCookie == null) {
@@ -61,9 +60,16 @@ public class RoutingServiceImpl implements RoutingService {
     }
 
     @Override
-    public void setRoutingInfo(HttpServletResponse response, String roomId, String nginxCookie) {
+    public void setRoutingInfo(HttpServletResponse response, String roomId, String nginxCookie, int redirectCount) {
         this.setServerCookie(response, nginxCookie);
         this.setRoomIdCookie(response, roomId);
+        this.setRoomRedirectCookie(response, redirectCount, 60);
+    }
+
+    @Override
+    public int getRedirectCount(HttpServletRequest request){
+        String roomRedirectCount = this.getCookie(request, ROOM_REDIRECT_COUNT);
+        return StringUtil.isNullOrEmpty(roomRedirectCount) ? 0 : Integer.parseInt(roomRedirectCount);
     }
 
     @Override
@@ -118,10 +124,10 @@ public class RoutingServiceImpl implements RoutingService {
         response.addCookie(cookie);
     }
 
-    private void setRoomRedirectCookie(HttpServletResponse response, int redirectCount, int age){
+    private void setRoomRedirectCookie(HttpServletResponse response, int redirectCount, Integer age){
         Cookie cookie = new Cookie(ROOM_REDIRECT_COUNT.getName(), String.valueOf(redirectCount));
         cookie.setPath("/");
-        cookie.setMaxAge(age); // 60초
+        cookie.setMaxAge(age == null ? 60 : age); // 60초
         cookie.setHttpOnly(true); // JavaScript 접근 차단 (보안)
         cookie.setSecure(false); // HTTP에서도 전송 (개발환경)
         response.addCookie(cookie);

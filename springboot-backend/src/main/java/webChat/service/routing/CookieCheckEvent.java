@@ -3,6 +3,7 @@ package webChat.service.routing;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
+import webChat.model.redis.DataType;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoutingCookie;
 import webChat.model.routing.RoutingCookieInfo;
 import webChat.service.redis.RedisService;
@@ -59,7 +62,7 @@ public class CookieCheckEvent {
 
     @EventListener(WebServerInitializedEvent.class)
     @Async
-    public void collectOwnCookieAsync() throws InterruptedException {
+    public void collectOwnCookieAsync() throws InterruptedException, BadRequestException {
         instanceProvider.initInstanceId();
         // Kafka consumer 준비 대기
         waitForKafkaConsumerReady();
@@ -229,7 +232,14 @@ public class CookieCheckEvent {
     /**
      * 개선된 Fallback - 잘못된 값 저장하지 않음
      */
-    private void handleImprovedFallback() {
+    private void handleImprovedFallback() throws InterruptedException, BadRequestException {
+        // Phase 1: 파드간 협력
+        String cookie = tryCollectFromPeersWithRetry();
+        if (cookie != null) {
+            saveCookieAndComplete(cookie);
+            return;
+        }
+
         log.error("=== Phase 3 Fallback: 모든 방법으로 nginx sessionAffinity 쿠키 수집 실패 ===");
         log.error("=== 현재 파드는 정확한 sessionAffinity 쿠키를 얻을 수 없습니다 ===");
         log.error("=== k8s/nginx 설정 또는 로드밸랜싱 동작을 확인하시기 바랍니다 ===");
@@ -359,7 +369,12 @@ public class CookieCheckEvent {
         return null;
     }
 
-    private void saveCookieAndComplete(String cookie) {
+    private void saveCookieAndComplete(String cookie) throws BadRequestException {
+        String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceProvider.getInstanceId(), DataType.INSTANCE_COOKIE, String.class);
+        if(!StringUtil.isNullOrEmpty(instanceCookie)) {
+            log.warn("=== 이미 쿠키가 존재 n: [{}] :: [{}] ===", instanceProvider.getInstanceId(), instanceCookie);
+            return;
+        }
         redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookie);
         publishCookieDiscovered(cookie);
         cookieCollected = true;

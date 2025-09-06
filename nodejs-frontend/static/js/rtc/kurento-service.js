@@ -226,24 +226,28 @@ function register() {
         // 방 정보를 서버에서 조회
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (response) => {
+            debugger;
             if(response.result === 'REDIRECT_ROOM'){
                 console.log('room redirect to : ', response.data.roomId);
                 location.reload();
             } else if(response.result === 'REDIRECT_DASHBOARD'){
                 Toastify({
                     text: "현재 방에 참여할 수 없습니다. \n 잠시 후 다시 시도해주세요.",
-                    duration: 3000,
-                    // destination: "",
+                    duration: 3000, // 토스트는 3초 유지
                     newWindow: true,
                     close: true,
-                    gravity: "top", // `top` or `bottom`
-                    position: "center", // `left`, `center` or `right`
-                    stopOnFocus: true, // Prevents dismissing of toast on hover
+                    gravity: "top",
+                    position: "center",
+                    stopOnFocus: true,
                     style: {
                         background: "linear-gradient(to right, #00b09b, #96c93d)",
                     },
                 }).showToast();
-                location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
+            
+                // 2초 후 리다이렉트
+                setTimeout(function() {
+                    location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
+                }, 2000);
             } else {
                 if (response?.data) {
                     kurentoRoomInfo = response.data;

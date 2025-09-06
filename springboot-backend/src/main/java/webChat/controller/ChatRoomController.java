@@ -71,6 +71,7 @@ public class ChatRoomController {
     public ResponseEntity<ChatForYouResponse> joinRoom(
             Model model,
             @PathVariable String roomId,
+            HttpServletRequest request,
             HttpServletResponse response) throws BadRequestException {
 
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
@@ -83,9 +84,14 @@ public class ChatRoomController {
 
         if (!instanceProvider.getInstanceId().equals(chatRoom.getInstanceId())) {
             RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix()+roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
-            // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
-            routingService.setRoutingInfo(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie());
-            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));
+            int redirectCount = routingService.getRedirectCount(request);
+            if(redirectCount > 3){
+                return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
+            } else {
+                // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
+                routingService.setRoutingInfo(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie(), redirectCount + 1);
+                return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));
+            }
         }
 
         model.addAttribute("room", chatRoom);
