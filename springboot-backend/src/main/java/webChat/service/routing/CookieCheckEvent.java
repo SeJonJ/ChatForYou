@@ -371,8 +371,8 @@ public class CookieCheckEvent {
 
     private void saveCookieAndComplete(String cookie) throws BadRequestException {
         String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceProvider.getInstanceId(), DataType.INSTANCE_COOKIE, String.class);
-        if(!StringUtil.isNullOrEmpty(instanceCookie)) {
-            log.warn("=== 이미 쿠키가 존재 n: [{}] :: [{}] ===", instanceProvider.getInstanceId(), instanceCookie);
+        if(!StringUtil.isNullOrEmpty(instanceCookie) && instanceCookie.contains("|")) {
+            log.warn("=== 이미 쿠키가 존재 : [{}] :: [{}] ===", instanceProvider.getInstanceId(), instanceCookie);
             return;
         }
         redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookie);
