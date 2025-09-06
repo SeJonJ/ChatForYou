@@ -50,6 +50,7 @@ public abstract class InstanceProvider {
     private CookieCheckEvent cookieCheckEvent;
 
     private String instanceId;
+    private boolean isShutdown = false;
 
     public void initInstanceId() {
         // 1. instanceId 생성
@@ -118,7 +119,6 @@ public abstract class InstanceProvider {
     /**
      * 서버 종료 시 이벤트 처리
      */
-    @PreDestroy
     public synchronized void shutdown() {
         // 종료 시 다른 서버들에게 알림
         publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
@@ -130,6 +130,7 @@ public abstract class InstanceProvider {
         if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown()) {
             heartbeatScheduler.shutdown();
         }
+        isShutdown = true;
 
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }
@@ -412,8 +413,12 @@ public abstract class InstanceProvider {
         sendHeartbeat();
         checkInactiveServers();
         heartbeatScheduler.scheduleAtFixedRate(() -> {
-            sendHeartbeat();
-            checkInactiveServers();
+            try {
+                sendHeartbeat();
+                checkInactiveServers();
+            } catch (Exception e) {
+                log.error("Heartbeat task failed", e);
+            }
         }, 30, 30, TimeUnit.SECONDS); // 30초마다 실행
 
         log.info("Heartbeat 시작됨: {}", instanceId);
@@ -437,7 +442,7 @@ public abstract class InstanceProvider {
         for (String serverId : getActiveServers()) {
             if (!serverId.equals(instanceId)) { // 자신은 제외
                 String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + serverId;
-                String lastHeartbeat = (String) redisService.getObject(key, Object.class);
+                Long lastHeartbeat = (Long) redisService.getObject(key, Object.class);
 
                 if (lastHeartbeat == null) {
                     // Redis TTL로 인해 키가 없어짐 -> 서버 비활성

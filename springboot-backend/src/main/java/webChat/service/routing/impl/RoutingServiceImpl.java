@@ -36,8 +36,8 @@ public class RoutingServiceImpl implements RoutingService {
             this.setServerCookie(response, roomRoutingInfo.getNginxCookie());
             this.setRoomIdCookie(response, roomId);
         } else {
-            String roomRedirectCookie = this.getCookie(request, ROOM_REDIRECT_COUNT);
-            int redirectCount = StringUtil.isNullOrEmpty(roomRedirectCookie) ? 0 : Integer.parseInt(roomRedirectCookie);
+            String roomRedirectCount = this.getCookie(request, ROOM_REDIRECT_COUNT);
+            int redirectCount = StringUtil.isNullOrEmpty(roomRedirectCount) ? 0 : Integer.parseInt(roomRedirectCount);
             if(redirectCount > 3) { // 리다이렉트가 3번 초과시에만 selectedInstanceId 를 현재 instanceId 로 수정
                 String currentNginxCookie = this.getNginxCookie(request);
                 if(currentNginxCookie == null) {
@@ -50,6 +50,7 @@ public class RoutingServiceImpl implements RoutingService {
                 this.setRoomRedirectCookie(response, 1, 0);
             } else {
                 String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + myInstanceId, DataType.INSTANCE_COOKIE, String.class);
+                redisService.saveRoomRoutingInfo(RoomRoutingInfo.of(roomId, myInstanceId, instanceCookie, System.currentTimeMillis()));
                 this.setServerCookie(response, instanceCookie);
                 this.setRoomIdCookie(response, roomId);
                 this.setRoomRedirectCookie(response, redirectCount + 1, 60);

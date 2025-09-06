@@ -215,7 +215,7 @@ public class CookieCheckEvent {
             String respInstanceId = extractResponseInstanceId(response);
             boolean isValid = respInstanceId.equals(instanceProvider.getInstanceId());
 
-            log.debug("실제 쿠키 검증: 쿠키={}, 응답instanceId={}, 내instanceId={}, 결과={}",
+            log.debug("실제 쿠키 검증: 쿠키={}, 응답 instanceId={}, 내instanceId={}, 결과={}",
                     cookie, respInstanceId, instanceProvider.getInstanceId(), isValid);
 
             return isValid;
