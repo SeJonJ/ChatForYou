@@ -43,6 +43,7 @@ public class KafkaServerEvent extends KafkaEvent {
 
     /**
      * 쿠키 요청 이벤트 생성
+     * '나' 의 쿠키를 요청
      */
     public static KafkaServerEvent createCookieRequest(String instanceId) {
         return KafkaServerEvent.builder()

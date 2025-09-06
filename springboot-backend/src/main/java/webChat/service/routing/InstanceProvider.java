@@ -17,6 +17,8 @@ import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
+
+import javax.annotation.PreDestroy;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -47,7 +49,6 @@ public abstract class InstanceProvider {
     private CookieCheckEvent cookieCheckEvent; // 이 어노테이션만 추가!
 
     private String instanceId;
-    private boolean isShutdown = false;
 
     public void initInstanceId() {
         log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
@@ -115,6 +116,7 @@ public abstract class InstanceProvider {
     /**
      * 서버 종료 시 이벤트 처리
      */
+    @PreDestroy
     public synchronized void shutdown() {
         // 종료 시 다른 서버들에게 알림
         publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
@@ -126,11 +128,6 @@ public abstract class InstanceProvider {
         if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown()) {
             heartbeatScheduler.shutdown();
         }
-
-        // Redis에서 heartbeat 키 삭제
-        String heartbeatKey = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
-        redisService.delete(heartbeatKey);
-        isShutdown = true;
 
         log.info("Instance {} shutdown announced to cluster", instanceId);
     }

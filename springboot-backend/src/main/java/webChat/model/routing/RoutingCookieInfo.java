@@ -37,6 +37,7 @@ public class RoutingCookieInfo {
 
     /**
      * 쿠키 요청 이벤트용 팩토리 메서드
+     * requestId 에 해당하는 쿠키 요청
      */
     public static RoutingCookieInfo forRequest(String requesterId) {
         return RoutingCookieInfo.builder()
@@ -47,6 +48,7 @@ public class RoutingCookieInfo {
 
     /**
      * 쿠키 응답 이벤트용 팩토리 메서드
+     * responseFrom 가 requestId 에 해당하는 쿠키 응답
      */
     public static RoutingCookieInfo forResponse(String requesterId, String cookie, String responseFrom) {
         return RoutingCookieInfo.builder()

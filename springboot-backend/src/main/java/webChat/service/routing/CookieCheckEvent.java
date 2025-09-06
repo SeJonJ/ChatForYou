@@ -134,7 +134,7 @@ public class CookieCheckEvent {
         try {
             log.info("=== Phase 2: 확률적 최적화 시작 ===");
 
-            int activePods = instanceProvider.getActiveServers().size(); // 기존 그대로!
+            int activePods = instanceProvider.getActiveServers().size();
             int optimalRetries = calculateOptimalRetries(activePods, CONFIDENCE_LEVEL);
             int maxRetries = Math.min(optimalRetries, PHASE2_MAX_RETRIES);
 
@@ -147,10 +147,15 @@ public class CookieCheckEvent {
                             cookieCheckDomain + COOKIE_CHECK_PATH, new HttpHeaders(), null);
 
                     String respInstanceId = extractResponseInstanceId(response);
-                    if (respInstanceId.equals(instanceProvider.getInstanceId())) { // 기존 그대로!
+                    if (respInstanceId.equals(instanceProvider.getInstanceId())) {
                         String cookie = extractCookieFromResponse(response);
                         log.info("=== Phase 2 성공: {}회 시도만에 쿠키 획득 ===", attempt);
                         return cookie;
+                    } else {
+                        String cookie = extractCookieFromResponse(response);
+                        if(!StringUtil.isNullOrEmpty(cookie) && cookie.contains("|")) {
+                            this.publishCookieResponse(respInstanceId, cookie);
+                        }
                     }
 
                     long delay = Math.min(800 * (long)Math.pow(1.4, attempt), 3000);
@@ -224,12 +229,14 @@ public class CookieCheckEvent {
 
             // 내가 요청한 쿠키 응답인지 확인
             if (instanceProvider.getInstanceId().equals(requesterId)) {
-                log.info("쿠키 응답 수신: {} -> {} (쿠키: {})", responseFrom, requesterId, cookie);
+                log.info("쿠키 응답 수신: {} -> 로 부터 확인한 -> {} 의 쿠키: [{}]", responseFrom, requesterId, cookie);
 
-                if (cookie != null && !cookie.isEmpty()) {
-                    String predictedCookie = predictMyCookieFromPattern(cookie, responseFrom);
-                    saveCookieAndComplete(predictedCookie);
-                    log.info("쿠키 응답으로부터 성공적으로 쿠키 획득: {}", predictedCookie);
+                if (!StringUtil.isNullOrEmpty(cookie)) {
+                    String predictedCookie = predictMyCookieFromPattern(cookie, requesterId);
+                    if (!StringUtil.isNullOrEmpty(predictedCookie)) {
+                        saveCookieAndComplete(predictedCookie);
+                        log.info("쿠키 응답으로부터 성공적으로 쿠키 획득: {}", predictedCookie);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -251,8 +258,10 @@ public class CookieCheckEvent {
                 if (cookieInfo != null && cookieInfo.isValidForDiscovery() && !cookieCollected) {
                     String discoveredCookie = cookieInfo.getCookie();
                     String predictedCookie = predictMyCookieFromPattern(discoveredCookie, discovererId);
-                    saveCookieAndComplete(predictedCookie);
-                    log.info("발견된 쿠키로부터 성공적으로 내 쿠키 획득: {}", predictedCookie);
+                    if (!StringUtil.isNullOrEmpty(predictedCookie)) {
+                        saveCookieAndComplete(predictedCookie);
+                        log.info("쿠키 응답으로부터 성공적으로 쿠키 획득: {}", predictedCookie);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -275,7 +284,16 @@ public class CookieCheckEvent {
         return null;
     }
 
+    /**
+     * 내 쿠키를 확인
+     * @param peerCookie
+     * @param peerInstanceId
+     * @return
+     */
     private String predictMyCookieFromPattern(String peerCookie, String peerInstanceId) {
+        if(peerCookie == null || peerInstanceId == null) return null;
+        if(!instanceProvider.getInstanceId().equals(peerInstanceId)) return null;
+
         if (peerCookie.contains("|")) {
             if (peerCookie.length() > 10 && !peerCookie.equals(peerInstanceId)) {
                 return peerCookie;

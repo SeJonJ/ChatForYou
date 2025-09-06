@@ -497,6 +497,7 @@ public class RedisServiceImpl implements RedisService {
         masterTemplate.delete(ROOM_COUNT_PREFIX.getPrefix() + instanceId);
         masterTemplate.delete(INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId);
         masterTemplate.delete(INSTANCE_INFO_PREFIX.getPrefix() + instanceId);
+        masterTemplate.delete(INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId);
     }
 
     @Override
@@ -517,7 +518,7 @@ public class RedisServiceImpl implements RedisService {
             for (String key : keys) {
                 String instanceId = key.replace(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix(), "");
                 // Replication lag 보안을 위해 master 에서 읽어옴
-                String cookie = Objects.requireNonNull(masterTemplate.opsForValue().get(key)).toString();
+                String cookie = (String) masterTemplate.opsForValue().get(key);
                 if (cookie != null) {
                     cookieMap.put(instanceId, cookie);
                 }

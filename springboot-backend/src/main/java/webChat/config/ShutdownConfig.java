@@ -77,11 +77,6 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
             kurentoRoomManager.deleteKurentoRoom(kurentoRoom);
         }
 
-        // shutdown 이벤트 실행
-        if (!instanceProvider.isShutdown()) {
-            instanceProvider.shutdown();
-        }
-
         kurentoClient.destroy();
         // 재배포 시 필요한 정리 작업
         log.info("All Kurento Data destroyed - Clean up completed");
