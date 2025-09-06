@@ -46,13 +46,11 @@ public abstract class InstanceProvider {
 
     @Autowired
     @Lazy
-    private CookieCheckEvent cookieCheckEvent; // 이 어노테이션만 추가!
+    private CookieCheckEvent cookieCheckEvent;
 
     private String instanceId;
 
     public void initInstanceId() {
-        log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
-
         // 1. instanceId 생성
         String podName = System.getenv("POD_NAME");
         if(podName == null){
@@ -65,6 +63,10 @@ public abstract class InstanceProvider {
         // podName-startTime-shortHash 혹은 chatforyou-startTime-shortHash
         // ex) chat-server-abc123-1692547200000-a1b2c3
         this.instanceId = podName + "-" + startTime + "-" + shortHash;
+    }
+
+    public void initInstanceProviderEvent() {
+        log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
 
         // 2. 자신을 해시 링에 먼저 추가 (부팅 시 즉시 사용 가능하도록)
         addServer(instanceId);
@@ -434,7 +436,7 @@ public abstract class InstanceProvider {
         for (String serverId : getActiveServers()) {
             if (!serverId.equals(instanceId)) { // 자신은 제외
                 String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + serverId;
-                String lastHeartbeat = redisService.getObject(key, String.class);
+                String lastHeartbeat = (String) redisService.getObject(key, Object.class);
 
                 if (lastHeartbeat == null) {
                     // Redis TTL로 인해 키가 없어짐 -> 서버 비활성
