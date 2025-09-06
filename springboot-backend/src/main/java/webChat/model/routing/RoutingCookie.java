@@ -6,7 +6,7 @@ import lombok.Getter;
 public enum RoutingCookie {
     CHATFORYOU_SERVER_COOKIE("chatforyou-server"),
     ROOM_ID_COOKIE("room-id"),
-    ROOM_REDIRECT_COOKIE("room-redirect")
+    ROOM_REDIRECT_COUNT("room-redirect-count")
     ;
 
     private final String name;

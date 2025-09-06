@@ -29,7 +29,7 @@ class RedisServiceImplTest {
         for(Map.Entry<String, String> entry : allInstanceCookies.entrySet()){
             log.info("===================================");
             log.info("instanceId: {}, cookie: {}", entry.getKey(), entry.getValue());
-            log.info("===================================");
+
         }
 
     }

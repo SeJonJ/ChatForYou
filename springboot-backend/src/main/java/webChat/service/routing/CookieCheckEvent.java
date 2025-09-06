@@ -363,7 +363,7 @@ public class CookieCheckEvent {
         redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookie);
         publishCookieDiscovered(cookie);
         cookieCollected = true;
-        log.info("=== 실제 nginx sessionAffinity 쿠키 수집 성공: {} ===", cookie);
+        log.info("=== 실제 nginx sessionAffinity 쿠키 수집 성공: [{}] :: [{}] ===", instanceProvider.getInstanceId(), cookie);
     }
 
     /**

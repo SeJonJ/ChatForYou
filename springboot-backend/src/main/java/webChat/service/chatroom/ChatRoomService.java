@@ -64,7 +64,7 @@ public class ChatRoomService {
             // 2. roomId 로 저장된 routing 정보 확인
             RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
             // 3. 최적의 instanceId 확인
-            String selectedInstanceId = instanceProvider.getServerForRoom(roomId);
+            String selectedInstanceId = instanceProvider.getServerForRoom(roomId, roomRoutingInfo);
             if(roomRoutingInfo != null) {
                 selectedInstanceId = roomRoutingInfo.getInstanceId();
             }

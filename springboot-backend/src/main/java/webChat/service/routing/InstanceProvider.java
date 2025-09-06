@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
 
@@ -63,6 +64,7 @@ public abstract class InstanceProvider {
         // podName-startTime-shortHash 혹은 chatforyou-startTime-shortHash
         // ex) chat-server-abc123-1692547200000-a1b2c3
         this.instanceId = podName + "-" + startTime + "-" + shortHash;
+        log.info("===== My Instance ID [{}] :: now initialized and announced to cluster =====", instanceId);
     }
 
     public void initInstanceProviderEvent() {
@@ -81,8 +83,6 @@ public abstract class InstanceProvider {
 
         // 5. heartbeat 시작
         startHeartbeat();
-
-        log.info("===== Instance {} initialized and announced to cluster =====", instanceId);
     }
 
     /**
@@ -272,7 +272,7 @@ public abstract class InstanceProvider {
      * @param roomId 방 ID
      * @return 최적 서버 ID, 서버가 없으면 null
      */
-    public String getServerForRoom(String roomId) throws BadRequestException {
+    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) throws BadRequestException {
         if (hashRing.isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
@@ -425,6 +425,7 @@ public abstract class InstanceProvider {
     private void sendHeartbeat() {
         String key = RedisKeyPrefix.INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId;
         redisService.setObject(key, System.currentTimeMillis(), 90, TimeUnit.SECONDS); // 90초 TTL
+        log.info("===== Sent heartbeat to server {} =====", instanceId);
     }
 
     /**
@@ -441,7 +442,7 @@ public abstract class InstanceProvider {
                 if (lastHeartbeat == null) {
                     // Redis TTL로 인해 키가 없어짐 -> 서버 비활성
                     serversToRemove.add(serverId);
-                    log.warn("비활성 서버 감지됨: {}", serverId);
+                    log.info("비활성 서버 감지됨: {}", serverId);
                 }
             }
         }

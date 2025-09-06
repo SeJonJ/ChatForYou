@@ -48,13 +48,12 @@ public class RoutingInstanceProvider extends InstanceProvider {
     }
 
     @Override
-    public String getServerForRoom(String roomId) throws BadRequestException {
+    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) throws BadRequestException {
         if (getHashRing().isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
         }
 
-        RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
         if(roomRoutingInfo != null && !StringUtil.isNullOrEmpty(roomRoutingInfo.getInstanceId())) {
             return roomRoutingInfo.getInstanceId();
         }
