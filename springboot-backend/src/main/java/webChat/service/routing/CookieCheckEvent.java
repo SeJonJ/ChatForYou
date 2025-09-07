@@ -7,7 +7,9 @@ import org.apache.coyote.BadRequestException;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.web.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +29,7 @@ import webChat.utils.StringUtil;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Nginx가 발급하는 sessionAffinity 쿠키를 수집하고,
@@ -47,6 +50,7 @@ public class CookieCheckEvent {
     @Lazy
     private final RoutingInstanceProvider instanceProvider;
     private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
+    private final ApplicationContext applicationContext;
 
     @Value("${cookie.check.domain:https://localhost:8443}")
     private String cookieCheckDomain;
@@ -73,7 +77,7 @@ public class CookieCheckEvent {
         log.info("=== 인스턴스 제공 이벤트 init 시작 ===");
         instanceProvider.initInstanceProviderEvent();
 
-        log.info("=== 85% 최적화된 쿠키 수집 시작 ===");
+        log.info("=== 최적화 쿠키 수집 시작 ===");
 
         // Phase 1: 파드간 협력
         String cookie = tryCollectFromPeersWithRetry();
@@ -135,7 +139,7 @@ public class CookieCheckEvent {
                     String peerInstanceId = entry.getKey();
                     String peerCookie = entry.getValue();
 
-                    log.info("발견된 파드: {} -> 쿠키: {}", peerInstanceId, peerCookie);
+                    log.debug("발견된 파드: {} -> 쿠키: {}", peerInstanceId, peerCookie);
 
                     // 실제 nginx 응답을 통한 검증만 수행
                     if (validateActualCookie(peerCookie)) {
@@ -237,7 +241,7 @@ public class CookieCheckEvent {
         result = Math.max(result, MIN_RETRY_COUNT);
         result = Math.min(result, MAX_RETRY_COUNT);
 
-        log.info("최적화 계산: N = [{}], 목표성공률 = [{} %], 계산된시도횟수 = [{}], 적용시도횟수 = [{}]",
+        log.info("최적화 계산: N = [{}], 목표성공률 = [{}%], 계산된시도횟수 = [{}], 적용시도횟수 = [{}]",
                 activePods, (int)(TARGET_SUCCESS_RATE * 100), (int)Math.ceil(optimalRetries), result);
 
         return result;
@@ -286,8 +290,28 @@ public class CookieCheckEvent {
         // 잘못된 값(instanceId)을 Redis에 저장하지 않음
         cookieCollected = false;
 
+        // 3초 후 애플리케이션 graceful shutdown
+        scheduleApplicationShutdown();
+
         // 필요시 모니터링을 위한 메트릭 기록
         log.warn("파드 {}는 sessionAffinity 기능을 사용할 수 없는 상태입니다", instanceProvider.getInstanceId());
+    }
+
+    /**
+     * 파드 재시작을 위한 애플리케이션 graceful shutdown
+     */
+    private void scheduleApplicationShutdown() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(3000); // 3초 대기 (로그 출력 및 정리 시간)
+                log.info("=== 파드 재시작을 위한 애플리케이션 graceful shutdown 시작 ===");
+                int exitCode = SpringApplication.exit(applicationContext, () -> 1);
+                System.exit(exitCode);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("애플리케이션 종료 중 인터럽트 발생", e);
+            }
+        });
     }
 
     /**
@@ -410,7 +434,7 @@ public class CookieCheckEvent {
 
     private void saveCookieAndComplete(String cookie) throws BadRequestException {
         String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceProvider.getInstanceId(), DataType.INSTANCE_COOKIE, String.class);
-        if(!StringUtil.isNullOrEmpty(instanceCookie) && instanceCookie.contains("|")) {
+        if(!StringUtil.isNullOrEmpty(cookieCheckDomain) && !StringUtil.isNullOrEmpty(instanceCookie) && instanceCookie.contains("|")) {
             log.warn("=== 이미 쿠키가 존재 : [{}] :: [{}] ===", instanceProvider.getInstanceId(), instanceCookie);
             return;
         }

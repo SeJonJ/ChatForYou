@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
+import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
@@ -55,8 +56,6 @@ public class RoutingServiceImpl implements RoutingService {
                 this.setRoomRedirectCookie(response, redirectCount + 1, 60);
             }
         }
-
-
     }
 
     @Override
@@ -107,29 +106,35 @@ public class RoutingServiceImpl implements RoutingService {
     }
 
     private void setServerCookie(HttpServletResponse response, String nginxCookie){
-        Cookie cookie = new Cookie(CHATFORYOU_SERVER_COOKIE.getName(), nginxCookie);
-        cookie.setPath("/");
-        cookie.setMaxAge(24 * 60 * 60); // 24시간
-        cookie.setHttpOnly(true); // JavaScript 접근 차단 (보안)
-        cookie.setSecure(false); // HTTP에서도 전송 (개발환경)
-        response.addCookie(cookie);
+        ResponseCookie responseCookie = ResponseCookie.from(CHATFORYOU_SERVER_COOKIE.getName(), nginxCookie)
+                .path("/")
+                .maxAge(24 * 60 * 60)
+                .httpOnly(true)
+                .secure(false)
+                .sameSite("None")
+                .build();
+        response.setHeader("Set-Cookie", responseCookie.toString());
     }
 
     private void setRoomIdCookie(HttpServletResponse response, String roomId){
-        Cookie cookie = new Cookie(ROOM_ID_COOKIE.getName(), roomId);
-        cookie.setPath("/");
-        cookie.setMaxAge(60); // 60초
-        cookie.setHttpOnly(false); // JavaScript 접근 차단 (보안)
-        cookie.setSecure(false); // HTTP에서도 전송 (개발환경)
-        response.addCookie(cookie);
+        ResponseCookie responseCookie = ResponseCookie.from(ROOM_ID_COOKIE.getName(), roomId)
+                .path("/")
+                .maxAge(60)
+                .httpOnly(false)
+                .secure(false)
+                .sameSite("None")
+                .build();
+        response.setHeader("Set-Cookie", responseCookie.toString());
     }
 
     private void setRoomRedirectCookie(HttpServletResponse response, int redirectCount, Integer age){
-        Cookie cookie = new Cookie(ROOM_REDIRECT_COUNT.getName(), String.valueOf(redirectCount));
-        cookie.setPath("/");
-        cookie.setMaxAge(age == null ? 60 : age); // 60초
-        cookie.setHttpOnly(true); // JavaScript 접근 차단 (보안)
-        cookie.setSecure(false); // HTTP에서도 전송 (개발환경)
-        response.addCookie(cookie);
+        ResponseCookie responseCookie = ResponseCookie.from(ROOM_REDIRECT_COUNT.getName(), String.valueOf(redirectCount))
+                .path("/")
+                .maxAge(age == null ? 60 : age)
+                .httpOnly(true)
+                .secure(false)
+                .sameSite("None")
+                .build();
+        response.setHeader("Set-Cookie", responseCookie.toString());
     }
 }
