@@ -110,7 +110,7 @@ public class RoutingServiceImpl implements RoutingService {
                 .path("/")
                 .maxAge(24 * 60 * 60)
                 .httpOnly(true)
-                .secure(false)
+                .secure(true)
                 .sameSite("None")
                 .build();
         response.setHeader("Set-Cookie", responseCookie.toString());
@@ -121,7 +121,7 @@ public class RoutingServiceImpl implements RoutingService {
                 .path("/")
                 .maxAge(60)
                 .httpOnly(false)
-                .secure(false)
+                .secure(true)
                 .sameSite("None")
                 .build();
         response.setHeader("Set-Cookie", responseCookie.toString());
@@ -132,7 +132,7 @@ public class RoutingServiceImpl implements RoutingService {
                 .path("/")
                 .maxAge(age == null ? 60 : age)
                 .httpOnly(true)
-                .secure(false)
+                .secure(true)
                 .sameSite("None")
                 .build();
         response.setHeader("Set-Cookie", responseCookie.toString());

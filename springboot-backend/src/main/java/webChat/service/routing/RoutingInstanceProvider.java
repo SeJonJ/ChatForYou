@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import webChat.model.kafka.KafkaEvent;
-import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
@@ -31,14 +30,14 @@ public class RoutingInstanceProvider extends InstanceProvider {
     public void incrementInstanceRoomCount() {
         String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
         Long newCount = redisService.increment(key, 1);
-        log.info("Server {} room count increased to: {}", this.getInstanceId(), newCount);
+        log.debug("Server {} room count increased to: {}", this.getInstanceId(), newCount);
     }
 
     // 방 삭제 시 현재 서버의 방 개수 감소
     public void decrementInstanceRoomCount() {
         String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
         Long newCount = redisService.decrement(key, 1);
-        log.info("Server {} room count decreased to: {}", this.getInstanceId(), newCount);
+        log.debug("Server {} room count decreased to: {}", this.getInstanceId(), newCount);
     }
 
     // 서버의 현재 활성 방 개수 조회
@@ -103,7 +102,7 @@ public class RoutingInstanceProvider extends InstanceProvider {
         for (String candidate : candidates) {
             String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + candidate;
             long roomCount = redisService.getInstanceRoomCount(key);
-            log.info("Server {} has {} active rooms", candidate, roomCount);
+            log.info("=== Server {} has {} active rooms", candidate, roomCount);
 
             if (roomCount < minRoomCount) {
                 minRoomCount = roomCount;
@@ -111,7 +110,7 @@ public class RoutingInstanceProvider extends InstanceProvider {
             }
         }
 
-        log.info("Selected server {} with {} active rooms", bestServer, minRoomCount);
+        log.info("=== Selected server {} with {} active rooms", bestServer, minRoomCount);
         return bestServer != null ? bestServer : this.getInstanceId();
     }
 }

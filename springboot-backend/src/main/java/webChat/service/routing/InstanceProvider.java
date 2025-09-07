@@ -130,7 +130,7 @@ public abstract class InstanceProvider {
         }
         isShutdown = true;
 
-        log.info("Instance {} shutdown announced to cluster", instanceId);
+        log.debug("Instance {} shutdown announced to cluster", instanceId);
     }
 
     /**
@@ -165,7 +165,7 @@ public abstract class InstanceProvider {
                     // 새로운 서버가 discovery 요청 → 해당 서버를 등록하고 자신의 존재를 알림
                     if (!this.isHealthy(event.getInstanceId())) {
                         addServer(event.getInstanceId());
-                        log.info("===== New server discovered via discovery request: {}", event.getInstanceId());
+                        log.debug("===== New server discovered via discovery request: {}", event.getInstanceId());
                     }
                     publishServerEvent(ServerEvent.SERVER_DISCOVERY_RESPONSE, instanceId);
                     break;
@@ -174,7 +174,7 @@ public abstract class InstanceProvider {
                     // 기존 서버의 응답 → 해당 서버를 등록
                     if (!this.isHealthy(event.getInstanceId())) {
                         addServer(event.getInstanceId());
-                        log.info("===== Added existing server via discovery response: {}", event.getInstanceId());
+                        log.debug("===== Added existing server via discovery response: {}", event.getInstanceId());
                     }
                     break;
 
@@ -187,7 +187,7 @@ public abstract class InstanceProvider {
 
                 case SERVER_STOPPED:
                     removeServer(event.getInstanceId());
-                    log.info("===== Removed server via SERVER_STOPPED event: {}", event.getInstanceId());
+                    log.debug("===== Removed server via SERVER_STOPPED event: {}", event.getInstanceId());
                     break;
 
                 case SERVER_COOKIE_REQUEST:
@@ -455,6 +455,6 @@ public abstract class InstanceProvider {
         }
 
         log.debug("===== {} inactive servers removed =====", serversToRemove.size());
-        log.info("===== Active servers: {} =====", getActiveServers().size());
+        log.debug("===== Active servers: {} =====", getActiveServers().size());
     }
 }
