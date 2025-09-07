@@ -32,9 +32,8 @@ import java.util.Random;
  * Nginx가 발급하는 sessionAffinity 쿠키를 수집하고,
  * 내 instanceId와 쿠키를 Redis에 매핑해 저장하는 컴포넌트
  *
- * 개선사항 (기존 아키텍처 최소 변경):
  * - Phase 1: 파드간 협력 유지 (첫 번째 파드 성공 방식)
- * - Phase 2: 시도 횟수 대폭 증가로 확률적 성공률 향상
+ * - Phase 2: 85% 목표 성공률 기반 Dynamic Retry Count로 요청 횟수 최적화
  * - Phase 3: 잘못된 값 저장 방지
  */
 @Component
@@ -57,8 +56,12 @@ public class CookieCheckEvent {
     // Phase별 개선된 설정값
     private static final int PHASE1_TIMEOUT_MS = 5000;
     private static final int PHASE1_MAX_RETRIES = 3;
-    private static final int PHASE2_MAX_RETRIES = 50; // 기존 5회 → 50회로 대폭 증가
-    private static final int PHASE2_REQUEST_INTERVAL_MS = 200; // 요청 간격 조정
+    private static final double TARGET_SUCCESS_RATE = 0.85; // 85% 목표 성공률로 최적화
+    private static final int MIN_RETRY_COUNT = 3; // 최소 시도 횟수
+    private static final int MAX_RETRY_COUNT = 25; // 최대 시도 횟수 (안전장치)
+    private static final int BASE_INTERVAL_MS = 50; // 기본 간격 50ms
+    private static final double BACKOFF_MULTIPLIER = 1.5; // 지수적 백오프 승수
+    private static final int MAX_INTERVAL_MS = 1000; // 최대 간격 1초
 
     @EventListener(WebServerInitializedEvent.class)
     @Async
@@ -70,7 +73,7 @@ public class CookieCheckEvent {
         log.info("=== 인스턴스 제공 이벤트 init 시작 ===");
         instanceProvider.initInstanceProviderEvent();
 
-        log.info("=== 쿠키 수집 시작 ===");
+        log.info("=== 85% 최적화된 쿠키 수집 시작 ===");
 
         // Phase 1: 파드간 협력
         String cookie = tryCollectFromPeersWithRetry();
@@ -79,7 +82,7 @@ public class CookieCheckEvent {
             return;
         }
 
-        // Phase 2: 확률적 최적화
+        // Phase 2: 85% 목표 성공률 기반 최적화
         cookie = tryOptimizedCollectionImproved();
         if (cookie != null) {
             saveCookieAndComplete(cookie);
@@ -128,7 +131,6 @@ public class CookieCheckEvent {
             if (!peerCookies.isEmpty()) {
                 log.info("발견된 파드 쿠키 수: {}", peerCookies.size());
 
-                // 쿠키 예측 제거, 실제 응답만 사용
                 for (Map.Entry<String, String> entry : peerCookies.entrySet()) {
                     String peerInstanceId = entry.getKey();
                     String peerCookie = entry.getValue();
@@ -153,18 +155,26 @@ public class CookieCheckEvent {
     }
 
     /**
-     * Phase 2: 대폭 개선된 확률적 최적화
+     * Phase 2: Dynamic Retry Count 최적화
      */
     private String tryOptimizedCollectionImproved() {
         try {
-            log.info("=== Phase 2: 확률적 최적화 시작 ===");
+            log.info("=== Phase 2: 네트워크 요청을 통해 확률적 cookie 체크 수행 ===");
 
             int activePods = instanceProvider.getActiveServers().size();
-            int maxRetries = PHASE2_MAX_RETRIES;
+            int optimalRetries = calculateOptimalRetryCount(activePods); // 새로운 Dynamic 계산
 
-            log.info("활성 파드 수: {}, 최대 시도 횟수: {}", activePods, maxRetries);
+            log.info("활성 파드 수: {}, 시도 횟수: {}", activePods, optimalRetries);
 
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            int currentInterval = BASE_INTERVAL_MS;
+
+            for (int attempt = 1; attempt <= optimalRetries; attempt++) {
+                // Early termination: 다른 파드가 성공했는지 체크
+                if (cookieCollected) {
+                    log.info("=== Phase 2 조기 종료: 다른 파드가 이미 성공 ===");
+                    return null;
+                }
+
                 try {
                     HttpResponse response = HttpUtil.getWithFullResponse(
                             cookieCheckDomain + COOKIE_CHECK_PATH, new HttpHeaders(), null);
@@ -174,28 +184,29 @@ public class CookieCheckEvent {
 
                     if (!StringUtil.isNullOrEmpty(cookie) && cookie.contains("|")) {
                         if (respInstanceId.equals(instanceProvider.getInstanceId())) {
-                            log.info("=== Phase 2 성공: {}회 시도만에 실제 nginx 쿠키 획득 ===", attempt);
+                            log.info("=== Phase 2 성공: {} 회 시도만에 실제 nginx 쿠키 획득 ===", attempt);
                             return cookie;
-                        }else {
+                        } else {
                             this.publishCookieResponse(respInstanceId, cookie);
                         }
                     }
 
-                    // 요청 간격 조정
-                    Thread.sleep(PHASE2_REQUEST_INTERVAL_MS);
+                    // Exponential backoff with jitter
+                    Thread.sleep(currentInterval + new Random().nextInt(50));
+                    currentInterval = Math.min((int)(currentInterval * BACKOFF_MULTIPLIER), MAX_INTERVAL_MS);
 
                 } catch (Exception e) {
-                    log.warn("Phase 2 시도 {}/{} 실패: {}", attempt, maxRetries, e.getMessage());
-                    Thread.sleep(PHASE2_REQUEST_INTERVAL_MS);
+                    log.warn("Phase 2 시도 {}/{} 실패: {}", attempt, optimalRetries, e.getMessage());
+                    Thread.sleep(currentInterval);
                 }
 
-                // 진행상황 로깅
-                if (attempt % 10 == 0) {
-                    log.info("Phase 2 진행중: {}/{} 시도 완료", attempt, maxRetries);
+                // 진행상황 로깅 (매 5회마다)
+                if (attempt % 5 == 0) {
+                    log.info("Phase 2 진행중: {}/{} 시도 완료 (현재 간격: {}ms)", attempt, optimalRetries, currentInterval);
                 }
             }
 
-            log.info("=== Phase 2 실패: {}회 모든 시도 실패, Phase 3 Fallback으로 이동 ===", maxRetries);
+            log.info("=== Phase 2 실패: {}회 최적화 시도 실패, Phase 3 Fallback 으로 이동 ===", optimalRetries);
             return null;
 
         } catch (Exception e) {
@@ -205,7 +216,35 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 실제 쿠키 검증
+     * 성공률(TARGET_SUCCESS_RATE) 기반 최적 재시도 횟수 계산
+     * 수학적 공식: k >= ln(1 - TARGET_SUCCESS_RATE) / ln(1 - 1/N)
+     * @param activePods 활성 파드 수 (N)
+     * @return 최적 재시도 횟수
+     */
+    private int calculateOptimalRetryCount(int activePods) {
+        if (activePods <= 1) {
+            return MIN_RETRY_COUNT;
+        }
+
+        // p = TARGET_SUCCESS_RATE (0.85)
+        // N = activePods
+        double probability = 1.0 / activePods;
+        double optimalRetries = Math.log(1 - TARGET_SUCCESS_RATE) / Math.log(1 - probability);
+
+        int result = (int) Math.ceil(optimalRetries);
+
+        // 최소값과 최대값 사이로 제한
+        result = Math.max(result, MIN_RETRY_COUNT);
+        result = Math.min(result, MAX_RETRY_COUNT);
+
+        log.info("최적화 계산: N = [{}], 목표성공률 = [{} %], 계산된시도횟수 = [{}], 적용시도횟수 = [{}]",
+                activePods, (int)(TARGET_SUCCESS_RATE * 100), (int)Math.ceil(optimalRetries), result);
+
+        return result;
+    }
+
+    /**
+     * 실제 쿠키 검증 
      */
     private boolean validateActualCookie(String cookie) {
         try {
@@ -218,7 +257,7 @@ public class CookieCheckEvent {
             String respInstanceId = extractResponseInstanceId(response);
             boolean isValid = respInstanceId.equals(instanceProvider.getInstanceId());
 
-            log.debug("실제 쿠키 검증: 쿠키={}, 응답 instanceId={}, 내instanceId={}, 결과={}",
+            log.info("=== 실제 쿠키 검증 결과 :: 쿠키 = [{}], 응답 instanceId = [{}], 내 instanceId = [{}], 결과 = [{}]",
                     cookie, respInstanceId, instanceProvider.getInstanceId(), isValid);
 
             return isValid;
@@ -230,19 +269,19 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 개선된 Fallback - 잘못된 값 저장하지 않음
+     * 개선된 Fallback 
      */
     private void handleImprovedFallback() throws InterruptedException, BadRequestException {
-        // Phase 1: 파드간 협력
+        // Phase 1: 파드간 협력 재시도
         String cookie = tryCollectFromPeersWithRetry();
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
         }
 
-        log.error("=== Phase 3 Fallback: 모든 방법으로 nginx sessionAffinity 쿠키 수집 실패 ===");
-        log.error("=== 현재 파드는 정확한 sessionAffinity 쿠키를 얻을 수 없습니다 ===");
-        log.error("=== k8s/nginx 설정 또는 로드밸랜싱 동작을 확인하시기 바랍니다 ===");
+        log.error("=== Phase 3 Fallback: 최적화 방법으로 nginx sessionAffinity 쿠키 수집 실패 ===");
+        log.error("=== 현재 파드에 대해 정확한 sessionAffinity 쿠키 수집 불가 ===");
+        log.error("=== k8s/nginx 설정 또는 로드밸랜싱 동작을 확인 필요 ===");
 
         // 잘못된 값(instanceId)을 Redis에 저장하지 않음
         cookieCollected = false;
@@ -252,7 +291,7 @@ public class CookieCheckEvent {
     }
 
     /**
-     * Kafka로 쿠키 요청 이벤트 발행
+     * Kafka로 쿠키 요청 이벤트 발행 
      */
     private void publishCookieRequest() {
         try {
@@ -265,7 +304,7 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 쿠키 응답 이벤트 발행
+     * 쿠키 응답 이벤트 발행 
      */
     public void publishCookieResponse(String requesterId, String cookie) {
         try {
@@ -280,7 +319,7 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 쿠키 응답 이벤트 처리
+     * 쿠키 응답 이벤트 처리 
      */
     public void handleCookieResponse(KafkaServerEvent event) {
         try {
@@ -296,13 +335,13 @@ public class CookieCheckEvent {
 
             // 내가 요청한 쿠키 응답인지 확인
             if (instanceProvider.getInstanceId().equals(requesterId)) {
-                log.info("쿠키 응답 수신: {} -> {} (쿠키: {})", responseFrom, requesterId, cookie);
+                log.debug("쿠키 응답 수신: {} -> {} (쿠키: {})", responseFrom, requesterId, cookie);
 
                 if (cookie != null && !cookie.isEmpty()) {
                     // 응답받은 실제 쿠키로 검증
                     if (validateActualCookie(cookie)) {
                         saveCookieAndComplete(cookie);
-                        log.info("쿠키 응답으로부터 성공적으로 실제 nginx 쿠키 획득: {}", cookie);
+                        log.debug("쿠키 응답으로부터 성공적으로 실제 nginx 쿠키 획득: {}", cookie);
                     }
                 }
             }
@@ -312,14 +351,14 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 쿠키 발견 이벤트 처리
+     * 쿠키 발견 이벤트 처리 
      */
     public void handleCookieDiscovered(KafkaServerEvent event) {
         try {
             String discovererId = event.getInstanceId();
 
             if (!instanceProvider.getInstanceId().equals(discovererId)) {
-                log.info("다른 인스턴스의 쿠키 발견 이벤트 수신: {}", discovererId);
+                log.debug("다른 인스턴스의 쿠키 발견 이벤트 수신: {}", discovererId);
 
                 RoutingCookieInfo cookieInfo = event.getCookieInfo();
                 if (cookieInfo != null && cookieInfo.isValidForDiscovery() && !cookieCollected) {
@@ -327,7 +366,7 @@ public class CookieCheckEvent {
                     // 발견된 실제 쿠키로 검증
                     if (validateActualCookie(discoveredCookie)) {
                         saveCookieAndComplete(discoveredCookie);
-                        log.info("발견된 쿠키로부터 성공적으로 실제 nginx 쿠키 획득: {}", discoveredCookie);
+                        log.debug("발견된 쿠키로부터 성공적으로 실제 nginx 쿠키 획득: {}", discoveredCookie);
                     }
                 }
             }
@@ -336,7 +375,7 @@ public class CookieCheckEvent {
         }
     }
 
-    // 기존 유틸리티 메서드들 유지
+    // 기존 유틸리티 메서드들 완전 유지
     private String extractResponseInstanceId(HttpResponse response) {
         try {
             return new String(response.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8).trim();
@@ -378,11 +417,11 @@ public class CookieCheckEvent {
         redisService.saveInstanceCookieMapping(instanceProvider.getInstanceId(), cookie);
         publishCookieDiscovered(cookie);
         cookieCollected = true;
-        log.info("=== 실제 nginx sessionAffinity 쿠키 수집 성공: [{}] :: [{}] ===", instanceProvider.getInstanceId(), cookie);
+        log.info("=== nginx sessionAffinity 쿠키 수집 성공: [{}] :: [{}] ===", instanceProvider.getInstanceId(), cookie);
     }
 
     /**
-     * 쿠키 발견 이벤트 발행
+     * 쿠키 발견 이벤트 발행 
      */
     private void publishCookieDiscovered(String cookie) {
         try {
@@ -390,7 +429,7 @@ public class CookieCheckEvent {
                     instanceProvider.getInstanceId(), cookie);
 
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
-            log.info("쿠키 발견 이벤트 발행 완료");
+            log.debug("쿠키 발견 이벤트 발행 완료");
         } catch (Exception e) {
             log.error("쿠키 발견 이벤트 발행 실패: {}", e.getMessage());
         }

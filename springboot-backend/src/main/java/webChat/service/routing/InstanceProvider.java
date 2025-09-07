@@ -18,8 +18,6 @@ import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
-
-import javax.annotation.PreDestroy;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -69,7 +67,7 @@ public abstract class InstanceProvider {
     }
 
     public void initInstanceProviderEvent() {
-        log.info("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
+        log.debug("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
 
         // 2. 자신을 해시 링에 먼저 추가 (부팅 시 즉시 사용 가능하도록)
         addServer(instanceId);
@@ -94,7 +92,7 @@ public abstract class InstanceProvider {
             KafkaServerEvent event = KafkaServerEvent.of(eventType, instanceId, System.currentTimeMillis());
 
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
-            log.info("===== Published {} event for server {} =====", eventType, instanceId);
+            log.debug("===== Published {} event for server {} =====", eventType, instanceId);
 
         } catch (Exception e) {
             log.error("Failed to publish server event: {} for {}", eventType, instanceId, e);
@@ -109,7 +107,7 @@ public abstract class InstanceProvider {
             KafkaServerEvent event = KafkaServerEvent.createCookieResponse(instanceId, requesterId, cookie);
 
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
-            log.info("쿠키 응답 이벤트 발행 완료: {} -> {}", instanceId, requesterId);
+            log.debug("쿠키 응답 이벤트 발행 완료: {} -> {}", instanceId, requesterId);
 
         } catch (Exception e) {
             log.error("쿠키 응답 이벤트 발행 실패: {}", e.getMessage());
@@ -221,7 +219,7 @@ public abstract class InstanceProvider {
         String myCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId, DataType.INSTANCE_COOKIE, String.class);
         if (myCookie != null) {
             publishCookieResponse(requesterId, myCookie);
-            log.info("쿠키 요청에 응답: {} -> {} (쿠키: {})", instanceId, requesterId, myCookie);
+            log.debug("쿠키 요청에 응답: {} -> {} (쿠키: {})", instanceId, requesterId, myCookie);
         } else {
             log.debug("쿠키 요청 수신했지만 내 쿠키가 없음: requester={}", requesterId);
         }
@@ -232,7 +230,6 @@ public abstract class InstanceProvider {
      */
     public void handleCookieResponse(KafkaServerEvent event) {
         try {
-            // CookieCheckEvent에 위임
             if (cookieCheckEvent != null) {
                 cookieCheckEvent.handleCookieResponse(event);
             } else {
@@ -248,7 +245,6 @@ public abstract class InstanceProvider {
      */
     public void handleCookieDiscovered(KafkaServerEvent event) {
         try {
-            // CookieCheckEvent에 위임
             if (cookieCheckEvent != null) {
                 cookieCheckEvent.handleCookieDiscovered(event);
             } else {
@@ -284,7 +280,7 @@ public abstract class InstanceProvider {
         long targetHash = tailMap.isEmpty() ? hashRing.firstKey() : tailMap.firstKey();
 
         String selectedServer = hashRing.get(targetHash);
-        log.info("===== Room {} mapped to server {}", roomId, selectedServer);
+        log.debug("===== Room {} mapped to server {}", roomId, selectedServer);
 
         return selectedServer;
     }
@@ -421,7 +417,7 @@ public abstract class InstanceProvider {
             }
         }, 30, 30, TimeUnit.SECONDS); // 30초마다 실행
 
-        log.info("Heartbeat 시작됨: {}", instanceId);
+        log.info("Heartbeat started :: {}", instanceId);
     }
 
     /**
