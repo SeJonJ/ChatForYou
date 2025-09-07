@@ -181,7 +181,7 @@ public abstract class InstanceProvider {
                 case SERVER_STARTED:
                     if (!this.isHealthy(event.getInstanceId())) {
                         addServer(event.getInstanceId());
-                        log.info("===== Added server via SERVER_STARTED event: {}", event.getInstanceId());
+                        log.debug("===== Added server via SERVER_STARTED event: {}", event.getInstanceId());
                     }
                     break;
 
@@ -304,7 +304,7 @@ public abstract class InstanceProvider {
         activeServers.add(instanceId);
         serverHashCache.put(instanceId, hashes);
 
-        log.info("===== Added server: {} with {} virtual nodes", instanceId, hashes.size());
+        log.debug("===== Added server: {} with {} virtual nodes", instanceId, hashes.size());
     }
 
     /**
@@ -328,7 +328,7 @@ public abstract class InstanceProvider {
         activeServers.remove(instanceId);
         serverHashCache.remove(instanceId);
 
-        log.info("Removed server: {} with {} virtual nodes", instanceId, hashes != null ? hashes.size() : 0);
+        log.debug("Removed server: {} with {} virtual nodes", instanceId, hashes != null ? hashes.size() : 0);
     }
 
     /**

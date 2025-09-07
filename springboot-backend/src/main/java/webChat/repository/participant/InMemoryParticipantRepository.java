@@ -50,7 +50,7 @@ public class InMemoryParticipantRepository<K, V> implements ParticipantRepositor
             // 방이 비어있으면 정리
             if (participants.isEmpty()) {
                 roomParticipants.remove(roomId);
-                log.info("방 {}가 비어있어 제거되었습니다.", roomId);
+                log.debug("방 {} 가 비어있어 유저를 정리했습니다.", roomId);
             }
         } else {
             log.debug("방 {}에서 사용자 {}를 찾을 수 없습니다.", roomId, userId);

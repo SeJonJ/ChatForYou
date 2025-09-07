@@ -113,7 +113,7 @@ public class RoutingServiceImpl implements RoutingService {
                 .secure(true)
                 .sameSite("None")
                 .build();
-        response.setHeader("Set-Cookie", responseCookie.toString());
+        response.addHeader("Set-Cookie", responseCookie.toString());
     }
 
     private void setRoomIdCookie(HttpServletResponse response, String roomId){
@@ -124,7 +124,7 @@ public class RoutingServiceImpl implements RoutingService {
                 .secure(true)
                 .sameSite("None")
                 .build();
-        response.setHeader("Set-Cookie", responseCookie.toString());
+        response.addHeader("Set-Cookie", responseCookie.toString());
     }
 
     private void setRoomRedirectCookie(HttpServletResponse response, int redirectCount, Integer age){
@@ -135,6 +135,6 @@ public class RoutingServiceImpl implements RoutingService {
                 .secure(true)
                 .sameSite("None")
                 .build();
-        response.setHeader("Set-Cookie", responseCookie.toString());
+        response.addHeader("Set-Cookie", responseCookie.toString());
     }
 }
