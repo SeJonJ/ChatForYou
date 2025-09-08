@@ -30,4 +30,12 @@ public class ChatKafkaProducer {
 
         kafkaTemplate.send("room-events", chatRoom.getRoomId(), eventData);
     }
+
+    public void sendRoomUserCntEvent(ChatRoom chatRoom) {
+        Map<String, Object> eventData = new HashMap<>();
+        eventData.put("event", "roomUserCnt");
+        eventData.put("roomId", chatRoom.getRoomId());
+        eventData.put("cnt", chatRoom.getUserCount());
+        kafkaTemplate.send("room-events", chatRoom.getRoomId(), eventData);
+    }
 }

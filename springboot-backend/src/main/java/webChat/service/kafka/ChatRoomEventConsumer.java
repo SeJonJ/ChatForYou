@@ -42,6 +42,11 @@ public class ChatRoomEventConsumer {
                 log.info("===========delete==========");
                 sseService.sendRoomDeletedEvent(chatRoom);
             }
+            // 방 인원 수 변경 시에 모든 클라이언트에 이벤트 전송
+            case "roomUserCnt" -> {
+                log.info("===========roomUserCnt==========");
+                sseService.sendRoomUserCntEvent(chatRoom);
+            }
         }
     }
 }
