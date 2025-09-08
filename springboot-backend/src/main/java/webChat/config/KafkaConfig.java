@@ -92,17 +92,21 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, Map<String, Object>> kafkaRoomEventConsumerFactory() {
+    public ConsumerFactory<String, KafkaEvent> kafkaRoomEventConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-        return new DefaultKafkaConsumerFactory<>(props);
+
+        // 역직렬화 대상 클래스 지정
+        JsonDeserializer<KafkaEvent> deserializer = new JsonDeserializer<>(KafkaEvent.class);
+        deserializer.addTrustedPackages("webChat.model.kafka");
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), deserializer);
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Map<String, Object>> kafkaRoomEventListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, Map<String, Object>> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> kafkaRoomEventListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(kafkaRoomEventConsumerFactory());
         return factory;

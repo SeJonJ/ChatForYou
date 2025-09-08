@@ -87,7 +87,7 @@ public class CookieCheckEvent {
         }
 
         // Phase 2: 85% 목표 성공률 기반 최적화
-        cookie = tryOptimizedCollectionImproved();
+        cookie = tryOptimizedCollectionImproved(instanceProvider.getActiveServers().size());
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
@@ -161,12 +161,11 @@ public class CookieCheckEvent {
     /**
      * Phase 2: Dynamic Retry Count 최적화
      */
-    private String tryOptimizedCollectionImproved() {
+    private String tryOptimizedCollectionImproved(int activePods) {
         try {
             log.info("=== Phase 2: 네트워크 요청을 통해 확률적 cookie 체크 수행 ===");
 
-            int activePods = instanceProvider.getActiveServers().size();
-            int optimalRetries = calculateOptimalRetryCount(activePods); // 새로운 Dynamic 계산
+            int optimalRetries = calculateOptimalRetryCount(activePods);
 
             log.info("활성 파드 수: {}, 시도 횟수: {}", activePods, optimalRetries);
 
@@ -275,9 +274,9 @@ public class CookieCheckEvent {
     /**
      * 개선된 Fallback 
      */
-    private void handleImprovedFallback() throws InterruptedException, BadRequestException {
-        // Phase 1: 파드간 협력 재시도
-        String cookie = tryCollectFromPeersWithRetry();
+    private void handleImprovedFallback() throws BadRequestException {
+        // Phase 2: 90% 목표 성공률 기반 최적화
+        String cookie = tryOptimizedCollectionImproved(instanceProvider.getActiveServers().size());
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;

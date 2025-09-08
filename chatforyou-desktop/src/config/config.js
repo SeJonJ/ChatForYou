@@ -1,19 +1,19 @@
 // ChatForYou Electron Configuration
-// Auto-generated from web config on 2025-08-09T13:42:11.661Z
+// Auto-generated from web config on 2025-09-08T11:09:00.422Z
 
 window.__CONFIG__ = {
-  "API_BASE_URL": "https://hjproject.kro.kr/chatforyou/api",
+  "API_BASE_URL": "http://localhost:8080/chatforyou/api",
   "BASE_URL": "./templates/roomlist.html",
   "PLATFORM": "electron",
   "FILE_PROTOCOL": true,
-  "DEV_MODE": false,
-  "AUTO_UPDATER": true,
-  "WEB_BASE_URL": "https://hjproject.kro.kr/chatforyou",
+  "DEV_MODE": true,
+  "AUTO_UPDATER": false,
+  "WEB_BASE_URL": "http://localhost:3000/chatforyou",
   "ELECTRON_VERSION": "unknown",
-  "APP_VERSION": "1.0.2",
+  "APP_VERSION": "1.0.0",
   "PLATFORM_TYPE": "desktop",
   "CONVERTED_FROM": "web",
-  "CONVERSION_DATE": "2025-08-09T13:42:11.661Z"
+  "CONVERSION_DATE": "2025-09-08T11:09:00.422Z"
 };
 
 // Electron specific utilities

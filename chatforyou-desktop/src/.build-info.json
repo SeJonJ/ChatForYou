@@ -1,6 +1,6 @@
 {
-  "syncedAt": "2025-08-09T13:42:11.661Z",
-  "sourceCommit": "cb7af521",
+  "syncedAt": "2025-09-08T11:09:00.422Z",
+  "sourceCommit": "c5f81384",
   "version": "1.0.2",
-  "environment": "prod"
+  "environment": "local"
 }

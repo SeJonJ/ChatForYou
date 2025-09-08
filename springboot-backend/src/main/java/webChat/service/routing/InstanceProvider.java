@@ -143,7 +143,7 @@ public abstract class InstanceProvider {
     )
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
-            KafkaServerEvent event = KafkaEvent.of(record.value());
+            KafkaServerEvent event = (KafkaServerEvent) record.value();
             if (StringUtil.isNullOrEmpty(event.getInstanceId()) || event.getEventType() == null) {
                 log.warn("=== Received event from server with null or empty instance ID: {}", event);
                 return;

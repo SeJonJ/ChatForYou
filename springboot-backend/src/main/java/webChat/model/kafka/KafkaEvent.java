@@ -13,8 +13,13 @@ import lombok.experimental.SuperBuilder;
 public abstract class KafkaEvent {
     private long publishedAt;
 
-    @JsonIgnore
-    public static KafkaServerEvent of(KafkaEvent event){
-        return (KafkaServerEvent) event;
-    }
+//    TODO 공통화 처리 필요
+//    @JsonIgnore
+//    public static KafkaServerEvent of(KafkaEvent event){
+//        return (KafkaServerEvent) event;
+//    }
+//    @JsonIgnore
+//    public static KafkaRoomEvent of(KafkaEvent event){
+//        return (KafkaRoomEvent) event;
+//    }
 }
