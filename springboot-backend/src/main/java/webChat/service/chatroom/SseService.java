@@ -79,4 +79,21 @@ public class SseService {
         }
         emitters.removeAll(deadEmitters);
     }
+
+    // 방 인원수 변경 시 이벤트 전송
+    public void sendRoomUserCntEvent(ChatRoom room) {
+        List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
+
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("changeUserCnt")
+                        .data(room));
+            } catch (IOException e) {
+                deadEmitters.add(emitter);
+            }
+        }
+
+        emitters.removeAll(deadEmitters);
+    }
 }

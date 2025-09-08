@@ -126,6 +126,46 @@ public class ChatRoomController {
         return ResponseEntity.ok(responses);
     }
 
+    // 채팅방 생성
+    // 채팅방 생성 후 다시 / 로 return
+    @PostMapping("/room")
+    public ResponseEntity<ChatForYouResponse> createRoom(
+            @RequestBody ChatRoomInVo chatRoomInVo) throws Exception {
+
+        // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
+        ChatRoom room = chatRoomService.createChatRoom(chatRoomInVo);
+
+        log.info("CREATE Chat Room [{}]", room);
+
+        return ResponseEntity.ok(ChatForYouResponse.ofCreateRoom(room));
+    }
+
+    // 채팅방 입장
+    @GetMapping("/room/{roomId}")
+    public ResponseEntity<ChatForYouResponse> roomDetail(
+            Model model,
+            @PathVariable String roomId,
+            @AuthenticationPrincipal PrincipalDetails principalDetails) throws BadRequestException {
+
+        log.info("roomId {}", roomId);
+
+        // principalDetails 가 null 이 아니라면 로그인 된 상태!!
+        if (principalDetails != null) {
+            // 세션에서 로그인 유저 정보를 가져옴
+            model.addAttribute("user", principalDetails.getUser());
+        }
+
+        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+
+        model.addAttribute("room", chatRoom);
+
+        if (ChatType.MSG.equals(chatRoom.getChatType())) {
+            return ResponseEntity.ok(null);
+        }else{
+            return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom));
+        }
+    }
+
     // 채팅방 비밀번호 확인
     @PostMapping(value = "/room/validatePwd/{roomId}")
     public ResponseEntity<ChatForYouResponse> validatePwd(

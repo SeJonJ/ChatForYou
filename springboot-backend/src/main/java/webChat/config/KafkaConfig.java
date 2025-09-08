@@ -13,6 +13,7 @@ import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import webChat.model.kafka.KafkaEvent;
+import webChat.model.kafka.KafkaMessage;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -87,6 +88,23 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(serverEventConsumerFactory());
+        return factory;
+    }
+
+    @Bean
+    public ConsumerFactory<String, Map<String, Object>> kafkaRoomEventConsumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Map<String, Object>> kafkaRoomEventListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, Map<String, Object>> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(kafkaRoomEventConsumerFactory());
         return factory;
     }
 }

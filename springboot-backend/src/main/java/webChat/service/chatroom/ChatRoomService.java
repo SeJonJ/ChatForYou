@@ -21,6 +21,7 @@ import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.service.analysis.AnalysisService;
 import webChat.service.file.FileService;
+import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
@@ -47,6 +48,8 @@ public class ChatRoomService {
     private final SseService sseService;
     private final RoutingInstanceProvider instanceProvider;
     private final RoutingService routingService;
+
+    private final ChatKafkaProducer chatKafkaProducer;
 
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
@@ -81,6 +84,8 @@ public class ChatRoomService {
             // 방 생성 후 방 개수 증가
             instanceProvider.incrementInstanceRoomCount();
             analysisService.increaseDailyRoomCnt();
+            // 새로운 채팅방 생성 이벤트를 Kafka에 발행
+            chatKafkaProducer.sendCreateRoomEvent(chatRoom);
             return chatRoom;
         } else {
             throw new BadRequestException("room type is not exist : " + chatRoomInVo.getRoomType());
@@ -185,8 +190,9 @@ public class ChatRoomService {
         } else {
             throw new ExceptionController.DelRoomException("Soft Delete Room Exception");
         }
-        // 방 삭제 시 모든 클라이언트에 이벤트 전송
-        sseService.sendRoomDeletedEvent(kurentoRoom);
+        // 채팅방 삭제 이벤트를 Kafka에 발행
+        chatKafkaProducer.sendDeleteRoomEvent(kurentoRoom);
+        // 방 삭제 시 해당 instance 에서 방 제거
         instanceProvider.decrementInstanceRoomCount();
 
         log.info("Room {} state changed {}", kurentoRoom.getRoomId(), RoomState.INACTIVE.getType());
