@@ -8,14 +8,11 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.KafkaEvent;
 import webChat.model.kafka.KafkaRoomEvent;
-import webChat.model.kafka.KafkaServerEvent;
 import webChat.model.kafka.RoomEvent;
 import webChat.model.redis.DataType;
 import webChat.model.room.ChatRoom;
 import webChat.service.chatroom.SseService;
 import webChat.service.redis.impl.RedisServiceImpl;
-
-import java.util.Map;
 
 @Component
 @Slf4j

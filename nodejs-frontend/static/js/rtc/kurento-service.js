@@ -226,7 +226,6 @@ function register() {
         // 방 정보를 서버에서 조회
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (response) => {
-            debugger;
             if(response.result === 'REDIRECT_ROOM'){
                 console.log('room redirect to : ', response.data.roomId);
                 location.reload();

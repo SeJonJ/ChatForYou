@@ -78,10 +78,6 @@ public class KafkaServerEvent extends KafkaEvent {
                 .build();
     }
 
-    public String getEventId() {
-        return instanceId + "_" + eventType + "_" + getPublishedAt();
-    }
-
     /**
      * 쿠키 관련 이벤트인지 확인
      */

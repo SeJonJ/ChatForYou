@@ -72,6 +72,11 @@ public class RoutingServiceImpl implements RoutingService {
     }
 
     @Override
+    public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) throws BadRequestException {
+         return redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
+    }
+
+    @Override
     public String getNginxCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {

@@ -72,7 +72,7 @@ public class CookieCheckEvent {
     public void collectOwnCookieAsync() throws InterruptedException, BadRequestException {
         instanceProvider.initInstanceId();
         // Kafka consumer 준비 대기
-        waitForKafkaConsumerReady();
+        waitKafkaConsumerReady();
 
         log.info("=== 인스턴스 제공 이벤트 init 시작 ===");
         instanceProvider.initInstanceProviderEvent();
@@ -80,24 +80,24 @@ public class CookieCheckEvent {
         log.info("=== 최적화 쿠키 수집 시작 ===");
 
         // Phase 1: 파드간 협력
-        String cookie = tryCollectFromPeersWithRetry();
+        String cookie = collectFromPeers();
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
         }
 
         // Phase 2: 85% 목표 성공률 기반 최적화
-        cookie = tryOptimizedCollectionImproved(instanceProvider.getActiveServers().size());
+        cookie = tryOptimizedCollection(instanceProvider.getActiveServers().size(), false);
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
         }
 
         // Phase 3: 개선된 Fallback
-        handleImprovedFallback();
+        handleFallback();
     }
 
-    private void waitForKafkaConsumerReady() throws InterruptedException {
+    private void waitKafkaConsumerReady() throws InterruptedException {
         for (int i = 0; i < 20; i++) {
             if (instanceProvider != null && !instanceProvider.getActiveServers().isEmpty()) break;
             Thread.sleep(500);
@@ -107,7 +107,7 @@ public class CookieCheckEvent {
     /**
      * Phase 1: 파드간 협력
      */
-    private String tryCollectFromPeersWithRetry() throws InterruptedException {
+    private String collectFromPeers() throws InterruptedException {
         for (int attempt = 0; attempt < PHASE1_MAX_RETRIES; attempt++) {
             String cookie = tryCollectFromPeers();
             if (cookie != null) return cookie;
@@ -142,7 +142,7 @@ public class CookieCheckEvent {
                     log.debug("발견된 파드: {} -> 쿠키: {}", peerInstanceId, peerCookie);
 
                     // 실제 nginx 응답을 통한 검증만 수행
-                    if (validateActualCookie(peerCookie)) {
+                    if (validateCookie(peerCookie)) {
                         log.info("=== Phase 1 성공: 기존 쿠키 검증 완료 ===");
                         return peerCookie;
                     }
@@ -161,11 +161,11 @@ public class CookieCheckEvent {
     /**
      * Phase 2: Dynamic Retry Count 최적화
      */
-    private String tryOptimizedCollectionImproved(int activePods) {
+    private String tryOptimizedCollection(int activePods, boolean isFallback) {
         try {
             log.info("=== Phase 2: 네트워크 요청을 통해 확률적 cookie 체크 수행 ===");
 
-            int optimalRetries = calculateOptimalRetryCount(activePods);
+            int optimalRetries = calculateRetryCount(activePods, isFallback);
 
             log.info("활성 파드 수: {}, 시도 횟수: {}", activePods, optimalRetries);
 
@@ -209,7 +209,11 @@ public class CookieCheckEvent {
                 }
             }
 
-            log.info("=== Phase 2 실패: {}회 최적화 시도 실패, Phase 3 Fallback 으로 이동 ===", optimalRetries);
+            if (isFallback) {
+                log.info("=== Phase 2 실패: {} 회 최적화 시도 실패, Phase 3 Fallback 으로 이동 ===", optimalRetries);
+            } else {
+                log.info("=== Phase 2 재시도 실패: {} 회 최적화 시도 실패, 파드 재시작 진행 ===", optimalRetries);
+            }
             return null;
 
         } catch (Exception e) {
@@ -224,15 +228,18 @@ public class CookieCheckEvent {
      * @param activePods 활성 파드 수 (N)
      * @return 최적 재시도 횟수
      */
-    private int calculateOptimalRetryCount(int activePods) {
+    private int calculateRetryCount(int activePods, boolean isFallback) {
         if (activePods <= 1) {
             return MIN_RETRY_COUNT;
         }
 
+        // fallback 시 90% 를 목표로 재시도
+        double targetRate = isFallback ? 0.90 : TARGET_SUCCESS_RATE;
+
         // p = TARGET_SUCCESS_RATE (0.85)
         // N = activePods
         double probability = 1.0 / activePods;
-        double optimalRetries = Math.log(1 - TARGET_SUCCESS_RATE) / Math.log(1 - probability);
+        double optimalRetries = Math.log(1 - targetRate) / Math.log(1 - probability);
 
         int result = (int) Math.ceil(optimalRetries);
 
@@ -241,7 +248,7 @@ public class CookieCheckEvent {
         result = Math.min(result, MAX_RETRY_COUNT);
 
         log.info("최적화 계산: N = [{}], 목표성공률 = [{}%], 계산된시도횟수 = [{}], 적용시도횟수 = [{}]",
-                activePods, (int)(TARGET_SUCCESS_RATE * 100), (int)Math.ceil(optimalRetries), result);
+                activePods, (int)(targetRate * 100), (int)Math.ceil(optimalRetries), result);
 
         return result;
     }
@@ -249,7 +256,7 @@ public class CookieCheckEvent {
     /**
      * 실제 쿠키 검증 
      */
-    private boolean validateActualCookie(String cookie) {
+    private boolean validateCookie(String cookie) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.add("Cookie", RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName() + "=" + cookie);
@@ -274,9 +281,9 @@ public class CookieCheckEvent {
     /**
      * 개선된 Fallback 
      */
-    private void handleImprovedFallback() throws BadRequestException {
-        // Phase 2: 90% 목표 성공률 기반 최적화
-        String cookie = tryOptimizedCollectionImproved(instanceProvider.getActiveServers().size());
+    private void handleFallback() throws BadRequestException {
+        // Phase 2 retry : 90% 목표 성공률 기반 최적화
+        String cookie = tryOptimizedCollection(instanceProvider.getActiveServers().size(), true);
         if (cookie != null) {
             saveCookieAndComplete(cookie);
             return;
@@ -362,7 +369,7 @@ public class CookieCheckEvent {
 
                 if (cookie != null && !cookie.isEmpty()) {
                     // 응답받은 실제 쿠키로 검증
-                    if (validateActualCookie(cookie)) {
+                    if (validateCookie(cookie)) {
                         saveCookieAndComplete(cookie);
                         log.debug("쿠키 응답으로부터 성공적으로 실제 nginx 쿠키 획득: {}", cookie);
                     }
@@ -387,7 +394,7 @@ public class CookieCheckEvent {
                 if (cookieInfo != null && cookieInfo.isValidForDiscovery() && !cookieCollected) {
                     String discoveredCookie = cookieInfo.getCookie();
                     // 발견된 실제 쿠키로 검증
-                    if (validateActualCookie(discoveredCookie)) {
+                    if (validateCookie(discoveredCookie)) {
                         saveCookieAndComplete(discoveredCookie);
                         log.debug("발견된 쿠키로부터 성공적으로 실제 nginx 쿠키 획득: {}", discoveredCookie);
                     }

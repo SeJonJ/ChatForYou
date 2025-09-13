@@ -1,6 +1,5 @@
 package webChat.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RestController;
 import webChat.model.routing.RoutingCookie;
 import webChat.service.routing.CookieCheckEvent;
 import webChat.service.routing.RoutingInstanceProvider;
-import webChat.service.routing.RoutingService;
 import webChat.utils.StringUtil;
 
 /**
@@ -25,7 +23,6 @@ import webChat.utils.StringUtil;
 public class HealthController {
     private final RoutingInstanceProvider instanceProvider;
     private final CookieCheckEvent cookieCheckEvent;
-    private final RoutingService routingService;
 
     @Value("${cookie.check.domain:}")
     private String cookieCheckDomain;
@@ -36,7 +33,7 @@ public class HealthController {
      * @return
      */
     @GetMapping("/cookie")
-    public ResponseEntity<String> cookieHealth(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<String> cookieHealth(HttpServletResponse response) {
         if (StringUtil.isNullOrEmpty(cookieCheckDomain)) { // 운영환경은 세팅, 로컬은 빈값
             response.addCookie(new jakarta.servlet.http.Cookie(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName(), instanceProvider.getInstanceId()));
         }

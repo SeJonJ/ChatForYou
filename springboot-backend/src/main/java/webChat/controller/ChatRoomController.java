@@ -10,12 +10,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
-import webChat.model.redis.DataType;
-import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.routing.RoutingCookie;
-import webChat.service.redis.RedisService;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.RoomState;
@@ -40,7 +37,6 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final RoutingService routingService;
     private final RoutingInstanceProvider instanceProvider;
-    private final RedisService redisService;
 
     // 채팅방 생성
     @PostMapping("/room")
@@ -77,13 +73,14 @@ public class ChatRoomController {
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
 
         if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
-            // TODO 서버가 죽었을때 예외처리 필요 :: 임시 조치로 메인 대시보드로 이동
+            // TODO 서버가 죽었을때 예외처리 필요 :: 방 삭제 및 임시 조치로 메인 대시보드로 이동
+            chatRoomService.delChatRoom(roomId);
             return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
         }
 
 
         if (!instanceProvider.getInstanceId().equals(chatRoom.getInstanceId())) {
-            RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix()+roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
+            RoomRoutingInfo roomRoutingInfo = routingService.getRoomRoutingInfoByRoomId(roomId);
             int redirectCount = routingService.getRedirectCount(request);
             if(redirectCount > 3){
                 return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));

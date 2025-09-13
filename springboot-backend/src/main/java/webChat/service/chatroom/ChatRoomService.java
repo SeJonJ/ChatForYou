@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
-import webChat.service.routing.InstanceProvider;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
