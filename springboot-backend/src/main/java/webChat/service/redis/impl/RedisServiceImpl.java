@@ -455,18 +455,22 @@ public class RedisServiceImpl implements RedisService {
             return false;
         }
 
-        return keys.stream()
-                .map(key -> {
-                    try {
-                        return slaveTemplate.opsForHash().get(key, "roomName");
-                    } catch (Exception e) {
-                        // TODO 로깅 처리
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .map(Object::toString)
-                .anyMatch(roomName::equals);
+        return keys.stream().anyMatch(key -> {
+            try {
+                Object roomNameVal = slaveTemplate.opsForHash().get(key, "roomName");
+                Object stateVal = slaveTemplate.opsForHash().get(key, "state");
+
+                if (roomNameVal == null || stateVal == null) {
+                    return false;
+                }
+
+                return roomName.equals(roomNameVal.toString())
+                        && RoomState.ACTIVE.equals(stateVal);
+            } catch (Exception e) {
+                // TODO 로깅 처리
+                return false;
+            }
+        });
     }
 
     @Override
