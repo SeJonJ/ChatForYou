@@ -19,6 +19,7 @@ import webChat.model.room.KurentoRoom;
 import webChat.repository.KurentoPiplineMap;
 import webChat.service.chatroom.ChatRoomService;
 import webChat.service.chatroom.participant.KurentoParticipantService;
+import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.redis.RedisService;
 import webChat.utils.JsonUtils;
 
@@ -46,8 +47,8 @@ public class KurentoHandler extends TextWebSocketHandler {
     private final KurentoClient kurentoClient;
 
     private final RedisService redisService;
-    private final ChatRoomService chatRoomService;
     private final KurentoParticipantService participantService;
+    private final ChatKafkaProducer chatKafkaProducer;
     private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPiplineMap.getInstance();
 
     @Override
@@ -160,6 +161,7 @@ public class KurentoHandler extends TextWebSocketHandler {
         kurentoRoom.activate();
         kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
         redisService.incrementUserCount(kurentoRoom);
+        chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
     }
 
     private void leaveRoom(KurentoUserSession user) throws IOException {
@@ -178,6 +180,7 @@ public class KurentoHandler extends TextWebSocketHandler {
 
         kurentoRoomManager.leave(kurentoRoom, user);
         redisService.decrementUserCount(kurentoRoom);
+        chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
     }
 
     private void connectException(KurentoUserSession user, Exception e) throws IOException {

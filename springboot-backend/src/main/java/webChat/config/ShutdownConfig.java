@@ -16,6 +16,7 @@ import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
+import webChat.service.routing.InstanceProvider;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
     private final KurentoClient kurentoClient;
     private final RedisService redisService;
     private final List<RoomState> ALL_ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED, RoomState.INACTIVE);
+    private final InstanceProvider instanceProvider;
 
     @PostConstruct
     public void init() {
@@ -73,7 +75,10 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
             log.info("KurentoRoom {} data updated", kurentoRoom.getRoomId());
 
             kurentoRoomManager.deleteKurentoRoom(kurentoRoom);
-            
+        }
+
+        if (!instanceProvider.isShutdown()) {
+            instanceProvider.shutdown();
         }
 
         kurentoClient.destroy();

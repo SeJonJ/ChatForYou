@@ -23,6 +23,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.*;
 import org.kurento.jsonrpc.JsonUtils;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import webChat.model.user.UserDto;
@@ -88,7 +90,7 @@ public class KurentoUserSession extends UserDto implements Closeable {
         "textoverlay text='' font-desc='Noto Sans CJK KR' halignment=center valignment=top deltay=50")
         .build();
 
-    log.info("TextOverlay filter created for user: {}", userId);
+    log.debug("TextOverlay filter created for user: {}", userId);
 
     // 미디어 파이프라인에 textoverlay 필터를 연결
     // outgoingMedia의 비디오를 textoverlay 필터를 거쳐서 다시 outgoingMedia로 연결

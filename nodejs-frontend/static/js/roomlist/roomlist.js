@@ -42,7 +42,7 @@ const roomList = {
       <tr>
         <td>${roomNameHtml}</td>
         <td>${lockIcon}</td>
-        <td><span class="badge bg-primary rounded-pill">${room.userCount}/${room.maxUserCnt}</span></td>
+        <td><span class="room-user-count badge bg-primary rounded-pill">${room.userCount}/${room.maxUserCnt}</span></td>
         <td>${roomType}</td>
         <td>${btnSetting}</td>
       </tr>
@@ -73,8 +73,21 @@ const roomList = {
           .remove();
     });
 
-    eventSource.addEventListener("ping", function (e) {
+    eventSource.addEventListener("ping", function (event) {
       console.log("Ping Ping Ping Ping Ping Ping Ping Ping ");
+    });
+
+    eventSource.addEventListener("changeUserCnt", function (event) {
+      const chatRoom = JSON.parse(event.data);
+      const chatRoomId = chatRoom.roomId;
+      const userCnt = chatRoom.userCount;
+      const {maxUserCnt} = chatRoom;
+
+      const $row = $('#roomTableBody')
+          .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)
+          .closest('tr');
+
+      $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
     });
 
     window.addEventListener("beforeunload", () => {

@@ -95,14 +95,17 @@ This site is only for studying various functions using WebRTC and WebSocket tech
 
 ## 🚀 구동 방법
 
-### 1. 사전 요구사항
+### 1. 서버 아키텍쳐
+https://github.com/SeJonJ/ChatForYou/wiki/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90
+
+### 2. 사전 요구사항
 - **Node.js** 16+ 설치
 - **Java 17** 설치
 - **Kurento Media Server** 설치
 - **TURN Server (coturn)** 설치
 - **Redis** 설치
 
-### 2. 프론트엔드 실행
+### 3. 프론트엔드 실행
 ```bash
 cd nodejs-frontend
 
@@ -116,7 +119,7 @@ npm run local
 npm run start
 ```
 
-### 3. 백엔드 실행
+### 4. 백엔드 실행
 ```bash
 cd springboot-backend
 
@@ -127,7 +130,7 @@ cd springboot-backend
 java -Dkms.url=ws://[KMS_IP]:[PORT]/kurento -jar build/libs/*.jar
 ```
 
-### 4. 환경 설정
+### 5. 환경 설정
 
 #### 프론트엔드 설정 파일
 ```javascript
@@ -151,7 +154,7 @@ server.port=8080
 kms.url=ws://localhost:8888/kurento
 ```
 
-### 5. Docker 실행
+### 6. Docker 실행
 ```bash
 # 프론트엔드 Docker 빌드
 cd nodejs-frontend
