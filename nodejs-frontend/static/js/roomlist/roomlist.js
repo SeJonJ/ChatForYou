@@ -78,11 +78,10 @@ const roomList = {
     });
 
     eventSource.addEventListener("changeUserCnt", function (event) {
-      console.log("ddjdjdjdjddjdjdjdjdjdjd");
       const chatRoom = JSON.parse(event.data);
       const chatRoomId = chatRoom.roomId;
       const userCnt = chatRoom.userCount;
-      const maxUserCnt = chatRoom.maxUserCnt;
+      const {maxUserCnt} = chatRoom;
 
       const $row = $('#roomTableBody')
           .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)

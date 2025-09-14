@@ -30,7 +30,7 @@ public class ChatRoom {
     private String instanceId; // room 이 배치된 서버 ID
 
     @JsonIgnore
-    public ChatRoom(@NotNull String roomId, @NotNull String roomName, String creator, int userCount, int maxUserCnt, String roomPwd, boolean secretChk, @NotNull ChatType chatType, RoomState roomState, String instanceId) {
+    public ChatRoom(@NotNull String roomId, @NotNull String roomName, String creator, int userCount, int maxUserCnt, String roomPwd, boolean secretChk, @NotNull ChatType chatType, RoomState roomState, @NotNull String instanceId) {
         this.roomId = roomId;
         this.roomName = roomName;
         this.userCount = userCount;
