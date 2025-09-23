@@ -16,6 +16,8 @@
     "concurrently": "^9.1.2"
   },
   "dependencies": {
-    "firebase": "^11.10.0"
+    "firebase": "^8.6.5",
+    "firebase-app": "^0.0.1",
+    "firebase-tools": "^14.10.1"
   }
 }

@@ -60,16 +60,16 @@
 					</div>
 
 					<div class="container-login100-form-btn">
-						<button class="login100-form-btn">
+						<button id="loginBtn" class="login100-form-btn">
 							Login
 						</button>
 					</div>
 					<div class="social-login">
 						<div>
 							<span class="d-block text-left my-4 text-muted"></span>
-							<a href="http://localhost:8080/oauth2/authorization/kakao">
-								<img src="images/login/kakaotalk.png" width="200" height="auto" alt="" />
-							</a>
+								<button id="googleOauth" width="200" height="auto">
+									Google로 로그인 하기
+								</button>
 							<a href="http://localhost:8080/oauth2/authorization/naver">
 								<img src="images/login/naver.png" width="200" height="auto" alt="" />
 							</a>
@@ -103,7 +103,24 @@
 <!--===============================================================================================-->
 	<script src="vendor/countdowntime/countdowntime.js"></script>
 <!--===============================================================================================-->
+	<script type="module">
+	// import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+	// import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+	//import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  	// import { getAuth, GoogleAuthProvider, signInWithPopup, } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+
+	// import { } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js'
+	
+		// import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+	</script>
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-app.js"></script>
+  	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-auth.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-firestore.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-storage.js"></script>
 	<script src="js/login/main.js"></script>
+	<script src='config/config.js'></script>
+	
+	
 
 </body>
 </html>
