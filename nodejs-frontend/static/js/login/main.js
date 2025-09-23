@@ -94,50 +94,48 @@
         var apiKey = window.__CONFIG__.GOOGLE_OAUTH.API_KEY;
         var authDomain = window.__CONFIG__.GOOGLE_OAUTH.AUTH_DOMAIN;
 
-        var firebaseapp = firebase.initializeApp({
-            projectId: projectId,
-            apiKey: apiKey,
-            authDomain: authDomain
-        });
+        var requestData = {};
 
-        var auth = getAuth(firebaseapp);
-
-        var googleAuthProvider = new GoogleAuthProvider();
-        googleAuthProvider.setDefaultLanguage('ko');
-        googleAuthProvider.setCustomParameters({
-            login_hint: 'user@example.com'
-        });
-
-        signInWithPopup(auth, googleAuthProvider)
-        .then((userCredential) => {
-            userCredential.user.getIdToken()
-            .then((idToken) => {
-                console.log('idToken : ' + idToken);
-                var refreshToken = userCredential.user.refreshToken;
-                console.log('refresh Token : ' + refreshToken);
+        if (!firebase.apps.length) {
+            firebase.initializeApp({
+                projectId: projectId,
+                apiKey: apiKey,
+                authDomain: authDomain
             });
-        });
+        } else {
+            firebase.app();
+        }
+        var auth = firebase.auth();
+        var provider = new firebase.auth.GoogleAuthProvider();
 
-        // var url = "https://accounts.google.com/o/oauth2/v2/auth";
-        // var width = 500;
-        // var height = 600;
-        // var left = (window.screen.width / 2) - (width / 2);
-        // var top = (window.screen.height / 2) - (height / 2);
+        auth.signInWithPopup(provider)
+            .then(function (result) {
+                var user = result.user;
+                console.log('user : ' + user);
+                user.getIdToken()
+                .then((idToken) => {
+                    console.log('idToken : ' + idToken);
+                    var refreshToken = user.refreshToken;
+                    console.log('refresh Token : ' + refreshToken);
 
-        // var clientId = window.__CONFIG__.GOOGLE_OAUTH.CLIENT_ID;
-        // var redirectURL = window.__CONFIG__.GOOGLE_OAUTH.REDIRECT_URL;
-        // var responseType = window.__CONFIG__.GOOGLE_OAUTH.RESPONSE_TYPE;
-        // var scope = window.__CONFIG__.GOOGLE_OAUTH.SCOPE;
+                    // requestData setting
+                    requestData.accessToken = idToken;
+                    requestData.refreshToken = refreshToken;
+                    requestData.name = user.displayName;
+                    requestData.email = user.email;
+                    requestData.emailVerified = user.emailVerified;
+                    requestData.photo = user.photoURL;
 
-        // url += '?client_id=' + clientId + '&redirect_uri=' + redirectURL
-        //  + '&response_type=' + responseType + '&scope=' + scope;
+                    var successCallback = function(data) {
 
+                    };
+                    var errorCallback = function(error) {
 
-        // window.open(
-        //     url,
-        //     "Google",
-        //     `width=${width},height=${height},left=${left},top=${top},resizable=no,scrollbars=no`
-        // );
+                    };
+                    const url = window.__CONFIG__.API_BASE_URL + '/file/googleOauth';
+                    ajax(url, 'POST', true, requestData, successCallback, errorCallback);
+                })
+            });
     });
 
 
