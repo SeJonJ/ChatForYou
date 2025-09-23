@@ -1,12 +1,11 @@
 package webChat.model.login;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
-@Getter
-@Setter
 public class GoogleOAuth {
     private String accessToken;
     private String refreshToken;

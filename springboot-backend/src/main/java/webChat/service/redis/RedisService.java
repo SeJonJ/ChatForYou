@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.dengliming.redismodule.redisearch.index.Document;
 import lombok.NonNull;
 import org.apache.coyote.BadRequestException;
+import webChat.model.login.GoogleOAuth;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
@@ -55,4 +56,6 @@ public interface RedisService {
     void updateChatRoom(ChatRoom chatRoom);
 
     boolean checkRoomName(String roomName);
+
+    void insertGoogleOauthToken(GoogleOAuth auth);
 }

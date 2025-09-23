@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import webChat.model.login.GoogleOAuth;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
@@ -445,6 +446,16 @@ public class RedisServiceImpl implements RedisService {
                 .filter(Objects::nonNull)
                 .map(Object::toString)
                 .anyMatch(roomName::equals);
+    }
+
+    @Override
+    public void insertGoogleOauthToken(GoogleOAuth auth) {
+        String redisKey = "oauth:" + auth.getEmail();
+
+        masterTemplate.opsForHash().put(redisKey, "email", auth.getEmail());
+        masterTemplate.opsForHash().put(redisKey, "accessToken", auth.getAccessToken());
+        masterTemplate.opsForHash().put(redisKey, "refreshToken", auth.getRefreshToken());
+        masterTemplate.opsForHash().put(redisKey, "nickname", auth.getName());
     }
 
 }
