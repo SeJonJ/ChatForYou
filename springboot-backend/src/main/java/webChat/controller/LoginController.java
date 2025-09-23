@@ -2,9 +2,8 @@ package webChat.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import webChat.model.login.GoogleOAuth;
 
 @RestController
 @RequestMapping("/chatforyou/api/file")
@@ -17,8 +16,8 @@ public class LoginController {
         return "chatlogin";
     }
 
-    @GetMapping("/googleOauth")
-    public void googleOauth(HttpServletRequest request) {
+    @PostMapping("/googleOauth")
+    public void googleOauth(HttpServletRequest request, @RequestBody GoogleOAuth googleOAuth) {
         String requestURL = request.getRequestURL().toString(); // 기본 URL
         String queryString = request.getQueryString();
     }
