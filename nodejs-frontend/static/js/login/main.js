@@ -127,7 +127,11 @@
                     requestData.photo = user.photoURL;
 
                     var successCallback = function(data) {
-
+                        localStorage.setItem('access_token', data.data.accessToken);
+                        localStorage.setItem('refresh_token', data.data.refreshToken);
+                        localStorage.setItem('email', data.data.email);
+                        localStorage.setItem('type', data.data.type);
+                        localStorage.setItem('nickname', data.data.email.split('@')[0]);
                     };
                     var errorCallback = function(error) {
 
