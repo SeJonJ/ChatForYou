@@ -14,5 +14,8 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "firebase": "^11.10.0"
   }
 }
