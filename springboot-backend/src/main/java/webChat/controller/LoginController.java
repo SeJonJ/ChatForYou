@@ -1,17 +1,14 @@
 package webChat.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import webChat.model.login.GoogleOAuth;
-import webChat.model.login.GoogleOAuthResponse;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.service.chatroom.LoginService;
 
 @RestController
-@RequestMapping("/chatforyou/api/file")
+@RequestMapping("/chatforyou/api/login")
 public class LoginController {
 
     @Autowired
@@ -39,7 +36,7 @@ public class LoginController {
         auth.setEmail(email);
         auth.setEmailVerified(emailVerified);
         auth.setPhoto(photo);
-        GoogleOAuthResponse response = loginService.checkSocialUser(auth);
+        GoogleOAuth response = loginService.checkSocialUser(auth);
 
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")

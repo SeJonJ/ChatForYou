@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import webChat.entity.SocialUser;
 import webChat.model.login.GoogleOAuth;
-import webChat.model.login.GoogleOAuthResponse;
 import webChat.repository.SocialUserRepository;
 
 @Service
@@ -16,7 +15,7 @@ public class LoginService {
     @Autowired
     private SocialUserRepository socialUserRepository;
 
-    public GoogleOAuthResponse checkSocialUser(GoogleOAuth googleOAuth) {
+    public GoogleOAuth checkSocialUser(GoogleOAuth googleOAuth) {
         SocialUser socialUser = socialUserRepository.findByEmail(googleOAuth.getEmail());
 
         // 계정이 없는 경우
@@ -36,11 +35,6 @@ public class LoginService {
             // db 값 변경
         }
 
-        return GoogleOAuthResponse.builder()
-                .accessToken(googleOAuth.getAccessToken())
-                .refreshToken(googleOAuth.getRefreshToken())
-                .email(googleOAuth.getEmail())
-                .type("google")
-                .build();
+        return googleOAuth;
     }
 }
