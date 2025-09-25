@@ -51,6 +51,36 @@ function ajaxToJson(url, method, async, data, successCallback, errorCallback, co
     })
 }
 
+function tokenAjax(url, method, async, data, successCallback, errorCallback, completeCallback) {
+    $.ajax({
+        url: url,
+        type: method,
+        data: data,
+        async: async !== undefined ? async : true,
+        xhrFields: {
+            withCredentials: true
+        },
+        headers: {
+            'Authorization': 'Bearar ' + localStorage.getItem('access_token')
+        },
+        success: function (data) {
+            if (successCallback && typeof successCallback === 'function') {
+                successCallback(data);
+            }
+        },
+        error: function (error) {
+            if (errorCallback && typeof errorCallback === 'function') {
+                errorCallback(error);
+            }
+        },
+        complete : function(result){
+            if (completeCallback && typeof completeCallback === "function") {
+                completeCallback(result);
+            }
+        }
+    })
+}
+
 /**
  * Promise 를 return 하는 ajax
  * @param {String }url

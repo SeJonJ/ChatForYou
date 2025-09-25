@@ -1,13 +1,17 @@
 package webChat.controller;
 
+import com.google.firebase.auth.FirebaseToken;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import webChat.model.login.GoogleOAuth;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.service.chatroom.LoginService;
+import webChat.utils.TokenUtils;
 
 @RestController
+@Slf4j
 @RequestMapping("/chatforyou/api/login")
 public class LoginController {
 
@@ -27,7 +31,7 @@ public class LoginController {
                                                           @RequestParam("name")String name,
                                                           @RequestParam("email")String email,
                                                           @RequestParam("emailVerified")boolean emailVerified,
-                                                          @RequestParam("photo")String photo) {
+                                                          @RequestParam("photo")String photo) throws Exception{
 
         GoogleOAuth auth = GoogleOAuth.builder().build();
         auth.setAccessToken(accessToken);

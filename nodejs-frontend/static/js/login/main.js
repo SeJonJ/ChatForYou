@@ -127,16 +127,21 @@
                     requestData.photo = user.photoURL;
 
                     var successCallback = function(data) {
-                        localStorage.setItem('access_token', data.data.accessToken);
-                        localStorage.setItem('refresh_token', data.data.refreshToken);
-                        localStorage.setItem('email', data.data.email);
-                        localStorage.setItem('type', data.data.type);
-                        localStorage.setItem('nickname', data.data.email.split('@')[0]);
+                        if (data.data.emailVerified) {
+                            localStorage.setItem('access_token', data.data.accessToken);
+                            localStorage.setItem('refresh_token', data.data.refreshToken);
+                            localStorage.setItem('email', data.data.email);
+                            localStorage.setItem('type', data.data.type);
+                            localStorage.setItem('nickname', data.data.email.split('@')[0]);
+                            window.location.href = '/';
+                        } else {
+                            alert('로그인에 실패하였습니다 !!!');
+                        }
                     };
                     var errorCallback = function(error) {
 
                     };
-                    const url = window.__CONFIG__.API_BASE_URL + '/file/googleOauth';
+                    const url = window.__CONFIG__.API_BASE_URL + '/login/googleOauth';
                     ajax(url, 'POST', true, requestData, successCallback, errorCallback);
                 })
             });

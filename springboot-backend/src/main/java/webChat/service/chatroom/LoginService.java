@@ -1,5 +1,6 @@
 package webChat.service.chatroom;
 
+import com.google.firebase.auth.FirebaseToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,6 +8,8 @@ import org.springframework.stereotype.Service;
 import webChat.entity.SocialUser;
 import webChat.model.login.GoogleOAuth;
 import webChat.repository.SocialUserRepository;
+import webChat.service.redis.RedisService;
+import webChat.utils.TokenUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -15,8 +18,20 @@ public class LoginService {
     @Autowired
     private SocialUserRepository socialUserRepository;
 
+    @Autowired
+    private RedisService redisService;
+
     public GoogleOAuth checkSocialUser(GoogleOAuth googleOAuth) {
         SocialUser socialUser = socialUserRepository.findByEmail(googleOAuth.getEmail());
+        FirebaseToken decodeToken = null;
+        try {
+            decodeToken = new TokenUtils().checkGoogleOAuthToken(googleOAuth.getAccessToken());
+
+
+            //resultAuth.setEmailVerified(decodeToken.isEmailVerified());
+        } catch (Exception e) {
+            log.info("google oauth 토큰 인증 실패");
+        }
 
         // 계정이 없는 경우
         if (socialUser == null) {
@@ -32,7 +47,10 @@ public class LoginService {
             }
         } else {
             // 레디스 insert
-            // db 값 변경
+            if (decodeToken.isEmailVerified()) {
+                redisService.insertGoogleOauthToken(googleOAuth);
+            }
+            googleOAuth.setEmailVerified(decodeToken.isEmailVerified());
         }
 
         return googleOAuth;
