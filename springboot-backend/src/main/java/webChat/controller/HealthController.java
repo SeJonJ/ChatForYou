@@ -24,9 +24,6 @@ public class HealthController {
     private final RoutingInstanceProvider instanceProvider;
     private final CookieCheckEvent cookieCheckEvent;
 
-    @Value("${cookie.check.domain:}")
-    private String cookieCheckDomain;
-
     /**
      * 자신(pod) 의 cookie 값 및 instanceID return
      * @param response
@@ -34,9 +31,6 @@ public class HealthController {
      */
     @GetMapping("/cookie")
     public ResponseEntity<String> cookieHealth(HttpServletResponse response) {
-        if (StringUtil.isNullOrEmpty(cookieCheckDomain)) { // 운영환경은 세팅, 로컬은 빈값
-            response.addCookie(new jakarta.servlet.http.Cookie(RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName(), instanceProvider.getInstanceId()));
-        }
 //        log.info("cookie : [{}] :: instanceId : [{}]", routingService.getCookie(request, RoutingCookie.CHATFORYOU_SERVER_COOKIE), instanceProvider.getInstanceId());
         // nginx 가 라우팅한 후 이 응답을 돌려줌
         return ResponseEntity.ok(instanceProvider.getInstanceId());

@@ -52,7 +52,7 @@ public class CookieCheckEvent {
     private final KafkaTemplate<String, KafkaEvent> kafkaTemplate;
     private final ApplicationContext applicationContext;
 
-    @Value("${cookie.check.domain:https://localhost:8443}")
+    @Value("${cookie.check.domain:}")
     private String cookieCheckDomain;
     private volatile boolean cookieCollected = false;
     private final String COOKIE_CHECK_PATH = "/chatforyou/api/health/cookie";
@@ -78,6 +78,13 @@ public class CookieCheckEvent {
         instanceProvider.initInstanceProviderEvent();
 
         log.info("=== 최적화 쿠키 수집 시작 ===");
+
+        // 로컬환경인 경우 쿠키 탐색 무시
+        if (StringUtil.isNullOrEmpty(cookieCheckDomain)) {
+            String localCookie = "local_cookie|" + this.instanceProvider.getInstanceId();
+            saveCookieAndComplete(localCookie);
+            return;
+        }
 
         // Phase 1: 파드간 협력
         String cookie = collectFromPeers();
