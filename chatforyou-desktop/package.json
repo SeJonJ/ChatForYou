@@ -1,0 +1,129 @@
+{
+  "name": "chatforyou-desktop",
+  "version": "1.0.3",
+  "description": "ChatForYou Desktop Application built with Electron",
+  "main": "src/main/electron-main.js",
+  "scripts": {
+    "build": "node build-scripts/build.js --platform mac --env prod",
+    "build:mac": "node build-scripts/build.js --platform mac --env prod",
+    "build:win": "node build-scripts/build.js --platform win --env prod",
+    "build:all": "node build-scripts/build.js --platform all --env prod",
+    "pack": "node build-scripts/build.js --platform pack --env prod",
+    "start": "node build-scripts/build.js --mode start --env local",
+    "dev": "node build-scripts/build.js --mode dev --env local --dev",
+    "test:update": "node auto-update/test-update.js test",
+    "test:update:force": "npm run start -- --force-dev-update",
+    "sync": "node build-scripts/sync-frontend.js",
+    "sync:verbose": "node build-scripts/sync-frontend.js --verbose",
+    "sync:prod": "node build-scripts/sync-frontend.js --env prod",
+    "scss:build": "npx sass src/static/scss:src/static/css --style=compressed --no-source-map",
+    "scss:dev": "npx sass src/static/scss:src/static/css --style=expanded --source-map",
+    "scss:watch": "npx sass src/static/scss:src/static/css --watch --style=expanded --source-map",
+    "clean": "npx rimraf dist src/static src/templates src/config",
+    "clean:all": "npm run clean && npx rimraf node_modules",
+    "info": "node build-scripts/build-log.js --env=local --platform=info --type=info",
+    "info:prod": "node build-scripts/build-log.js --env=prod --platform=info --type=info --save",
+    "postinstall": "electron-builder install-app-deps",
+    "postbuild": "node build-scripts/sha512-builder.js",
+    "postbuild:mac": "node build-scripts/sha512-builder.js"
+  },
+  "keywords": [
+    "electron",
+    "webrtc",
+    "chat",
+    "video-conference",
+    "desktop-app"
+  ],
+  "author": "sejon",
+  "license": "by-nc-sa 4.0",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0",
+    "sass": "^1.89.2",
+    "rimraf": "^5.0.0",
+    "commander": "^11.0.0",
+    "chokidar": "^3.5.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SeJonJ/ChatForYou.git"
+  },
+  "build": {
+    "appId": "com.chatforyou.desktop",
+    "productName": "ChatForYou",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "auto-update/app-update.yml",
+        "to": "app-update.yml"
+      }
+    ],
+    "files": [
+      "src/**/*",
+      "build-scripts/lib/**/*",
+      "auto-update/**/*",
+      "package.json",
+      "!src/**/*.scss",
+      "!src/.backup/**/*"
+    ],
+    "mac": {
+      "identity": null,
+      "gatekeeperAssess": false,
+      "hardenedRuntime": true,
+      "signIgnore": [
+        "node_modules"
+      ],
+      "category": "public.app-category.social-networking",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "src/static/images/logo/chatforyou_logo_512.png",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "ChatForYou가 시스템 이벤트에 접근하여 원활한 업데이트를 제공합니다.",
+        "NSCameraUsageDescription": "ChatForYou가 화상 채팅을 위해 카메라에 접근합니다.",
+        "NSMicrophoneUsageDescription": "ChatForYou가 음성 채팅을 위해 마이크에 접근합니다."
+      }
+    },
+    "win": {
+      "target": {
+        "target": "nsis",
+        "arch": [
+          "x64",
+          "ia32"
+        ]
+      },
+      "icon": "src/static/images/logo/chatforyou_logo.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "src/static/images/logo/chatforyou_logo.ico",
+      "uninstallerIcon": "src/static/images/logo/chatforyou_logo.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ChatForYou"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Network", 
+      "icon": "src/static/images/logo/chatforyou_logo_512.png"
+    }
+  },
+  "dependencies": {
+    "electron-log": "^5.4.1",
+    "electron-updater": "^6.6.2"
+  }
+}

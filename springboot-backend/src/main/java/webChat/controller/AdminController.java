@@ -5,9 +5,12 @@ import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import webChat.model.redis.DataType;
 import webChat.model.response.common.ChatForYouResponse;
+import webChat.model.room.KurentoRoom;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.redis.RedisService;
 import webChat.utils.JwtUtil;
 
 import java.util.ArrayList;
@@ -22,6 +25,7 @@ public class AdminController {
 
     private final ChatRoomService chatRoomService;
     private final JwtUtil jwtUtil;
+    private final RedisService redisService;
 
     @Value("${turn.server.urls}")
     private String turnServerUrl;
@@ -89,10 +93,12 @@ public class AdminController {
             throw new ExceptionController.UnauthorizedException("Invalid token format or you have No Auth");
         }
 
+        KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        chatRoomService.delChatRoom(kurentoRoom);
         // roomId 기준으로 chatRoomMap 에서 삭제, 해당 채팅룸 안에 있는 사진 삭제
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
-                .data(chatRoomService.delChatRoom(roomId))
+                .message("Success to delete room [ " + roomId + " ] with all related data.")
                 .build());
     }
 

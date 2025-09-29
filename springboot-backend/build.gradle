@@ -4,7 +4,6 @@ plugins {
 	id 'java'
 }
 
-group = 'Terian'
 version = '6.11'
 sourceCompatibility = '17'
 targetCompatibility = '17'
@@ -132,6 +131,8 @@ dependencies {
 	// https://mvnrepository.com/artifact/commons-codec/commons-codec
 	implementation 'commons-codec:commons-codec:1.16.0'
 
+	// https://mvnrepository.com/artifact/org.apache.kafka/kafka-clients
+	implementation 'org.apache.kafka:kafka-clients:4.0.0'
 
 	// kafka
 	implementation 'org.springframework.kafka:spring-kafka'

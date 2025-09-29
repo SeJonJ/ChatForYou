@@ -7,7 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
+import webChat.model.redis.RedisKeyPrefix;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
@@ -18,10 +19,13 @@ import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.service.analysis.AnalysisService;
-import webChat.service.chatroom.SseService;
 import webChat.service.file.FileService;
+import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
+import webChat.service.routing.RoutingInstanceProvider;
+import webChat.service.routing.RoutingService;
+import webChat.utils.StringUtil;
 
 import java.util.*;
 
@@ -41,6 +45,10 @@ public class ChatRoomService {
     private final AnalysisService analysisService;
 
     private final SseService sseService;
+    private final RoutingInstanceProvider instanceProvider;
+    private final RoutingService routingService;
+
+    private final ChatKafkaProducer chatKafkaProducer;
 
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
@@ -48,15 +56,35 @@ public class ChatRoomService {
     private final List<RoomState> ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED);
 
     // roomName 로 채팅방 만들기
-    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo) throws BadRequestException {
+    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo, String roomId) throws BadRequestException {
 
         this.validateRoomInfo(chatRoomInVo.getRoomName(), chatRoomInVo.getMaxUserCnt());
 
         if(ChatType.RTC.equals(chatRoomInVo.getRoomType())) {
-            analysisService.increaseDailyRoomCnt();
-            ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(chatRoomInVo);
+            // 1. roomId 확인
+            roomId = StringUtil.isNullOrEmpty(roomId) ? UUID.randomUUID().toString() : roomId;
+            // 2. roomId 로 저장된 routing 정보 확인
+            RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
+            // 3. 최적의 instanceId 확인
+            String selectedInstanceId = instanceProvider.getServerForRoom(roomId, roomRoutingInfo);
+            if(roomRoutingInfo != null) {
+                selectedInstanceId = roomRoutingInfo.getInstanceId();
+            }
+
+            // 현재 서버가 선택된 서버가 아니면 리다이렉트
+            if(!instanceProvider.getInstanceId().equals(selectedInstanceId)) {
+                return ChatRoom.ofRedirect(chatRoomInVo, roomId, selectedInstanceId);
+            }
+
+            ChatRoom chatRoom = kurentoRoomManager.createKurentoRoom(roomId, selectedInstanceId, chatRoomInVo);
+
             // 새로운 방 생성 시 모든 클라이언트에 이벤트 전송
             sseService.sendRoomCreatedEvent(chatRoom);
+            // 방 생성 후 방 개수 증가
+            instanceProvider.incrementInstanceRoomCount();
+            analysisService.increaseDailyRoomCnt();
+            // 새로운 채팅방 생성 이벤트를 Kafka에 발행
+            chatKafkaProducer.sendCreateRoomEvent(chatRoom);
             return chatRoom;
         } else {
             throw new BadRequestException("room type is not exist : " + chatRoomInVo.getRoomType());
@@ -155,13 +183,17 @@ public class ChatRoomService {
         KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         if(kurentoRoom.getUserCount() <= 0) {
+            // 채팅방 state 를 deactive 로 업데이트 -> batch 로 삭제
             kurentoRoom.deactivate();
             redisService.updateChatRoom(kurentoRoom);
         } else {
             throw new ExceptionController.DelRoomException("Soft Delete Room Exception");
         }
-        // 방 삭제 시 모든 클라이언트에 이벤트 전송
-        sseService.sendRoomDeletedEvent(kurentoRoom);
+        // 채팅방 삭제 이벤트를 Kafka에 발행
+        chatKafkaProducer.sendDeleteRoomEvent(kurentoRoom);
+        // 방 삭제 시 해당 instance 에서 방 제거
+        instanceProvider.decrementInstanceRoomCount();
+
         log.info("Room {} state changed {}", kurentoRoom.getRoomId(), RoomState.INACTIVE.getType());
         return true;
     }

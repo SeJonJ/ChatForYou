@@ -43,7 +43,7 @@ const dataChannel = {
             this.showNewMessage(message, 'other');
             this.showNewFileMessage(file, 'other');
 
-        } else if (recvMessage.type === 'gameEvent') {
+        } else if (recvMessage.type === 'gameEvent' && recvMessage.userName !== this.user.nickName) {
             this.gameEvent(recvMessage.message);
         } else if(recvMessage.userName !== this.user.nickName) {
             // 일반 메시지 처리

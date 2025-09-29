@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-frontend",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Node.js static server for ChatForYou frontend",
   "main": "server.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "dev": "concurrently \"npm run sass\" \"npm run start\""
   },
   "author": "sejon",
-  "license": "MIT",
+  "license": "by-nc-sa 4.0",
   "devDependencies": {
     "concurrently": "^9.1.2"
   },

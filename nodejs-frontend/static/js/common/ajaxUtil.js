@@ -8,6 +8,9 @@ function ajax(url, method, async, data, successCallback, errorCallback, complete
         type: method,
         data: data,
         async: async !== undefined ? async : true,
+        xhrFields: {
+            withCredentials: true
+        },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
                 successCallback(data);
@@ -33,6 +36,9 @@ function ajaxToJson(url, method, async, data, successCallback, errorCallback, co
         data: JSON.stringify(data),
         async: async !== undefined ? async : true,
         contentType : 'application/json; charset=UTF-8',
+        xhrFields: {
+            withCredentials: true
+        },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
                 successCallback(data);
@@ -94,6 +100,9 @@ function ajaxToJsonPromise(url, method, data) {
             url: url,
             method: method,
             data: JSON.stringify(data),
+            xhrFields: {
+                withCredentials: true
+            },
             success: resolve,
             error: reject
         });
@@ -108,6 +117,9 @@ function fileUploadAjax(url, method, async, data, successCallback, errorCallback
         async: async !== undefined ? async : true,
         processData: false,
         contentType: false,
+        xhrFields: {
+            withCredentials: true
+        },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
                 successCallback(data);
@@ -127,6 +139,9 @@ function fileDownloadAjax(url, method, async, data, successCallback, errorCallba
         type: method,
         data: data,
         async: async !== '' ? async : true,
+        xhrFields: {
+            withCredentials: true
+        },
         dataType: 'binary', // 파일 다운로드를 위해서는 binary 타입으로 받아야한다.
         xhrFields: {
             'responseType': 'blob' // 여기도 마찬가지

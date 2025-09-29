@@ -4,7 +4,7 @@
 const dataChannelChatting = {
     $element: $('.floating-chat'),
     $sendMessageBtn : $('#sendMessageBtn'),
-    $userTextInput :  $('.text-box'),
+    $userTextInput :  $('#userTextInput'),
     $messagesContainer : $('.messages'),
     isCheckMinioPage : false,
     init: function() {
@@ -24,13 +24,16 @@ const dataChannelChatting = {
         self.$userTextInput.on('keydown', function(event) {
             if (event.shiftKey && event.which === 13) {
                 // shift + enter 사용 시 한줄 띄우기
-            } else if (event.which === 13) {
+            } else if (event.which === 13 && self.$userTextInput.text().trim() !== '') {
                 event.preventDefault(); // 기본 동작(한줄 띄우기)을 방지
                 dataChannel.showNewMessage(self.parseMessage(self.$userTextInput), 'self');
             }
         });
 
-        this.$sendMessageBtn.on("click", function(){
+        self.$sendMessageBtn.on("click", function(){
+            if(self.$userTextInput.text().trim() === ''){
+                return;
+            }
             dataChannel.showNewMessage(self.parseMessage(self.$userTextInput), 'self');
         });
 

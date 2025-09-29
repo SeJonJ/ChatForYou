@@ -5,6 +5,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
@@ -13,14 +14,61 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.cert.X509Certificate;
 import java.util.*;
 
 public class HttpUtil {
 
     private static final Logger log = LoggerFactory.getLogger(HttpUtil.class);
 
-    private static HttpClient httpClient = HttpClients.createDefault();
+    private static HttpClient httpClient = createHttpClient();
     private static ObjectMapper objectMapper = new ObjectMapper();
+
+    // SSL 검증을 우회하는 HttpClient 생성
+    private static HttpClient createHttpClient() {
+        try {
+            // 모든 인증서를 신뢰하는 TrustManager
+            TrustManager[] trustAllCerts = new TrustManager[] {
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() { return null; }
+                        public void checkClientTrusted(X509Certificate[] certs, String authType) { }
+                        public void checkServerTrusted(X509Certificate[] certs, String authType) { }
+                    }
+            };
+
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+            return HttpClients.custom()
+                    .setSSLContext(sslContext)
+                    .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                    .build();
+        } catch (Exception e) {
+            log.warn("SSL 우회 HttpClient 생성 실패, 기본 클라이언트 사용: {}", e.getMessage());
+            return HttpClients.createDefault();
+        }
+    }
+
+    // 응답 헤더를 포함한 GET 요청 (쿠키 포함)
+    public static HttpResponse getWithFullResponse(String url, HttpHeaders httpHeaders, Map<String, String> queryParams) throws Exception {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);
+        if (queryParams != null) {
+            for (Map.Entry<String, String> entry : queryParams.entrySet()) {
+                builder.queryParam(entry.getKey(), entry.getValue());
+            }
+        }
+
+        HttpGet httpGet = new HttpGet(builder.build().toUri());
+        if (httpHeaders != null) {
+            httpHeaders.forEach((key, values) -> values.forEach(value -> httpGet.addHeader(key, value)));
+        }
+
+        return httpClient.execute(httpGet);
+    }
 
     public static <T> T get(String url, HttpHeaders httpHeaders, Map<String, String> queryParams, Class<T> responseType) throws Exception {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);

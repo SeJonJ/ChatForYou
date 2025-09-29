@@ -1,24 +1,139 @@
-# macOS/OS 임시 파일
+# ========================================
+# Node.js 환경
+# ========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output
+
+# Instrumentation 
+.grunt
+bower_components
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# ========================================
+# 환경 변수 및 설정 파일
+# ========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ========================================
+# Build 및 Distribution
+# ========================================
+dist/
+build/
+out/
+.cache
+.parcel-cache
+.next
+.nuxt
+.vuepress/dist
+.serverless
+.backup
+*.backup
+
+# ========================================
+# OS 생성 파일
+# ========================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
-# 공통 IDE/에디터
-.idea/
+# ========================================
+# IDE 및 에디터 파일
+# ========================================
 .vscode/
-*.iml
-*.ipr
-*.iws
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+*CLAUDE*.md
 
-# springboot-backend 빌드/IDE/환경 파일
+# ========================================
+# ChatForYou 프로젝트
+# ========================================
+
+# Desktop 앱 동기화 관련
+chatforyou-desktop/src/.backup/
+chatforyou-desktop/src/.build-info.json
+chatforyou-desktop/.backup/
+*.backup-*
+sync-*.log
+
+# SCSS 컴파일 결과물
+src/static/css/*.map
+chatforyou-desktop/src/static/css/*.map
+
+# 프론트 빌드 결과물
+chatforyou-desktop/src/static
+chatforyou-desktop/src/templates
+
+# 빌드 로그
+build-scripts/.logs/
+scripts/.logs/
+
+# 임시 파일들
+*.tmp
+*.temp
+
+# ========================================
+# Spring Boot Backend 설정
+# ========================================
 springboot-backend/.gradle/
 springboot-backend/build/
 springboot-backend/out/
 springboot-backend/bin/
-springboot-backend/.DS_Store
 springboot-backend/.apt_generated
 springboot-backend/.classpath
 springboot-backend/.factorypath
 springboot-backend/.project
-springboot-backend/.settings
+springboot-backend/.settings/
 springboot-backend/.springBeans
 springboot-backend/.sts4-cache
 
@@ -36,18 +151,20 @@ springboot-backend/dist/
 springboot-backend/nbdist/
 springboot-backend/.nb-gradle/
 
-# 프론트엔드(nodejs-frontend) 빌드/환경 파일
-nodejs-frontend/node_modules/
-nodejs-frontend/.DS_Store
-nodejs-frontend/.env
+# 데이터베이스 관련
+springboot-backend/src/main/resources/data/
+springboot-backend/src/main/resources/geodata/
+
+# ========================================
+# 개발 도구 및 기타
+# ========================================
+.claude
 .cursor/rules/
 
-# 민감/환경 파일
-springboot-backend/src/main/resources/application.properties
-springboot-backend/src/main/resources/ssl/
-#springboot-backend/src/main/generated/webChat/mapper/
+# 테스트 결과물
+test-results/
+coverage-report/
 
-# 기타(필요시)
-#springboot-backend/src/main/resources/geodata/
-
-# README, HELP 등은 git에 포함(무시하지 않음)
+# 로그 파일들
+*.log
+logs/

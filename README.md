@@ -1,4 +1,5 @@
 # ChatForYou v2 - WebRTC 화상채팅 & 게임 플랫폼
+[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-green)]([LICENSE](https://creativecommons.org/licenses/by-nc-sa/4.0/) )
 [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FSeJonJ%2FChatForYou_v2&count_bg=%233310C8&title_bg=%2316C86B&icon=&icon_color=%23E7E7E7&title=HITS&edge_flat=true)](https://hits.seeyoufarm.com)
 
 ## 📋 프로젝트 개요
@@ -94,14 +95,17 @@ This site is only for studying various functions using WebRTC and WebSocket tech
 
 ## 🚀 구동 방법
 
-### 1. 사전 요구사항
+### 1. 서버 아키텍쳐
+https://github.com/SeJonJ/ChatForYou/wiki/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90
+
+### 2. 사전 요구사항
 - **Node.js** 16+ 설치
 - **Java 17** 설치
 - **Kurento Media Server** 설치
 - **TURN Server (coturn)** 설치
 - **Redis** 설치
 
-### 2. 프론트엔드 실행
+### 3. 프론트엔드 실행
 ```bash
 cd nodejs-frontend
 
@@ -115,7 +119,7 @@ npm run local
 npm run start
 ```
 
-### 3. 백엔드 실행
+### 4. 백엔드 실행
 ```bash
 cd springboot-backend
 
@@ -126,7 +130,7 @@ cd springboot-backend
 java -Dkms.url=ws://[KMS_IP]:[PORT]/kurento -jar build/libs/*.jar
 ```
 
-### 4. 환경 설정
+### 5. 환경 설정
 
 #### 프론트엔드 설정 파일
 ```javascript
@@ -150,7 +154,7 @@ server.port=8080
 kms.url=ws://localhost:8888/kurento
 ```
 
-### 5. Docker 실행
+### 6. Docker 실행
 ```bash
 # 프론트엔드 Docker 빌드
 cd nodejs-frontend
@@ -197,22 +201,6 @@ docker-compose up -d
 - **Python API Server**: [chatforyou-python-api](https://github.com/SeJonJ/chatforyou_python_api)
   - CatchMind 게임의 동적 주제 생성을 위한 ChatGPT 연동 서버
 
-## 📚 Reference
-- [WebRTC-SS](https://github.com/Benkoff/WebRTC-SS)
-- [webrtc-lab](https://github.com/codejs-kr/webrtc-lab)
-- [Kurento Documentation](https://doc-kurento.readthedocs.io/en/latest/index.html)
-- [Progress Bar](https://kimmobrunfeldt.github.io/progressbar.js/)
-- [Spinner](https://spin.js.org/)
-
-## 📄 License
-Copyright 2024 SejonJang (wkdtpwhs@gmail.com)  
-
-This project is licensed under the GNU Affero General Public License v3.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
-
-[GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html)
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
 ## 👥 팀 소개
 
 | 역할 | 이름 | 담당 업무 | 이메일 | 프로필 |
@@ -224,3 +212,24 @@ Unless required by applicable law or agreed to in writing, software distributed 
 
 ### 📬 연락처
 팀원들의 개별 연락처와 GitHub 프로필은 곧 업데이트될 예정입니다.
+
+## 📚 Reference
+- [WebRTC-SS](https://github.com/Benkoff/WebRTC-SS)
+- [webrtc-lab](https://github.com/codejs-kr/webrtc-lab)
+- [Kurento Documentation](https://doc-kurento.readthedocs.io/en/latest/index.html)
+- [Progress Bar](https://kimmobrunfeldt.github.io/progressbar.js/)
+- [Spinner](https://spin.js.org/)
+
+## 📄 라이선스
+
+Copyright 2024 SejonJang (wkdtpwhs@gmail.com)
+
+이 프로젝트는 Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License 하에 라이선스됩니다.
+
+**비상업적 사용만 허용됩니다:**
+- ✅ 개인적, 교육적, 연구 목적의 사용
+- ✅ 오픈소스 기여 및 개선
+- ❌ 상업적 목적의 사용 및 배포
+- ❌ 수익 창출을 위한 활용
+
+자세한 내용은 [LICENSE](https://creativecommons.org/licenses/by-nc-sa/4.0/) 파일을 참조하세요.

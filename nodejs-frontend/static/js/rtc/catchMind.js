@@ -37,6 +37,7 @@ const catchMind = {
     maxClearCount: 3, // 캔버스 클리어 최대 횟수
     recognition: null, // 음성 인식 객체
     synth: null,
+    alreadyPlayedGame: false, // 게임 이미 진행되었는지 여부
     init: function () {
         this.canvas = document.getElementById('mycanvas');
         this.ctx = this.canvas.getContext('2d');
@@ -220,6 +221,15 @@ const catchMind = {
         });
 
         $('#subjectModal').on('shown.bs.modal', function (e) {
+            if(self.alreadyPlayedGame) {
+                Toastify({
+                    text: "이미 게임이 진행되었습니다!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "center",
+                }).showToast();
+                return;
+            }
             $('#maxGameCount').val(self.totalGameRound);
 
             let $body = $('body');
@@ -978,6 +988,7 @@ const catchMind = {
     // 게임 참여자 데이터를 기반으로 모달 내용을 동적으로 생성
     displayGameResults: function (data) {
         let self = this;
+        self.alreadyPlayedGame = true;
         // 모달 헤더에 총 게임 라운드 수 표시
         document.getElementById('totalGameRounds').textContent = `총 게임 라운드: ${data.totalGameRound}`;
 

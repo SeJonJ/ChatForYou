@@ -54,8 +54,8 @@ public class KurentoRoom extends ChatRoom implements Closeable {
   private boolean isKurentoInitialized = false;
 
   // 룸 정보 set
-  public KurentoRoom(String roomId, String roomName, String creator, String roomPwd, boolean secretChk, int userCount, int maxUserCnt, ChatType chatType){
-    super(roomId, roomName, creator, userCount, maxUserCnt, roomPwd, secretChk, chatType, RoomState.CREATED);
+  public KurentoRoom(String roomId, String roomName, String creator, String roomPwd, boolean secretChk, int userCount, int maxUserCnt, ChatType chatType, String instanceId){
+    super(roomId, roomName, creator, userCount, maxUserCnt, roomPwd, secretChk, chatType, RoomState.CREATED, instanceId);
   }
 
   // Kurento 리소스가 필요한 시점에 초기화
