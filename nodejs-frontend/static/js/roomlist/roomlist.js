@@ -65,10 +65,9 @@ const roomList = {
     });
 
     eventSource.addEventListener('roomDeleted', function(event) {
-      const deletedRoom = JSON.parse(event.data);
-      const deletedRoomId = deletedRoom.roomId;
+      const { roomId } = JSON.parse(event.data);
       $('#roomTableBody')
-          .find(`[data-id='${deletedRoomId}'], [data-roomid='${deletedRoomId}']`)
+          .find(`[data-id='${roomId}'], [data-roomid='${roomId}']`)
           .closest('tr')
           .remove();
     });
@@ -78,30 +77,23 @@ const roomList = {
     });
 
     eventSource.addEventListener("changeUserCnt", function (event) {
-      const chatRoom = JSON.parse(event.data);
-      const chatRoomId = chatRoom.roomId;
-      const userCnt = chatRoom.userCount;
-      const {maxUserCnt} = chatRoom;
+      const { roomId, userCount, maxUserCnt } = JSON.parse(event.data);
 
       const $row = $('#roomTableBody')
-          .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)
+          .find(`[data-id='${roomId}'], [data-roomid='${roomId}']`)
           .closest('tr');
 
-      $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
+      $row.find('span.room-user-count').text(`${userCount}/${maxUserCnt}`);
     });
 
     eventSource.addEventListener("changeRoomSetting", function (event) {
-      const chatRoom = JSON.parse(event.data);
-      const chatRoomId = chatRoom.roomId;
-      const roomName = chatRoom.roomName;
-      const userCnt = chatRoom.userCount;
-      const maxUserCnt = chatRoom.maxUserCnt;
+      const { roomId, roomName, userCount, maxUserCnt } = JSON.parse(event.data);
 
       const $row = $('#roomTableBody')
-          .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)
+          .find(`[data-id='${roomId}'], [data-roomid='${roomId}']`)
           .closest('tr');
 
-      $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
+      $row.find('span.room-user-count').text(`${userCount}/${maxUserCnt}`);
       $row.find('.enterRoomBtn, .directEnterBtn').text(roomName);
     });
 
