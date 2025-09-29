@@ -8,6 +8,7 @@ import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
+import webChat.model.routing.RoomRoutingInfo;
 
 import java.util.List;
 import java.util.Map;
@@ -37,12 +38,15 @@ public interface RedisService {
 
     void decrementUserCount(KurentoRoom kurentoRoom);
 
+    long increment(String key, long delta);
+
+    long decrement(String key, long delta);
 
     Set<String> getKeysByPattern(String pattern);
 
     List<KurentoRoom> getChatRoomListForDelete(int searchCount) throws BadRequestException;
 
-    void insertChatRoom(ChatRoom chatRoom);
+    void saveChatRoom(ChatRoom chatRoom);
 
     <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz) throws BadRequestException;
 
@@ -55,4 +59,22 @@ public interface RedisService {
     void updateChatRoom(ChatRoom chatRoom);
 
     boolean checkRoomName(String roomName);
+
+    /**
+     * roomID 를 기준으로 instanceId 및 cookie 를 저장
+     * @param roomRoutingInfo roomId, instanceId, cookie 가 매핑된 객체
+     */
+    void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo);
+
+    long getInstanceRoomCount(String key);
+
+    /**
+     * redis 에서 instanceId 와 관련된 정보 모두 삭제
+     * @param instanceId
+     */
+    void delInstanceInfo(String instanceId);
+
+    void saveInstanceCookieMapping(String currentInstanceId, String cookie);
+
+    Map<String, String> getAllInstanceCookies() throws BadRequestException;
 }

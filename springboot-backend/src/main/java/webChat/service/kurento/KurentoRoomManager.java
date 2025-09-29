@@ -213,12 +213,12 @@ public class KurentoRoomManager {
     user.sendMessage(existingParticipantsMsg);
   }
 
-  public ChatRoom createKurentoRoom(ChatRoomInVo chatRoomInVo) {
+  public ChatRoom createKurentoRoom(String roomId, String instanceId, ChatRoomInVo chatRoomInVo) {
 
-    KurentoRoom room = new KurentoRoom(UUID.randomUUID().toString(), chatRoomInVo.getRoomName(), chatRoomInVo.getCreator(), chatRoomInVo.getRoomPwd(), chatRoomInVo.isSecretChk(), 0, chatRoomInVo.getMaxUserCnt(), chatRoomInVo.getRoomType());;
+    KurentoRoom room = new KurentoRoom(roomId, chatRoomInVo.getRoomName(), chatRoomInVo.getCreator(), chatRoomInVo.getRoomPwd(), chatRoomInVo.isSecretChk(), 0, chatRoomInVo.getMaxUserCnt(), chatRoomInVo.getRoomType(), instanceId);
 
     // redis 에 저장
-    redisService.insertChatRoom(room);
+    redisService.saveChatRoom(room);
 
     return room;
   }

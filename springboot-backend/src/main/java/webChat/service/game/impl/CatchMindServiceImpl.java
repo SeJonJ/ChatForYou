@@ -39,6 +39,7 @@ public class CatchMindServiceImpl implements CatchMindService {
 
     // python 서버와 통신 후 예외가 발생하는 경우 titles 대체를 위한 list
     private final List<String> TITLES_EX = Lists.newArrayList("동물","식물","애니메이션","게임","영화");
+    private final List<String> SUBJECTS_EX = Lists.newArrayList("히오스","롤","메이플스토리","슈퍼마리오","젤다의전설");
 
     @Override
     public boolean chkAlreadyPlayedGame(String roomId) throws BadRequestException {
@@ -87,7 +88,10 @@ public class CatchMindServiceImpl implements CatchMindService {
             return gameSubjects;
         } catch (Exception e){ // 예외 발생 시 기본 리스트를 반환
             e.printStackTrace();
-//            subjects = new GameTitles(TITLES_EX);
+            gameSubjects = GameSubjects.builder()
+                    .title("게임")
+                    .subjects(SUBJECTS_EX)
+                    .build();
             return gameSubjects;
         }
     }

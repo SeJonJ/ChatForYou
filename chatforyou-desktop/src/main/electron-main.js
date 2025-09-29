@@ -59,7 +59,7 @@ function isValidLocalPath(fileUrl) {
             return false;
         }
         
-        // Directory traversal 공격 차단 - 더 정확한 검사
+        // Directory traversal 공격 차단
         const relativePath = path.relative(appDir, normalizedPath);
         if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
             log.warn(`보안: 경로 탐색 시도 차단: ${relativePath}`);
@@ -127,18 +127,34 @@ function setupAutoUpdater() {
         // Mac에서 autoUpdater 이벤트 처리 - 수동 다운로드로 유도
         autoUpdater.on('update-available', (info) => {
             log.info(`Mac 업데이트 발견: v${info.version}`);
+            
+            if (mainWindow) {
+                mainWindow.hide();
+                log.info('Mac 강제 업데이트: 메인 창 숨김');
+            }
+            
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
-                title: '새 버전 업데이트 안내',
-                message: `ChatForYou v${info.version} 업데이트가 있습니다!`,
-                detail: `Mac 버전은 수동 설치가 필요합니다.\nGitHub에서 최신 DMG 파일을 다운로드해주세요.`,
-                buttons: ['GitHub에서 다운로드', '나중에'],
+                title: '필수 업데이트 안내',
+                message: `ChatForYou v${info.version} 필수 업데이트가 있습니다!`,
+                detail: `서비스 사용을 위해 업데이트가 필요합니다.\nGitHub에서 최신 DMG 파일을 다운로드해주세요.`,
+                buttons: ['GitHub에서 다운로드', '나중에 업데이트(앱 종료)'],
                 defaultId: 0,
-                cancelId: 1
+                cancelId: 1,
+                noLink: true  // 링크 스타일 방지
             }).then(result => {
                 if (result.response === 0) {
                     shell.openExternal('https://github.com/SeJonJ/ChatForYou/releases/latest');
-                    log.info('Mac 수동 업데이트: GitHub Releases 페이지 열기');
+                    log.info('Mac 강제 업데이트: GitHub Releases 페이지 열기');
+                    // GitHub 페이지 열기 후에도 앱 종료
+                    setTimeout(() => {
+                        log.info('Mac 강제 업데이트: GitHub 페이지 열기 후 앱 종료');
+                        app.quit();
+                    }, 1000);
+                } else {
+                    // "앱 종료" 선택 시 즉시 종료
+                    log.info('Mac 강제 업데이트: 사용자가 앱 종료 선택');
+                    app.quit();
                 }
             });
         });
@@ -591,6 +607,9 @@ app.whenReady().then(() => {
     setupAutoUpdater();
     
     if (!isDev) {
+        if (process.platform === 'darwin') {
+            log.info('Mac 앱 시작: 강제 업데이트 체크 수행 (재시작 시에도 동일하게 적용)');
+        }
         autoUpdater.checkForUpdatesAndNotify();
         log.info('자동 업데이트 확인 시작');
     }

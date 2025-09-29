@@ -47,7 +47,6 @@ public class KurentoHandler extends TextWebSocketHandler {
     private final KurentoClient kurentoClient;
 
     private final RedisService redisService;
-    private final ChatRoomService chatRoomService;
     private final KurentoParticipantService participantService;
     private final ChatKafkaProducer chatKafkaProducer;
     private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPiplineMap.getInstance();
