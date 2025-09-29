@@ -78,7 +78,6 @@ const roomList = {
     });
 
     eventSource.addEventListener("changeUserCnt", function (event) {
-      console.log("ddjdjdjdjddjdjdjdjdjdjd");
       const chatRoom = JSON.parse(event.data);
       const chatRoomId = chatRoom.roomId;
       const userCnt = chatRoom.userCount;
@@ -89,6 +88,21 @@ const roomList = {
           .closest('tr');
 
       $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
+    });
+
+    eventSource.addEventListener("changeRoomSetting", function (event) {
+      const chatRoom = JSON.parse(event.data);
+      const chatRoomId = chatRoom.roomId;
+      const roomName = chatRoom.roomName;
+      const userCnt = chatRoom.userCount;
+      const maxUserCnt = chatRoom.maxUserCnt;
+
+      const $row = $('#roomTableBody')
+          .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)
+          .closest('tr');
+
+      $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
+      $row.find('.enterRoomBtn, .directEnterBtn').text(roomName);
     });
 
     window.addEventListener("beforeunload", () => {

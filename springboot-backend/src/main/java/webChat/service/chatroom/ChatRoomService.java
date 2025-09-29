@@ -170,6 +170,10 @@ public class ChatRoomService {
     // 채팅방 수정
     public ChatRoom updateRoom(String roomId, String roomName, String roomPwd, int maxUserCnt) throws BadRequestException {
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        // 방 이름 혹은 최대 인원 수 변경 시에 kafka -> sse를 통해 실시간 방 업데이트
+        if (!chatRoom.getRoomName().equals(roomName) || chatRoom.getMaxUserCnt() != maxUserCnt) {
+            chatKafkaProducer.sendChangedRoomSettingEvent(chatRoom);
+        }
         chatRoom.setRoomName(roomName);
         chatRoom.setRoomPwd(roomPwd);
         chatRoom.setMaxUserCnt(maxUserCnt);

@@ -93,7 +93,21 @@ public class SseService {
                 deadEmitters.add(emitter);
             }
         }
+        emitters.removeAll(deadEmitters);
+    }
 
+    public void sendChangeRoomSettingEvent(ChatRoom room) {
+        List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
+
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("changeRoomSetting")
+                        .data(room));
+            } catch (IOException e) {
+                deadEmitters.add(emitter);
+            }
+        }
         emitters.removeAll(deadEmitters);
     }
 }
