@@ -40,6 +40,25 @@ const RoomSettingsPopup = {
         $(document).off('click', '#saveRoomConfigBtn').on('click', '#saveRoomConfigBtn', function () {
             self.saveRoomConfig();
         });
+        $('#logoutBtn').on('click', function() {
+            const url = window.__CONFIG__.API_BASE_URL + '/login/logout';
+            var requestData = {
+                email: localStorage.getItem('email')
+            };
+
+            var successCallback = function(data) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('email');
+                localStorage.removeItem('type');
+                localStorage.removeItem('nickname');
+                window.location.href = '/chatlogin.html';
+            };
+            var errorCallback = function(data) {
+                debugger;
+            };
+            tokenAjax(url, 'POST', true, requestData, successCallback, errorCallback);
+        });
 
         // 비밀번호 변경 체크박스
         $(document).off('change', '#changePwdCheckbox').on('change', '#changePwdCheckbox', function () {

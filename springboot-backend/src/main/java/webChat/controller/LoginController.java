@@ -47,4 +47,15 @@ public class LoginController {
                 .data(response)
                 .build());
     }
+
+    @PostMapping(value = "/logout", produces = "application/json; charset=UTF8")
+    public ResponseEntity<ChatForYouResponse> logout(@RequestHeader("Authorization") String authorization,
+                                                     @RequestParam("email") String email) throws Exception {
+
+        loginService.logout(authorization, email);
+
+        return ResponseEntity.ok(ChatForYouResponse.builder()
+                .result("success")
+                .build());
+    }
 }

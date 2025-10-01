@@ -549,5 +549,9 @@ public class RedisServiceImpl implements RedisService {
         masterTemplate.opsForHash().put(redisKey, "lastLoginDate", time);
     }
 
+    @Override
+    public void deleteLoginInfo(String email) {
+        masterTemplate.delete(SOCIAL_USER_PREFIX.getPrefix() + email);
+    }
 
 }

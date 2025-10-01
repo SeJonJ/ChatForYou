@@ -3,6 +3,7 @@ package webChat.service.chatroom;
 import com.google.firebase.auth.FirebaseToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import webChat.entity.SocialUser;
@@ -67,5 +68,23 @@ public class LoginService {
         }
 
         return googleOAuth;
+    }
+
+    public void logout(String authorization, String email) throws Exception{
+        FirebaseToken decodeToken = null;
+
+        // 토큰 검증
+        try {
+            decodeToken = new TokenUtils().checkGoogleOAuthToken(authorization);
+        } catch (Exception e) {
+            log.error("google oauth 토큰 인증 실패 !!!");
+        }
+
+        // 레디스 삭제
+        if (!decodeToken.isEmailVerified() || !decodeToken.getEmail().equalsIgnoreCase(email)) {
+            throw new BadRequestException("Invalid Logout Info !!! ");
+        }
+        redisService.deleteLoginInfo(email);
+
     }
 }

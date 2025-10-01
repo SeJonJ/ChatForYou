@@ -80,4 +80,5 @@ public interface RedisService {
 
     Map<String, String> getAllInstanceCookies() throws BadRequestException;
     void insertGoogleOauthToken(OauthRedis oauthRedis, long time);
+    void deleteLoginInfo(String email);
 }
