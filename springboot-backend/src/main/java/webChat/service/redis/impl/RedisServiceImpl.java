@@ -11,15 +11,18 @@ import io.github.dengliming.redismodule.redisearch.search.SearchOptions;
 import io.github.dengliming.redismodule.redisearch.search.SortBy;
 import io.lettuce.core.RedisException;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.jetbrains.annotations.NotNull;
 import org.redisson.api.SortOrder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.*;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import webChat.model.login.GoogleOAuth;
+import webChat.model.login.OauthRedis;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
@@ -340,6 +343,8 @@ public class RedisServiceImpl implements RedisService {
         String redisKey = "";
         if (DataType.LOGIN_USER.equals(dataType) || DataType.USER_REFRESH_TOKEN.equals(dataType) || DataType.USER_LAST_LOGIN_DATE.equals(dataType)) {
             redisKey = key.contains("user:") ? key : "user:" + key;
+        } else if (DataType.SOCIAL_USER.equals(dataType)) {
+            redisKey = SOCIAL_USER_PREFIX.getPrefix() + key;
         } else {
             redisKey = makeRedisKey(key);
         }
@@ -360,6 +365,8 @@ public class RedisServiceImpl implements RedisService {
                 return clazz.cast(slaveTemplate.opsForValue().get(key));
             case INSTANCE_COOKIE:
                 return clazz.cast(slaveTemplate.opsForValue().get(key));
+            case SOCIAL_USER:
+                return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.SOCIAL_USER.getType()));
             default:
                 throw new BadRequestException("Dose Not Exist DataType");
         }
@@ -533,13 +540,14 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
-    public void insertGoogleOauthToken(GoogleOAuth auth) {
-        String redisKey = "oauth:" + auth.getEmail();
+    public void insertGoogleOauthToken(OauthRedis oauthRedis, long time) {
+        String redisKey = "oauth:" + oauthRedis.getEmail();
 
-        masterTemplate.opsForHash().put(redisKey, "email", auth.getEmail());
-        masterTemplate.opsForHash().put(redisKey, "accessToken", auth.getAccessToken());
-        masterTemplate.opsForHash().put(redisKey, "refreshToken", auth.getRefreshToken());
-        masterTemplate.opsForHash().put(redisKey, "nickname", auth.getName());
+        masterTemplate.opsForHash().put(redisKey, DataType.SOCIAL_USER.getType(), oauthRedis);
+        masterTemplate.opsForHash().put(redisKey, "email", oauthRedis.getEmail());
+        masterTemplate.opsForHash().put(redisKey, "nickname", oauthRedis.getEmail().split("@")[0]);
+        masterTemplate.opsForHash().put(redisKey, "lastLoginDate", time);
     }
+
 
 }

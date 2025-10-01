@@ -113,6 +113,9 @@ const RoomPopup = {
             let errorCallback = function(err) {
                 if(err.responseJSON && err.responseJSON.code === '40042'){
                     self.showToast('이미 존재하는 방입니다. \n 다른 방 이름을 입력해주세요.');
+                } else if (err.responseJSON && err.responseJSON.code === '40050') {
+                    self.showToast('로그인이 필요한 서비스입니다.');
+                    window.location.href = '/chatlogin.html';
                 } else {
                     self.showToast('방 생성에 실패했습니다. \n 잠시뒤에 다시 시도해주세요.');
                 }
@@ -123,7 +126,7 @@ const RoomPopup = {
             };
 
             const url = window.__CONFIG__.API_BASE_URL + '/chat/room';
-            ajaxToJson(url, 'POST', true, requestData, successCallback, errorCallback);
+            tokenAjaxToJson(url, 'POST', true, requestData, successCallback, errorCallback);
         }
     },    
     /**

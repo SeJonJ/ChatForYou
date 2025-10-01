@@ -7,9 +7,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import webChat.entity.SocialUser;
 import webChat.model.login.GoogleOAuth;
+import webChat.model.login.OauthRedis;
 import webChat.repository.SocialUserRepository;
 import webChat.service.redis.RedisService;
 import webChat.utils.TokenUtils;
+
+import java.util.Calendar;
 
 @Service
 @RequiredArgsConstructor
@@ -30,27 +33,37 @@ public class LoginService {
 
             //resultAuth.setEmailVerified(decodeToken.isEmailVerified());
         } catch (Exception e) {
-            log.info("google oauth 토큰 인증 실패");
+            log.error("google oauth 토큰 인증 실패 !!!");
         }
 
         // 계정이 없는 경우
+        long time = Calendar.getInstance().getTimeInMillis();
         if (socialUser == null) {
             if (googleOAuth.isEmailVerified()) {
                 SocialUser user = SocialUser.builder().build();
-                user.setAccessToken(googleOAuth.getAccessToken());
-                user.setRefreshToken(googleOAuth.getRefreshToken());
-                user.setName(googleOAuth.getName());
                 user.setEmail(googleOAuth.getEmail());
-                user.setPhoto(googleOAuth.getPhoto());
+                user.setNickname(googleOAuth.getName().split("@")[0]);
+                user.setPhotoUrl(googleOAuth.getPhoto());
                 user.setType("google");
+                user.setCreateDate(time);
+                user.setUpdateDate(time);
+                user.setLastLoginDate(time);
+
                 socialUserRepository.save(user);
             }
         } else {
-            // 레디스 insert
-            if (decodeToken.isEmailVerified()) {
-                redisService.insertGoogleOauthToken(googleOAuth);
-            }
             googleOAuth.setEmailVerified(decodeToken.isEmailVerified());
+        }
+
+        // 레디스 insert
+        if (decodeToken.isEmailVerified()) {
+            OauthRedis oauthRedis = new OauthRedis();
+            oauthRedis.setEmail(googleOAuth.getEmail());
+            oauthRedis.setAccessToken(googleOAuth.getAccessToken());
+            oauthRedis.setRefreshToken(googleOAuth.getRefreshToken());
+            oauthRedis.setNickname(googleOAuth.getName().split("@")[0]);
+            oauthRedis.setLastLoginDate(time);
+            redisService.insertGoogleOauthToken(oauthRedis, time);
         }
 
         return googleOAuth;

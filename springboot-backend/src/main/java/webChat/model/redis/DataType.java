@@ -8,6 +8,7 @@ public enum DataType {
 //    KURENTO("kurento", 2),
     USER_COUNT("user_count", 4),
     USER_LIST("user_list", 5),
+    SOCIAL_USER("social_user", 6),
     LOGIN_USER("login_user", 9),
     USER_REFRESH_TOKEN("user_refresh_token", 10),
     USER_LAST_LOGIN_DATE("user_last_login_date", 11),

@@ -15,13 +15,15 @@ public class SocialUser {
     private String email;
 
     @Column
-    private String accessToken;
-    @Column
-    private String refreshToken;
-    @Column
-    private String name;
-    @Column
-    private String photo;
+    private String nickname;
+    @Column(name = "photo_url")
+    private String photoUrl;
     @Column
     private String type;
+    @Column(name = "create_date")
+    private long createDate;
+    @Column(name = "update_date")
+    private long updateDate;
+    @Column(name = "last_login_date")
+    private long lastLoginDate;
 }

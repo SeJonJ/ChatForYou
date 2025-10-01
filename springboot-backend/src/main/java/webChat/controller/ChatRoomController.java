@@ -1,5 +1,6 @@
 package webChat.controller;
 
+import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import webChat.model.login.OauthRedis;
+import webChat.model.redis.DataType;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.routing.RoutingCookie;
@@ -20,10 +23,12 @@ import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
 import webChat.service.social.PrincipalDetails;
 import webChat.utils.StringUtil;
+import webChat.utils.TokenUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,13 +42,23 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final RoutingService routingService;
     private final RoutingInstanceProvider instanceProvider;
+    private final RedisService redisService;
 
     // 채팅방 생성
     @PostMapping("/room")
     public ResponseEntity<ChatForYouResponse> createRoom(
             HttpServletRequest request,
             HttpServletResponse response,
-            @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody ChatRoomInVo chatRoomInVo) throws Exception {
+
+        // token 확인
+        FirebaseToken token = new TokenUtils().checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+
+        if (oauthRedis == null) {
+            throw new ExceptionController.NotExistUserException("");
+        }
 
         String roomId = routingService.getCookie(request, RoutingCookie.ROOM_ID_COOKIE);
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수

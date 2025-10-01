@@ -221,4 +221,17 @@ public class ExceptionController {
         e.printStackTrace();
     }
 
+    public static class NotExistUserException extends BadRequestException {
+        public NotExistUserException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(NotExistUserException.class)
+    public @ResponseBody Map<String, Object> notExistUser(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40050");
+        result.put("message", "Not Exist Account");
+        return result;
+    }
 }

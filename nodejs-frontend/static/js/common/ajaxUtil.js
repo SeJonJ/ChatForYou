@@ -67,7 +67,38 @@ function tokenAjax(url, method, async, data, successCallback, errorCallback, com
             withCredentials: true
         },
         headers: {
-            'Authorization': 'Bearar ' + localStorage.getItem('access_token')
+            'Authorization': localStorage.getItem('access_token')
+        },
+        success: function (data) {
+            if (successCallback && typeof successCallback === 'function') {
+                successCallback(data);
+            }
+        },
+        error: function (error) {
+            if (errorCallback && typeof errorCallback === 'function') {
+                errorCallback(error);
+            }
+        },
+        complete : function(result){
+            if (completeCallback && typeof completeCallback === "function") {
+                completeCallback(result);
+            }
+        }
+    })
+}
+
+function tokenAjaxToJson(url, method, async, data, successCallback, errorCallback, completeCallback) {
+    $.ajax({
+        url: url,
+        type: method,
+        data: JSON.stringify(data),
+        async: async !== undefined ? async : true,
+        contentType : 'application/json; charset=UTF-8',
+        xhrFields: {
+            withCredentials: true
+        },
+        headers: {
+            'Authorization': localStorage.getItem('access_token')
         },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
