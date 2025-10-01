@@ -1,161 +1,182 @@
 @use "variables" as *;
 
 .body-roomlist {
-    background: $background-dark; // ChatForYou 다크 배경 그라데이션
-    font-family: $font-base;
-    color: $color-white;
-    min-height: 100vh;
+	background: $background-dark; // ChatForYou 다크 배경 그라데이션
+	font-family: $font-base;
+	color: $color-white;
+	min-height: 100vh;
 
-    .container {
-        position: relative;
-        padding-bottom: 30px;
-    }
+	.container {
+		position: relative;
+		padding-bottom: 30px;
+	}
 
-    .main_title {
-        font-size: 2rem;
-        font-weight: 600;
-        margin-top: 2rem;
-        border-left: 4px solid $color-accent;
-        padding-left: 1rem;
-        color: $color-white;
-    }
+	.main_title {
+		font-size: 2rem;
+		font-weight: 600;
+		margin-top: 2rem;
+		border-left: 4px solid $color-accent;
+		padding-left: 1rem;
+		color: $color-white;
+	}
 
-    .button-group {
-        display: flex;
-        gap: 0.5rem;
-        margin: 1rem 0;
-        flex-wrap: wrap;
-    }
+	.button-group {
+		display: flex;
+		gap: 0.5rem;
+		margin: 1rem 0;
+		flex-wrap: wrap;
+	}
 
-    .btn {
-        transition: all 0.3s ease;
-        background: $gradient-start;
-        color: $color-white;
-        border: none;
-        border-radius: $btn-radius;
-        padding: 8px 16px;
+	.btn {
+		transition: all 0.3s ease;
+		background: $gradient-start;
+		color: $color-white;
+		border: none;
+		border-radius: $btn-radius;
+		padding: 8px 16px;
 
-        &:hover {
-            box-shadow: 0 4px 12px rgba(209, 95, 255, 0.3); // 보라색 hover 효과
-            background: $gradient-end;
-        }
-    }
+		&:hover {
+			box-shadow: 0 4px 12px rgba(209, 95, 255, 0.3); // 보라색 hover 효과
+			background: $gradient-end;
+		}
+	}
 
-    .table_wrap {
-        height: 72vh;
-        padding: 6px;
-        margin-top: 2rem;
-        background-color: $color-gray-900;
-        border-radius: 6px;
-        overflow-y: auto;
+	.table_wrap {
+		height: 72vh;
+		padding: 6px;
+		margin-top: 2rem;
+		background-color: $color-gray-900;
+		border-radius: 6px;
+		overflow-y: auto;
 
-        thead {
-            color: $color-accent;
-            background: $color-gray-800;
-        }
+		thead {
+			color: $color-accent;
+			background: $color-gray-800;
+		}
 
-        tbody {
-            border-top: none;
+		tbody {
+			border-top: none;
 
-            tr {
-                color: $color-white;
+			tr {
+				color: $color-white;
 
-                &:hover {
-                    background-color: $color-gray-800;
-                    transition: background-color 0.3s;
-                }
+				&:hover {
+					background-color: $color-gray-800;
+					transition: background-color 0.3s;
+				}
 
-                td {
-                    color: $color-white;
-                    background-color: $color-gray-900;
-                    vertical-align: middle;
-                    border-bottom: 1px solid $color-gray-700;
+				td {
+					color: $color-white;
+					background-color: $color-gray-900;
+					vertical-align: middle;
+					border-bottom: 1px solid $color-gray-700;
 
-                    a:hover {
-                        color: #ffffffa6;
-                    }
-                }
-            }
-        }
+					a:hover {
+						color: #ffffffa6;
+					}
+				}
+			}
+		}
 
-        .table-scroll {
-            thead th {
-                position: sticky;
-                top: 0;
-                background: $color-gray-800;
-                z-index: 1;
-            }
-        }
-    }
+		.table-scroll {
+			thead th {
+				position: sticky;
+				top: 0;
+				background: $color-gray-800;
+				z-index: 1;
+			}
+		}
+	}
 
-    .visitor-count {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        font-size: 0.9rem;
-        z-index: $z-toast;
-        color: $color-gray-400;
-    }
+	.visitor-count {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		font-size: 0.9rem;
+		z-index: $z-toast;
+		color: $color-gray-400;
+	}
 
-    .toast-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: $z-toast;
-    }
+	.toast-container {
+		position: fixed;
+		top: 20px;
+		right: 20px;
+		z-index: $z-toast;
+	}
 
-    span.input-group-text.input-password-hide,
-    span.input-group-text.input-password-show {
-        height: 40px;
-        background: $color-gray-800;
-        color: $color-white;
-        border: 1px solid $color-gray-700;
-    }
+	span.input-group-text.input-password-hide,
+	span.input-group-text.input-password-show {
+		height: 40px;
+		background: $color-gray-800;
+		color: $color-white;
+		border: 1px solid $color-gray-700;
+	}
 
-    input#maxUserCnt {
-        width: 160px;
-        background-color: $color-gray-800;
-        border: 1px solid $color-gray-600;
-        color: $color-white;
-    }
+	input#maxUserCnt {
+		width: 160px;
+		background-color: $color-gray-800;
+		border: 1px solid $color-gray-600;
+		color: $color-white;
+	}
 }
 
 .body-kurentoroom {
-    h2 {
-        color: $color-accent;
-    }
+	h2 {
+		color: $color-accent;
+	}
 
-    .icon_wrap {
-        img {
-            width: 24px;
-            height: 24px;
-            filter: brightness(1.2); // 다크모드에서 아이콘 밝기 증가
-        }
-    }
+	.icon_wrap {
+		img {
+			width: 24px;
+			height: 24px;
+			filter: brightness(1.2); // 다크모드에서 아이콘 밝기 증가
+		}
+	}
 }
 
 .sidebar {
-    background-color: #1b1c1e;
+	background-color: #1b1c1e;
 
-    .logo {
-        padding: 0 1rem;
+	.logo {
+		padding: 0 1rem;
 
-        img {
-            width: 60px;
-        }
-    }
+		img {
+			width: 60px;
+		}
+	}
 
-    .nav-link {
-        font-size: 14px;
-        transition: background-color 0.2s ease;
+	.nav-link {
+		font-size: 14px;
+		transition: background-color 0.2s ease;
 
-        .fas {
-            margin-right: 10px;
-        }
+		.fas {
+			margin-right: 10px;
+		}
 
-        &:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            text-decoration: none;
-        }
-    }
+		&:hover {
+			background-color: rgba(255, 255, 255, 0.1);
+			text-decoration: none;
+		}
+	}
+}
+
+/* login */
+.body-login {
+	.container-login100::before {
+		background-color: rgba(0, 0, 0, 0.9);
+	}
+
+	.logo {
+		img {
+			width: 80px;
+			aspect-ratio: 1/1;
+		}
+	}
+
+	.social-login {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 20px;
+	}
 }

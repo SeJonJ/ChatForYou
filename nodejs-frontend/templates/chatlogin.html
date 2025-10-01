@@ -26,21 +26,19 @@
 <!--===============================================================================================-->
 	<link rel="stylesheet" type="text/css" href="css/login/util.css">
 	<link rel="stylesheet" type="text/css" href="css/login/main.css">
+  <link rel="stylesheet" href="static/css/chatroom/common.css">
 <!--===============================================================================================-->
 </head>
-<body>
-	
+<body class="body-login">
 	<div class="limiter">
 		<div class="container-login100" style="background-image: url('images/login/bg-01.jpg');">
 			<div class="wrap-login100">
 				<form class="login100-form validate-form">
-					<span class="login100-form-logo">
-						<i class="zmdi zmdi-landscape"></i>
+					<span class="login100-form-logo logo">
+						<img src="static/images/logo/chatforyou_logo.png" alt="ChatForYou Logo">
 					</span>
 
-					<span class="login100-form-title p-b-34 p-t-27">
-						Log in
-					</span>
+					<span class="login100-form-title p-b-34 p-t-27">Log in</span>
 
 					<div class="wrap-input100 validate-input" data-validate = "Enter username">
 						<input class="input100" type="text" name="username" placeholder="Username">
@@ -52,33 +50,15 @@
 						<span class="focus-input100" data-placeholder="&#xf191;"></span>
 					</div>
 
-					<div class="contact100-form-checkbox">
-						<input class="input-checkbox100" id="ckb1" type="checkbox" name="remember-me">
-						<label class="label-checkbox100" for="ckb1">
-							Remember me
-						</label>
-					</div>
-
-					<div class="container-login100-form-btn">
-						<button id="loginBtn" class="login100-form-btn">
-							Login
-						</button>
+					<div class="container-login100-form-btn display-none">
+						<button id="loginBtn" class="login100-form-btn">Login</button>
 					</div>
 					<div class="social-login">
-						<div>
-							<span class="d-block text-left my-4 text-muted"></span>
-								<button id="googleOauth" width="200" height="auto">
-									Google로 로그인 하기
-								</button>
-							<a href="http://localhost:8080/oauth2/authorization/naver">
-								<img src="images/login/naver.png" width="200" height="auto" alt="" />
-							</a>
-						</div>
+						<button id="googleOauth" class="btn-google"></button>
+						<button id="" class="btn-naver"></button>
 					</div>
-					<div class="text-center p-t-90">
-						<a class="txt1" href="/">
-							로그인 없이 채팅하기
-						</a>
+					<div class="text-center p-t-90 display-none">
+						<a class="txt1" href="/">로그인 없이 채팅하기</a>
 					</div>
 				</form>
 			</div>

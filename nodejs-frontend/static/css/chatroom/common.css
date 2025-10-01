@@ -52,6 +52,10 @@ table {
   border-spacing: 0;
 }
 
+.display-none {
+  display: none;
+}
+
 /* _mixins.scss */
 .btn-custom-primary {
   background-color: #3f87f5;
@@ -62,6 +66,18 @@ table {
   background-color: #306fd3;
   border-color: #306fd3;
   color: #ffffff;
+}
+
+.social-login [class^=btn-] {
+  width: 50px;
+  aspect-ratio: 1/1;
+  border-radius: 50%;
+}
+.social-login .btn-google {
+  background: #fff url(/static/images/login/google-logo.png) no-repeat center/70%;
+}
+.social-login .btn-naver {
+  background: url(/static/images/login/naver_logo.png) no-repeat center/100%;
 }
 
 .body-roomlist {
@@ -193,6 +209,21 @@ table {
 .sidebar .nav-link:hover {
   background-color: rgba(255, 255, 255, 0.1);
   text-decoration: none;
+}
+
+/* login */
+.body-login .container-login100::before {
+  background-color: rgba(0, 0, 0, 0.9);
+}
+.body-login .logo img {
+  width: 80px;
+  aspect-ratio: 1/1;
+}
+.body-login .social-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
 }
 
 .modal-content {
