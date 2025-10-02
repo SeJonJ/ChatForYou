@@ -10,7 +10,7 @@
 html,
 body {
   height: 100%;
-  font-family: sans-serif;
+  font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -74,14 +74,14 @@ table {
   border-radius: 50%;
 }
 .social-login .btn-google {
-  background: #fff url(/static/images/login/google-logo.png) no-repeat center/70%;
+  background: #ffffff url(/static/images/login/google-logo.png) no-repeat center/70%;
 }
 .social-login .btn-naver {
   background: url(/static/images/login/naver_logo.png) no-repeat center/100%;
 }
 
 .body-roomlist {
-  background: linear-gradient(135deg, #1f1f2e, #2c2f36);
+  background: linear-gradient(135deg, #1f1a2e, #2c2f36);
   font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color: #ffffff;
   min-height: 100vh;
@@ -109,7 +109,7 @@ table {
   background: #8e4fff;
   color: #ffffff;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 8px 16px;
 }
 .body-roomlist .btn:hover {
@@ -120,13 +120,13 @@ table {
   height: 72vh;
   padding: 6px;
   margin-top: 2rem;
-  background-color: #1f1f2e;
+  background-color: #1f1a2e;
   border-radius: 6px;
   overflow-y: auto;
 }
 .body-roomlist .table_wrap thead {
   color: #d15fff;
-  background: #333348;
+  background: #38314b;
 }
 .body-roomlist .table_wrap tbody {
   border-top: none;
@@ -135,14 +135,14 @@ table {
   color: #ffffff;
 }
 .body-roomlist .table_wrap tbody tr:hover {
-  background-color: #333348;
+  background-color: #38314b;
   transition: background-color 0.3s;
 }
 .body-roomlist .table_wrap tbody tr td {
   color: #ffffff;
-  background-color: #1f1f2e;
+  background-color: #1f1a2e;
   vertical-align: middle;
-  border-bottom: 1px solid #55556b;
+  border-bottom: 1px solid #5a536f;
 }
 .body-roomlist .table_wrap tbody tr td a:hover {
   color: rgba(255, 255, 255, 0.6509803922);
@@ -150,7 +150,7 @@ table {
 .body-roomlist .table_wrap .table-scroll thead th {
   position: sticky;
   top: 0;
-  background: #333348;
+  background: #38314b;
   z-index: 1;
 }
 .body-roomlist .visitor-count {
@@ -159,7 +159,7 @@ table {
   right: 10px;
   font-size: 0.9rem;
   z-index: 9999;
-  color: #c8c8d5;
+  color: #c6bedc;
 }
 .body-roomlist .toast-container {
   position: fixed;
@@ -170,14 +170,14 @@ table {
 .body-roomlist span.input-group-text.input-password-hide,
 .body-roomlist span.input-group-text.input-password-show {
   height: 40px;
-  background: #333348;
+  background: #38314b;
   color: #ffffff;
-  border: 1px solid #55556b;
+  border: 1px solid #5a536f;
 }
 .body-roomlist input#maxUserCnt {
   width: 160px;
-  background-color: #333348;
-  border: 1px solid #77778a;
+  background-color: #38314b;
+  border: 1px solid #7a7293;
   color: #ffffff;
 }
 
@@ -211,19 +211,139 @@ table {
   text-decoration: none;
 }
 
-/* login */
-.body-login .container-login100::before {
-  background-color: rgba(0, 0, 0, 0.9);
-}
-.body-login .logo img {
-  width: 80px;
-  aspect-ratio: 1/1;
-}
-.body-login .social-login {
+/* ============================
+   Login Page
+   ============================ */
+.page-login {
+  font-size: 1rem;
+  line-height: 1.58;
+  color: #ffffff;
+  background: linear-gradient(135deg, #12091c, #1d0f2f);
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 100vh;
+}
+
+.login {
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+}
+.login__container {
+  padding: 40px 30px;
+  background: rgba(25, 18, 38, 0.95);
+  border: 1px solid #3d2b5a;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+.login__wrap {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
+}
+
+.login-form__logo {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.login-form__logo img {
+  display: inline-block;
+  width: 80px;
+  aspect-ratio: 1/1;
+  object-fit: contain;
+}
+.login-form__title {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: #9a4dff;
+  text-align: center;
+  margin-bottom: 24px;
+}
+.login-form__field {
+  position: relative;
+  margin-bottom: 16px;
+}
+.login-form__field .login-form__input {
+  width: 100%;
+  padding: 12px 40px 12px 14px;
+  border: 1px solid #3d2b5a;
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #ffffff;
+  background: #1a1226;
+}
+.login-form__field .login-form__input:focus {
+  border-color: #9a4dff;
+  box-shadow: 0 0 6px rgba(154, 77, 255, 0.5);
+  outline: none;
+}
+.login-form__field .login-form__icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: #c6bedc;
+  pointer-events: none;
+}
+.login-form__actions {
+  margin-top: 20px;
+}
+.login-form__actions .btn--primary {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(90deg, #8a3cff, #c678ff);
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
+}
+.login-form__actions .btn--primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.login-form__actions .btn--primary.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.login-form__social {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 20px;
+}
+.login-form__social .btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #1a1226;
+  border: 1px solid #3d2b5a;
+  transition: all 0.3s ease;
+}
+.login-form__social .btn--google {
+  background: #fff url("/static/images/login/google-logo.png") no-repeat center/60%;
+}
+.login-form__social .btn--naver {
+  background: #03c75a url("/static/images/login/naver.png") no-repeat center/100%;
+}
+.login-form__social .btn:hover {
+  border-color: #9a4dff;
+  box-shadow: 0 0 8px #9a4dff;
+  transform: scale(1.05);
+}
+.login-form__guest {
+  margin-top: 20px;
+  text-align: center;
+}
+.login-form__guest .login-form__link {
+  font-size: 0.9rem;
+  color: #9a4dff;
+}
+.login-form__guest .login-form__link:hover {
+  text-decoration: underline;
 }
 
 .modal-content {

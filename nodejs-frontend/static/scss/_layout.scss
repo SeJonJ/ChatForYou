@@ -1,4 +1,5 @@
 @use "variables" as *;
+@use "mixins" as *;
 
 .body-roomlist {
 	background: $background-dark; // ChatForYou 다크 배경 그라데이션
@@ -160,23 +161,159 @@
 	}
 }
 
-/* login */
-.body-login {
-	.container-login100::before {
-		background-color: rgba(0, 0, 0, 0.9);
+/* ============================
+   Login Page
+   ============================ */
+.page-login {
+	font-size: $font-size-base;
+	line-height: $line-height-base;
+	color: $color-white; // 기본 글자색 밝게
+	background: linear-gradient(135deg, #12091c, #1d0f2f);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+}
+
+.login {
+	width: 100%;
+	max-width: 400px;
+	margin: auto;
+
+	&__container {
+		padding: 40px 30px;
+		background: rgba(25, 18, 38, 0.95);
+		border: 1px solid #3d2b5a;
+		border-radius: $btn-radius;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
 	}
 
-	.logo {
+	&__wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+}
+
+.login-form {
+	&__logo {
+		text-align: center;
+		margin-bottom: 20px;
+
 		img {
+			display: inline-block;
 			width: 80px;
 			aspect-ratio: 1/1;
+			object-fit: contain;
 		}
 	}
 
-	.social-login {
+	&__title {
+		font-weight: 700;
+		font-size: 1.5rem;
+		color: $color-primary;
+		text-align: center;
+		margin-bottom: 24px;
+	}
+
+	&__field {
+		position: relative;
+		margin-bottom: 16px;
+
+		.login-form__input {
+			width: 100%;
+			padding: 12px 40px 12px 14px;
+			border: 1px solid #3d2b5a;
+			border-radius: $btn-radius;
+			font-size: $font-size-base;
+			color: $color-white;
+			background: #1a1226;
+
+			&:focus {
+				border-color: $color-primary;
+				box-shadow: 0 0 6px rgba($color-primary, 0.5);
+				outline: none;
+			}
+		}
+
+		.login-form__icon {
+			position: absolute;
+			right: 12px;
+			top: 50%;
+			transform: translateY(-50%);
+			font-size: 14px;
+			color: $color-gray-400;
+			pointer-events: none;
+		}
+	}
+
+	&__actions {
+		margin-top: 20px;
+
+		.btn--primary {
+			width: 100%;
+			padding: 14px;
+			font-size: $font-size-base;
+			font-weight: 600;
+			color: $color-white;
+			background: linear-gradient(90deg, #8a3cff, #c678ff);
+			border-radius: $btn-radius;
+			box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+			transition: all 0.3s ease;
+
+			&:hover {
+				opacity: 0.9;
+				transform: translateY(-1px);
+			}
+
+			&.disabled {
+				opacity: 0.5;
+				pointer-events: none;
+			}
+		}
+	}
+
+	&__social {
 		display: flex;
-		align-items: center;
 		justify-content: center;
 		gap: 20px;
+		margin-top: 20px;
+
+		.btn {
+			width: 48px;
+			height: 48px;
+			border-radius: 50%;
+			background: #1a1226;
+			border: 1px solid #3d2b5a;
+			transition: all 0.3s ease;
+
+			&--google {
+				background: #fff url("/static/images/login/google-logo.png") no-repeat center / 60%;
+			}
+
+			&--naver {
+				background: #03c75a url("/static/images/login/naver.png") no-repeat center / 100%;
+			}
+
+			&:hover {
+				border-color: $color-primary;
+				box-shadow: 0 0 8px $color-primary;
+				transform: scale(1.05);
+			}
+		}
+	}
+
+	&__guest {
+		margin-top: 20px;
+		text-align: center;
+
+		.login-form__link {
+			font-size: 0.9rem;
+			color: $color-primary;
+
+			&:hover {
+				text-decoration: underline;
+			}
+		}
 	}
 }

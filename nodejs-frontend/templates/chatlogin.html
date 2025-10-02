@@ -29,43 +29,43 @@
   <link rel="stylesheet" href="static/css/chatroom/common.css">
 <!--===============================================================================================-->
 </head>
-<body class="body-login">
-	<div class="limiter">
-		<div class="container-login100" style="background-image: url('images/login/bg-01.jpg');">
-			<div class="wrap-login100">
-				<form class="login100-form validate-form">
-					<span class="login100-form-logo logo">
-						<img src="static/images/logo/chatforyou_logo.png" alt="ChatForYou Logo">
-					</span>
+<body class="page-login">
+  <div class="login">
+    <div class="login__container">
+      <div class="login__wrap">
+        <form class="login-form" autocomplete="off">
+          <div class="login-form__logo">
+            <img src="static/images/logo/chatforyou_logo.png" alt="ChatForYou Logo">
+          </div>
 
-					<span class="login100-form-title p-b-34 p-t-27">Log in</span>
+          <h1 class="login-form__title">Login</h1>
 
-					<div class="wrap-input100 validate-input" data-validate = "Enter username">
-						<input class="input100" type="text" name="username" placeholder="Username">
-						<span class="focus-input100" data-placeholder="&#xf207;"></span>
-					</div>
+          <div class="login-form__field" data-validate="Enter username">
+            <input class="login-form__input" type="text" name="username" placeholder="Username">
+            <span class="login-form__icon" data-placeholder="&#xf207;"></span>
+          </div>
 
-					<div class="wrap-input100 validate-input" data-validate="Enter password">
-						<input class="input100" type="password" name="pass" placeholder="Password">
-						<span class="focus-input100" data-placeholder="&#xf191;"></span>
-					</div>
+          <div class="login-form__field" data-validate="Enter password">
+            <input class="login-form__input" type="password" name="password" placeholder="Password">
+            <span class="login-form__icon" data-placeholder="&#xf191;"></span>
+          </div>
 
-					<div class="container-login100-form-btn display-none">
-						<button id="loginBtn" class="login100-form-btn">Login</button>
-					</div>
-					<div class="social-login">
-						<button id="googleOauth" class="btn-google"></button>
-						<button id="" class="btn-naver"></button>
-					</div>
-					<div class="text-center p-t-90 display-none">
-						<a class="txt1" href="/">로그인 없이 채팅하기</a>
-					</div>
-				</form>
-			</div>
-		</div>
-	</div>
-	
+          <div class="login-form__actions">
+            <button id="loginBtn" class="btn btn--primary">Login</button>
+          </div>
 
+          <div class="login-form__social">
+            <button id="googleOauth" class="btn btn--google"></button>
+            <button class="btn btn--naver"></button>
+          </div>
+
+          <div class="login-form__guest display-none">
+            <a class="login-form__link" href="/">로그인 없이 채팅하기</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 	<div id="dropDownSelect1"></div>
 	
 <!--===============================================================================================-->
@@ -90,8 +90,6 @@
 	<script src="js/login/main.js"></script>
 	<script src='config/config.js'></script>
 	<script src='js/common/ajaxUtil.js'></script>
-	
-	
 
 </body>
 </html>
