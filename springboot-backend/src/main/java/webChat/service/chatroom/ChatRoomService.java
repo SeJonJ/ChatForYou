@@ -135,9 +135,15 @@ public class ChatRoomService {
 
     // 채팅방 비밀번호 조회
     public boolean validatePwd(String roomId, String roomPwd) throws BadRequestException {
-        // TODO 방정보 찾을 수 없는 경우 예외처리
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
-        return chatRoom.getRoomPwd().equals(roomPwd);
+        if(chatRoom == null) {
+            // TODO 방정보 찾을 수 없는 경우 예외처리
+        }
+
+        boolean validPwd = chatRoom.getRoomPwd().equals(roomPwd);
+        boolean overUserCnt = chatRoom.getUserCount() + 1 > chatRoom.getMaxUserCnt();
+
+        return validPwd && !overUserCnt;
     }
 
     // maxUserCnt 에 따른 채팅방 입장 여부

@@ -234,4 +234,32 @@ public class ExceptionController {
         result.put("message", "Not Exist Account");
         return result;
     }
+
+    public static class TokenExpiredException extends BadRequestException {
+        public TokenExpiredException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(TokenExpiredException.class)
+    public @ResponseBody Map<String, Object> tokenExpiredException(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40051");
+        result.put("message", "Token Expired");
+        return result;
+    }
+
+    public static class NotExistTokenException extends BadRequestException {
+        public NotExistTokenException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(NotExistTokenException.class)
+    public @ResponseBody Map<String, Object> notExistTokenException(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40052");
+        result.put("message", "Not Exist Token");
+        return result;
+    }
 }

@@ -4,8 +4,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Getter;
 import webChat.model.chat.ChatType;
+import webChat.model.login.OauthRedis;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.RoomState;
+import webChat.model.user.UserDto;
+
 import java.util.Random;
 import java.util.UUID;
 
@@ -38,12 +41,12 @@ public class ChatRoomOutVo {
                 .build();
     }
 
-    public static ChatRoomOutVo ofJoin(ChatRoom chatRoom) {
+    public static ChatRoomOutVo ofJoin(ChatRoom chatRoom, UserDto user) {
         return ChatRoomOutVo.builder()
                 .roomId(chatRoom.getRoomId())
                 .roomName(chatRoom.getRoomName())
-                .userId(UUID.randomUUID().toString().split("-")[0])
-                .nickName("guest" + (new Random().nextInt(100)+1))
+                .userId(user.getUserId())
+                .nickName(user.getNickName())
                 .userCount(chatRoom.getUserCount())
                 .maxUserCnt(chatRoom.getMaxUserCnt())
                 .roomPwd(chatRoom.getRoomPwd())

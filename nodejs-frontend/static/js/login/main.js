@@ -139,7 +139,7 @@
                         }
                     };
                     var errorCallback = function(error) {
-
+                        console.error(error);
                     };
                     const url = window.__CONFIG__.API_BASE_URL + '/login/googleOauth';
                     ajax(url, 'POST', true, requestData, successCallback, errorCallback);

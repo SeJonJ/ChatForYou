@@ -21,10 +21,10 @@
     }
 
     .btn-google {
-        background: $color-white url(/static/images/login/google-logo.png) no-repeat center/70%;
+        background: $color-white url("/static/images/login/google-logo.png") no-repeat center/70%;
     }
 
     .btn-naver {
-        background: url(/static/images/login/naver_logo.png) no-repeat center/100%;
+        background: url("/static/images/login/naver_logo.png") no-repeat center/100%;
     }
 }

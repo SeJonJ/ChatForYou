@@ -5,6 +5,7 @@ import lombok.Getter;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.out.ChatRoomOutVo;
+import webChat.model.user.UserDto;
 
 @Getter
 @Builder
@@ -27,10 +28,10 @@ public class ChatForYouResponse {
                 .build();
     }
 
-    public static ChatForYouResponse ofJoinRoom(ChatRoom chatRoom) {
+    public static ChatForYouResponse ofJoinRoom(ChatRoom chatRoom, UserDto userDto) {
         return ChatForYouResponse.builder()
                 .result(ChatForYouResponseResult.SUCCESS.name())
-                .data(ChatRoomOutVo.ofJoin(chatRoom))
+                .data(ChatRoomOutVo.ofJoin(chatRoom, userDto))
                 .build();
     }
 

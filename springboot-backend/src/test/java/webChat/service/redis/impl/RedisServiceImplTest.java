@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
+import webChat.model.login.OauthRedis;
+import webChat.model.redis.DataType;
 import webChat.service.redis.RedisService;
 
 import java.util.Map;
@@ -31,6 +33,5 @@ class RedisServiceImplTest {
             log.info("instanceId: {}, cookie: {}", entry.getKey(), entry.getValue());
 
         }
-
     }
 }

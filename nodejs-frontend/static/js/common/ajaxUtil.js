@@ -67,7 +67,7 @@ function tokenAjax(url, method, async, data, successCallback, errorCallback, com
             withCredentials: true
         },
         headers: {
-            'Authorization': localStorage.getItem('access_token')
+            'Authorization': localStorage.getItem('access_token') || ''
         },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
@@ -98,7 +98,7 @@ function tokenAjaxToJson(url, method, async, data, successCallback, errorCallbac
             withCredentials: true
         },
         headers: {
-            'Authorization': localStorage.getItem('access_token')
+            'Authorization': localStorage.getItem('access_token') || ''
         },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {

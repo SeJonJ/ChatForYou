@@ -74,10 +74,10 @@ table {
   border-radius: 50%;
 }
 .social-login .btn-google {
-  background: #ffffff url(/static/images/login/google-logo.png) no-repeat center/70%;
+  background: #ffffff url("/static/images/login/google-logo.png") no-repeat center/70%;
 }
 .social-login .btn-naver {
-  background: url(/static/images/login/naver_logo.png) no-repeat center/100%;
+  background: url("/static/images/login/naver_logo.png") no-repeat center/100%;
 }
 
 .body-roomlist {

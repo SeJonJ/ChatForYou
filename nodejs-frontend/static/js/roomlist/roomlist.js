@@ -32,12 +32,12 @@ const roomList = {
     const isSecret = room.secretChk;
     const roomType = room.chatType === 'MSG' ? '일반 채팅' : '화상 채팅';
     const lockIcon = isSecret ? '🔒︎' : '';
-    const btnSetting = `<button class='btn btn-primary btn-sm configRoomBtn' data-id='${room.roomId}'>채팅방 설정</button>`;
+    const btnSetting = `<button class='btn btn-primary btn-sm configRoomBtn' data-room-id='${room.roomId}'>채팅방 설정</button>`;
     const roomNameHtml = isSecret
-        ? `<a href="#enterRoomModal" data-bs-toggle="modal" class="enterRoomBtn" data-id="${room.roomId}">${room.roomName}</a>`
-        : `<a href="#" class="directEnterBtn" data-roomid="${room.roomId}">${room.roomName}</a>`;
+        ? `<a href="#enterRoomModal" data-bs-toggle="modal" class="enterRoomBtn" data-room-id="${room.roomId}">${room.roomName}</a>`
+        : `<a href="#" class="directEnterBtn" data-room-id="${room.roomId}">${room.roomName}</a>`;
 
-    if ($('#roomTableBody').find(`[data-id='${room.roomId}'], [data-roomid='${room.roomId}']`).length === 0) {
+    if ($('#roomTableBody').find(`[data-room-id='${room.roomId}']`).length === 0) {
       const html = `
       <tr>
         <td>${roomNameHtml}</td>
@@ -68,7 +68,7 @@ const roomList = {
       const deletedRoom = JSON.parse(event.data);
       const deletedRoomId = deletedRoom.roomId;
       $('#roomTableBody')
-          .find(`[data-id='${deletedRoomId}'], [data-roomid='${deletedRoomId}']`)
+          .find(`[data-room-id='${deletedRoomId}']`)
           .closest('tr')
           .remove();
     });
@@ -84,7 +84,7 @@ const roomList = {
       const {maxUserCnt} = chatRoom;
 
       const $row = $('#roomTableBody')
-          .find(`[data-id='${chatRoomId}'], [data-roomid='${chatRoomId}']`)
+          .find(`[data-room-id='${chatRoomId}']`)
           .closest('tr');
 
       $row.find('span.room-user-count').text(`${userCnt}/${maxUserCnt}`);
@@ -136,13 +136,13 @@ const roomList = {
     const self = this;
     // 모달창 열릴 때 이벤트 처리 => roomId 가져오기
     $("#enterRoomModal").on("show.bs.modal", function (event) {
-      self.roomId = $(event.relatedTarget).data('id');
+      self.roomId = $(event.relatedTarget).data('room-id');
     });
     // 방 설정 모달 열릴 때 roomId 세팅 보강 및 기존 비밀번호 저장
     $(document).on('show.bs.modal', '#validatePwdModal', function (e) {
-      let id = $(e.relatedTarget).data('id');
-      if (id) {
-        self.roomId = id;
+      let roomId = $(e.relatedTarget).data('room-id');
+      if (roomId) {
+        self.roomId = roomId;
       }
     });
     // roomConfigModal 열릴 때 현재 방 정보로 input 초기화 및 기존 비밀번호 저장

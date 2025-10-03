@@ -473,7 +473,7 @@ public class RedisServiceImpl implements RedisService {
                 }
 
                 return roomName.equals(roomNameVal.toString())
-                        && RoomState.ACTIVE.equals(stateVal);
+                        && (RoomState.ACTIVE.equals(stateVal) || RoomState.CREATED.equals(stateVal));
             } catch (Exception e) {
                 log.error("Error occurred while checking room state in Redis for key: {}", key, e);
                 return false;
