@@ -6,6 +6,7 @@ import lombok.NonNull;
 import org.apache.coyote.BadRequestException;
 import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
+import webChat.model.login.QRSession;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
@@ -81,4 +82,6 @@ public interface RedisService {
     Map<String, String> getAllInstanceCookies() throws BadRequestException;
     void insertGoogleOauthToken(OauthRedis oauthRedis, long time);
     void deleteLoginInfo(String email);
+    void insertQRSession(QRSession qrSession);
+    QRSession getQRSession(String sessionId);
 }

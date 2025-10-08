@@ -11,18 +11,16 @@ import io.github.dengliming.redismodule.redisearch.search.SearchOptions;
 import io.github.dengliming.redismodule.redisearch.search.SortBy;
 import io.lettuce.core.RedisException;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.jetbrains.annotations.NotNull;
 import org.redisson.api.SortOrder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.*;
-import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
-import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
+import webChat.model.login.QRSession;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
@@ -522,13 +520,13 @@ public class RedisServiceImpl implements RedisService {
      */
     @Override
     public Map<String, String> getAllInstanceCookies() {
-        String pattern = RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + "*";
+        String pattern = INSTANCE_COOKIE_PREFIX.getPrefix() + "*";
         Set<String> keys = slaveTemplate.keys(pattern);
 
         Map<String, String> cookieMap = new HashMap<>();
         if (!CollectionUtils.isEmpty(keys)) {
             for (String key : keys) {
-                String instanceId = key.replace(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix(), "");
+                String instanceId = key.replace(INSTANCE_COOKIE_PREFIX.getPrefix(), "");
                 // Replication lag 보안을 위해 master 에서 읽어옴
                 String cookie = (String) masterTemplate.opsForValue().get(key);
                 if (cookie != null) {
@@ -541,8 +539,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void insertGoogleOauthToken(OauthRedis oauthRedis, long time) {
-        String redisKey = "oauth:" + oauthRedis.getEmail();
-
+        String redisKey = OAUTH_PREFIX.getPrefix() + oauthRedis.getEmail();
         masterTemplate.opsForHash().put(redisKey, DataType.SOCIAL_USER.getType(), oauthRedis);
         masterTemplate.opsForHash().put(redisKey, "email", oauthRedis.getEmail());
         masterTemplate.opsForHash().put(redisKey, "nickname", oauthRedis.getEmail().split("@")[0]);
@@ -554,4 +551,15 @@ public class RedisServiceImpl implements RedisService {
         masterTemplate.delete(SOCIAL_USER_PREFIX.getPrefix() + email);
     }
 
+    @Override
+    public void insertQRSession(QRSession qrSession){
+        String redisKey = QR_SESSION_PREFIX.getPrefix() + qrSession.getSessionId();
+        masterTemplate.opsForValue().set(redisKey, qrSession, 5, TimeUnit.MINUTES);
+    }
+
+    @Override
+    public QRSession getQRSession(String sessionId){
+        String redisKey = QR_SESSION_PREFIX.getPrefix() + sessionId;
+        return (QRSession) slaveTemplate.opsForValue().get(redisKey);
+    }
 }
