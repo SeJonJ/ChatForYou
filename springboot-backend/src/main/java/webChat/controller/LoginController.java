@@ -33,8 +33,7 @@ public class LoginController {
                                                           @RequestParam("emailVerified") boolean emailVerified,
                                                           @RequestParam("photo") String photo) throws Exception {
 
-        GoogleOAuth auth = GoogleOAuth.of(accessToken, refreshToken, name, email, emailVerified, photo);
-        GoogleOAuth response = loginService.checkSocialUser(auth);
+        GoogleOAuth response = loginService.checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
 
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
@@ -72,18 +71,16 @@ public class LoginController {
                     @RequestParam("refreshToken") String refreshToken,
                     @RequestParam("name") String name,
                     @RequestParam("email") String email,
-                    @RequestParam("emailVerified") boolean emailVerified,
+                    @RequestParam(value = "emailVerified", defaultValue = "false") boolean emailVerified,
                     @RequestParam("photo") String photo) throws BadRequestException {
 
         log.info("QR 세션 인증 요청: sessionId={}", sessionId);
 
-        GoogleOAuth auth = GoogleOAuth.of(accessToken, refreshToken, name, email, emailVerified, photo);
-        
-        loginService.authenticateSession(sessionId, auth);
-        
+        GoogleOAuth response = loginService.authenticateQRSession(sessionId, accessToken, refreshToken, name, email, emailVerified, photo);
+
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
-                .data(auth)
+                .data(response)
                 .build());
     }
 

@@ -2,12 +2,14 @@ package webChat.service.login.impl;
 
 import com.google.firebase.auth.FirebaseToken;
 import com.google.zxing.WriterException;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import webChat.controller.ExceptionController;
 import webChat.entity.SocialUser;
 import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
@@ -41,15 +43,15 @@ public class LoginServiceImpl implements LoginService {
 
     @Transactional
     @Override
-    public GoogleOAuth checkSocialUser(GoogleOAuth googleOAuth) {
-        if (!googleOAuth.isEmailVerified()) {
+    public GoogleOAuth checkSocialUser(@NonNull String accessToken, @NonNull String refreshToken, @NonNull String name, @NonNull String email, boolean emailVerified, String photo) {
+        if (!emailVerified) {
             // TODO 예외처리?? :: googleOAuth.isEmailVerified() 값이 정확히 뭔지 모르겠어요ㅠㅠ
         }
 
-        SocialUser socialUser = socialUserRepository.findByEmail(googleOAuth.getEmail());
+        SocialUser socialUser = socialUserRepository.findByEmail(email);
         FirebaseToken decodeToken = null;
         try {
-            decodeToken = new TokenUtils().checkGoogleOAuthToken(googleOAuth.getAccessToken());
+            decodeToken = new TokenUtils().checkGoogleOAuthToken(accessToken);
 //            resultAuth.setEmailVerified(decodeToken.isEmailVerified());
         } catch (Exception e) {
             log.error("google oauth 토큰 인증 실패 !!!");
@@ -64,28 +66,36 @@ public class LoginServiceImpl implements LoginService {
         // 계정이 없는 경우
         long time = Calendar.getInstance().getTimeInMillis();
         if (socialUser == null) {
-            SocialUser user = SocialUser.builder().build();
-            user.setEmail(googleOAuth.getEmail());
-            user.setNickname(googleOAuth.getName().split("@")[0]);
-            user.setPhotoUrl(googleOAuth.getPhoto());
-            user.setType("google"); // TODO 추후 다른 로그인 추가 시 enum 으로 변경??
-            user.setCreateDate(time);
-            user.setUpdateDate(time);
-            user.setLastLoginDate(time);
+            socialUser = SocialUser.builder().build();
+            socialUser.setEmail(email);
+            socialUser.setNickname(isDuplicateNickName(email.split("@")[0]));
+            socialUser.setPhotoUrl(photo);
+            socialUser.setType("google"); // TODO 추후 다른 로그인 추가 시 enum 으로 변경??
+            socialUser.setCreateDate(time);
+            socialUser.setUpdateDate(time);
+            socialUser.setLastLoginDate(time);
 
-            socialUserRepository.save(user);
+            socialUserRepository.save(socialUser);
         }
 
         // 레디스 insert
         OauthRedis oauthRedis = new OauthRedis();
-        oauthRedis.setEmail(googleOAuth.getEmail());
-        oauthRedis.setAccessToken(googleOAuth.getAccessToken());
-        oauthRedis.setRefreshToken(googleOAuth.getRefreshToken());
-        oauthRedis.setNickname(googleOAuth.getName().split("@")[0]);
+        oauthRedis.setEmail(socialUser.getEmail());
+        oauthRedis.setAccessToken(accessToken);
+        oauthRedis.setRefreshToken(refreshToken);
+        oauthRedis.setNickname(socialUser.getNickname());
         oauthRedis.setLastLoginDate(time);
         redisService.insertGoogleOauthToken(oauthRedis, time);
 
-        return googleOAuth;
+        return GoogleOAuth.of(accessToken, refreshToken, emailVerified, socialUser);
+    }
+
+    private String isDuplicateNickName(String nickname){
+        if (socialUserRepository.existsByNickname(nickname)) {
+            nickname = nickname + "_" + UUID.randomUUID().toString().substring(0, 4);
+            return isDuplicateNickName(nickname);
+        }
+        return nickname;
     }
 
     @Override
@@ -129,9 +139,9 @@ public class LoginServiceImpl implements LoginService {
         }
     }
 
-    @Transactional
     @Override
-    public void authenticateSession(String sessionId, GoogleOAuth auth) throws BadRequestException {
+    @Transactional
+    public GoogleOAuth authenticateQRSession(String sessionId, @NonNull String accessToken, @NonNull String refreshToken, @NonNull String name, @NonNull String email, boolean emailVerified, String photo) throws BadRequestException {
         QRSession qrSession = redisService.getQRSession(sessionId);
         long currentTime = System.currentTimeMillis();
         if (qrSession == null) {
@@ -142,12 +152,18 @@ public class LoginServiceImpl implements LoginService {
             // TODO 예외처리
             qrSession = QRSession.ofUpdateStatus(qrSession, QRSessionStatus.EXPIRED);
             redisService.insertQRSession(qrSession);
-            return;
+            throw new ExceptionController.ExpiredQRSession("");
         }
 
-        this.checkSocialUser(auth);
+        // 소셜 유저 체크
+        GoogleOAuth auth = checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
+
+        // QR session 에 저장
+        // TODO 굳이 저장해야하나? 삭제하면 안됨?
         qrSession = QRSession.ofUpdateStatusAndAuth(qrSession, QRSessionStatus.AUTHENTICATED, auth);
         redisService.insertQRSession(qrSession);
+
+        return auth;
     }
 
     @Override

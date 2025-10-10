@@ -262,4 +262,18 @@ public class ExceptionController {
         result.put("message", "Not Exist Token");
         return result;
     }
+
+    public static class ExpiredQRSession extends BadRequestException {
+        public ExpiredQRSession(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ExpiredQRSession.class)
+    public @ResponseBody Map<String, Object> ExpiredQRSession(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40060");
+        result.put("message", "QR Session Expired");
+        return result;
+    }
 }

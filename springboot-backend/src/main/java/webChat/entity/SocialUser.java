@@ -13,7 +13,6 @@ import lombok.*;
 public class SocialUser {
     @Id
     private String email;
-
     @Column
     private String nickname;
     @Column(name = "photo_url")
