@@ -90,34 +90,29 @@
     });
 
     $('#googleOauth').on('click', function(e) {
-        var projectId = window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID;
-        var apiKey = window.__CONFIG__.GOOGLE_OAUTH.API_KEY;
-        var authDomain = window.__CONFIG__.GOOGLE_OAUTH.AUTH_DOMAIN;
-
-        var requestData = {};
 
         if (!firebase.apps.length) {
             firebase.initializeApp({
-                projectId: projectId,
-                apiKey: apiKey,
-                authDomain: authDomain
+                projectId: window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID,
+                apiKey: window.__CONFIG__.GOOGLE_OAUTH.API_KEY,
+                authDomain: window.__CONFIG__.GOOGLE_OAUTH.AUTH_DOMAIN
             });
         } else {
             firebase.app();
         }
+
         var auth = firebase.auth();
         var provider = new firebase.auth.GoogleAuthProvider();
-
         auth.signInWithPopup(provider)
             .then(function (result) {
                 var user = result.user;
                 console.log('user : ' + user);
-                user.getIdToken()
-                .then((idToken) => {
+                user.getIdToken().then((idToken) => {
                     console.log('idToken : ' + idToken);
                     var refreshToken = user.refreshToken;
                     console.log('refresh Token : ' + refreshToken);
 
+                    var requestData = {};
                     // requestData setting
                     requestData.accessToken = idToken;
                     requestData.refreshToken = refreshToken;
@@ -126,13 +121,13 @@
                     requestData.emailVerified = user.emailVerified;
                     requestData.photo = user.photoURL;
 
-                    var successCallback = function(data) {
-                        if (data.data.emailVerified) {
-                            localStorage.setItem('access_token', data.data.accessToken);
-                            localStorage.setItem('refresh_token', data.data.refreshToken);
-                            localStorage.setItem('email', data.data.email);
-                            localStorage.setItem('type', data.data.type);
-                            localStorage.setItem('nickname', data.data.email.split('@')[0]);
+                    var successCallback = function(result) {
+                        if (result.data.emailVerified) {
+                            localStorage.setItem('access_token', result.data.accessToken);
+                            localStorage.setItem('refresh_token', result.data.refreshToken);
+                            localStorage.setItem('email', result.data.email);
+                            localStorage.setItem('type', result.data.type);
+                            localStorage.setItem('nickname', result.data.email.split('@')[0]);
                             window.location.href = '/';
                         } else {
                             alert('로그인에 실패하였습니다 !!!');
@@ -147,5 +142,32 @@
             });
     });
 
+    $('#qrLoginBtn').on('click', function() {
+        window.open(window.__CONFIG__.BASE_URL + '/templates/login/qr/qrlogin.html');
+    });
+
+    // Electron 환경 감지 함수
+    function isElectron() {
+        return window.navigator.userAgent.toLowerCase().indexOf('electron') > -1 ||
+               (window.process && window.process.versions && window.process.versions.electron) ||
+               (window.require && window.require('electron')) ||
+               window.__dirname !== undefined;
+    }
+
+    // storage 이벤트 리스너 추가
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'access_token' && e.newValue) {
+            console.log('[Login] QR 로그인 완료 감지, roomlist로 이동');
+            
+            // Electron 환경과 일반 웹 환경 구분
+            if (isElectron()) {
+                console.log('[Login] Electron 환경 감지');
+                window.location.href = 'templates/roomlist.html';
+            } else {
+                console.log('[Login] 일반 웹 환경 감지');
+                window.location.href = '/templates/roomlist.html';
+            }
+        }
+    });
 
 })(jQuery);

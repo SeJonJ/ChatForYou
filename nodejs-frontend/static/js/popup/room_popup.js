@@ -115,7 +115,7 @@ const RoomPopup = {
                     self.showToast('이미 존재하는 방입니다. \n 다른 방 이름을 입력해주세요.');
                 } else if (['40050', '40051', '40052'].includes(err.responseJSON?.code)) {
                     self.showToast('로그인이 필요한 서비스입니다.');
-                    window.location.href = window.__CONFIG__.BASE_URL + '/chatlogin.html';
+                    window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
                 } else {
                     self.showToast('방 생성에 실패했습니다. \n 잠시뒤에 다시 시도해주세요.');
                 }
@@ -196,14 +196,14 @@ const RoomPopup = {
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
                 $('#enterRoomModal').modal('hide');
 
-                let url = window.__CONFIG__.BASE_URL + '/kurentoroom.html?roomId=' + self.roomId;
+                let url = window.__CONFIG__.BASE_URL + '/room/kurentoroom.html?roomId=' + self.roomId;
                 tokenAjax(url, 'GET', true, '', function(){
                     console.log('tokenCheck');
                     location.href = url;
                 }, function(error){
                     if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                         self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = '/chatlogin.html';
+                        window.location.href = '/login/chatlogin.html';
                     }
                 });
                 
@@ -215,7 +215,7 @@ const RoomPopup = {
         let errorCallback = function(error) {
             if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = '/chatlogin.html';
+                window.location.href = '/login/chatlogin.html';
             } else {
                 console.error(error.responseJSON.message, 'error');
                 self.showToast('비밀번호 확인 중 오류가 발생했습니다.', 'error');
@@ -237,14 +237,14 @@ const RoomPopup = {
             if (result?.data && result?.result === 'success') {
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
 
-                let url = window.__CONFIG__.BASE_URL + '/kurentoroom.html?roomId=' + self.roomId;
+                let url = window.__CONFIG__.BASE_URL + '/room/kurentoroom.html?roomId=' + self.roomId;
                 tokenAjax(url, 'GET', true, '', function(){
                     console.log('tokenCheck');
                     location.href = url;
                 }, function(error){
                     if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                         self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = '/chatlogin.html';
+                        window.location.href = '/login/chatlogin.html';
                     }
                 });
             } else {

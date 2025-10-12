@@ -52,7 +52,7 @@ const RoomSettingsPopup = {
                 localStorage.removeItem('email');
                 localStorage.removeItem('type');
                 localStorage.removeItem('nickname');
-                window.location.href = '/chatlogin.html';
+                window.location.href = '/login/chatlogin.html';
             };
             var errorCallback = function(data) {
                 debugger;
@@ -128,7 +128,7 @@ const RoomSettingsPopup = {
         let errorCallback = function (error) {
             if (['40050', '40051', '40052'].includes(error.responseJSON?.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = window.__CONFIG__.BASE_URL + '/chatlogin.html';
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
             } else {
                 self.showToast(error.responseJSON.message, 'error');
                 self.showToast('방 정보 로딩 중 오류가 발생했습니다.', 'error');
