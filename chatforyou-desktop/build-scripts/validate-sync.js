@@ -83,8 +83,10 @@ class SyncValidator {
     // HTML 템플릿 파일 확인
     const templateFiles = [
       'src/templates/roomlist.html',
-      'src/templates/chatlogin.html',
-      'src/templates/kurentoroom.html'
+      'src/templates/login/chatlogin.html',
+      'src/templates/login/qr/qrlogin.html',
+      'src/templates/login/qr/qrscan.html',
+      'src/templates/room/kurentoroom.html'
     ];
 
     for (const template of templateFiles) {

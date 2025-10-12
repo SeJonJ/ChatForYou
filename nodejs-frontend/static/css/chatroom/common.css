@@ -324,10 +324,10 @@ table {
   transition: all 0.3s ease;
 }
 .login-form__social .btn--google {
-  background: #fff url("/static/images/login/google-logo.png") no-repeat center/60%;
+  background: #fff url("/images/login/google-logo.png") no-repeat center/60%;
 }
 .login-form__social .btn--naver {
-  background: #03c75a url("/static/images/login/naver.png") no-repeat center/100%;
+  background: #03c75a url("/images/login/naver.png") no-repeat center/100%;
 }
 .login-form__social .btn:hover {
   border-color: #9a4dff;

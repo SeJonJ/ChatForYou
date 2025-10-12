@@ -147,15 +147,37 @@ class PathConverter {
       CSS: [
         {
           name: 'url-static-conversion',
-          description: 'url("/static/") -> url("../static/")',
+          description: 'url("/static/") -> 동적 상대 경로',
           pattern: /url\(["']?\/static\//g,
-          replacement: 'url("../static/'
+          replacement: (match, offset, string, filePath) => {
+            // CSS 파일의 위치에 따라 상대 경로 계산
+            if (filePath && filePath.includes('/static/css/')) {
+              // static/css/ 디렉토리에 있는 경우: ../../static/
+              return 'url("../../static/';
+            } else if (filePath && filePath.includes('/css/')) {
+              // 다른 css/ 디렉토리에 있는 경우: ../static/
+              return 'url("../static/';
+            }
+            // 기본값
+            return 'url("../static/';
+          }
         },
         {
           name: 'url-relative-conversion',
-          description: 'url("static/") -> url("../static/")',
+          description: 'url("static/") -> 동적 상대 경로',
           pattern: /url\(["']?static\//g,
-          replacement: 'url("../static/'
+          replacement: (match, offset, string, filePath) => {
+            // CSS 파일의 위치에 따라 상대 경로 계산
+            if (filePath && filePath.includes('/static/css/')) {
+              // static/css/ 디렉토리에 있는 경우: ../../static/
+              return 'url("../../static/';
+            } else if (filePath && filePath.includes('/css/')) {
+              // 다른 css/ 디렉토리에 있는 경우: ../static/
+              return 'url("../static/';
+            }
+            // 기본값
+            return 'url("../static/';
+          }
         },
         {
           name: 'import-static-conversion',
@@ -244,7 +266,7 @@ class PathConverter {
       patterns: [
         {
           name: 'base-href-normalization',
-          description: '모든 base href를 Electron 형식으로 변환',
+          description: '일반적인 base href를 ../로 설정 (login 하위 디렉토리 제외)',
           pattern: /<base\s+href=["'][^"']*["']/gi,
           replacement: '<base href="../">'
         },
@@ -448,11 +470,89 @@ class PathConverter {
     const rules = this.conversionRules[fileType] || [];
     let filePathsConverted = 0;
 
+    // 동적 base href 처리 (convert_path.json 활용)
+    if (fileType === 'HTML' && filePath) {
+      const fileName = path.basename(filePath);
+      const convertPathFile = path.join(__dirname, '../convert_path.json');
+      
+      try {
+        if (fs.existsSync(convertPathFile)) {
+          const pathMapping = JSON.parse(fs.readFileSync(convertPathFile, 'utf8'));
+          
+          // 새로운 구조에서 파일명 찾기: {"경로": ["파일명들"]}
+          let mappedPath = null;
+          for (const [dirPath, fileList] of Object.entries(pathMapping)) {
+            if (fileList.includes(fileName)) {
+              mappedPath = dirPath;
+              break;
+            }
+          }
+          
+          if (mappedPath) {
+            // 매핑된 경로의 깊이에 따라 base href 결정
+            const depth = mappedPath.split('/').length - 1; // /templates/login = 2, /templates/login/qr = 3
+            const baseHref = '../'.repeat(depth);
+            
+            convertedContent = convertedContent.replace(
+              /<base\s+href=["'][^"']*["']/gi, 
+              `<base href="${baseHref}">`
+            );
+            
+            if (convertedContent !== content) {
+              filePathsConverted++;
+              if (this.options.verbose) {
+                this.logger.debug(`  🔧 동적 base href 변환: ${fileName} -> ${baseHref} (깊이: ${depth})`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (this.options.verbose) {
+          this.logger.debug(`  ⚠️ convert_path.json 로드 실패: ${error.message}`);
+        }
+      }
+    }
+
     for (const rule of rules) {
+      // 동적으로 처리된 파일의 경우 base href 변환 건너뛰기
+      if (rule.name === 'base-href-normalization' && filePath) {
+        const fileName = path.basename(filePath);
+        const convertPathFile = path.join(__dirname, '../convert_path.json');
+        
+        try {
+          if (fs.existsSync(convertPathFile)) {
+            const pathMapping = JSON.parse(fs.readFileSync(convertPathFile, 'utf8'));
+            
+            // 새로운 구조에서 파일명 찾기: {"경로": ["파일명들"]}
+            let isFileMapped = false;
+            for (const [dirPath, fileList] of Object.entries(pathMapping)) {
+              if (fileList.includes(fileName)) {
+                isFileMapped = true;
+                break;
+              }
+            }
+            
+            if (isFileMapped) {
+              continue; // 이미 동적으로 처리된 파일은 건너뛰기
+            }
+          }
+        } catch (error) {
+          // 에러 발생 시 기본 처리 계속
+        }
+      }
+      
       const matches = convertedContent.match(rule.pattern);
       if (matches) {
         const beforeConversion = convertedContent;
-        convertedContent = convertedContent.replace(rule.pattern, rule.replacement);
+        
+        if (typeof rule.replacement === 'function') {
+          convertedContent = convertedContent.replace(rule.pattern, (match, ...args) => {
+            // filePath를 함수에 전달
+            return rule.replacement(match, ...args, filePath);
+          });
+        } else {
+          convertedContent = convertedContent.replace(rule.pattern, rule.replacement);
+        }
         
         if (beforeConversion !== convertedContent) {
           filePathsConverted += matches.length;
@@ -487,7 +587,10 @@ class PathConverter {
         const beforeConversion = convertedContent;
         
         if (typeof rule.replacement === 'function') {
-          convertedContent = convertedContent.replace(rule.pattern, rule.replacement);
+          convertedContent = convertedContent.replace(rule.pattern, (match, ...args) => {
+            // filePath를 함수에 전달
+            return rule.replacement(match, ...args, filePath);
+          });
         } else {
           convertedContent = convertedContent.replace(rule.pattern, rule.replacement);
         }
@@ -576,7 +679,7 @@ class PathConverter {
     // 이미지 경로 정규화
     normalized = normalized.replace(
       /url\(\s*["']?(?:\.\/)?(?:\/)?images\//gi,
-      'url("../static/images/'
+      'url("../images/'
     );
     
     return normalized;

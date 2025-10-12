@@ -111,6 +111,18 @@ const log = {
     }
 };
 
+// 경로 매핑 설정 로드
+let pathMapping = {};
+try {
+    const mappingPath = path.join(__dirname, '../../build-scripts/convert_path.json');
+    if (fs.existsSync(mappingPath)) {
+        pathMapping = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+        log.info(`경로 매핑 설정 로드됨: ${Object.keys(pathMapping).length}개 파일`);
+    }
+} catch (error) {
+    log.warn(`경로 매핑 설정 로드 실패: ${error.message}`);
+}
+
 // 자동 업데이트 설정 - 플랫폼별 처리
 function setupAutoUpdater() {
     // Windows에서만 AutoUpdateManager 사용
@@ -671,11 +683,30 @@ app.on('web-contents-created', (event, contents) => {
                 const urlObj = new URL(url);
                 const queryString = urlObj.search;
                 
-                // 파일명만 추출
+                // URL에서 파일명 추출
                 const fileName = path.basename(urlPath.split('?')[0]);
                 
-                // 올바른 경로로 로드
-                const correctPath = path.join(__dirname, '../templates', fileName);
+                // 동적 경로 매핑으로 올바른 경로 결정
+                let correctPath;
+                let mappedPath = null;
+                
+                // 새로운 구조에서 파일명 찾기: {"경로": ["파일명들"]}
+                for (const [dirPath, fileList] of Object.entries(pathMapping)) {
+                    if (fileList.includes(fileName)) {
+                        mappedPath = dirPath;
+                        break;
+                    }
+                }
+                
+                if (mappedPath) {
+                    // 설정 파일에서 매핑된 경로 사용
+                    correctPath = path.join(__dirname, '..', mappedPath, fileName);
+                    log.debug(`동적 경로 매핑: ${fileName} -> ${mappedPath}`);
+                } else {
+                    // 기본 경로 사용
+                    correctPath = path.join(__dirname, '../templates', fileName);
+                    log.debug(`기본 경로 사용: ${fileName} -> templates`);
+                }
                 const correctUrl = `file://${correctPath}${queryString}`;
                 
                 // 수정된 URL도 보안 검증

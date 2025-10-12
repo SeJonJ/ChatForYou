@@ -154,6 +154,21 @@
                window.__dirname !== undefined;
     }
 
+    // Electron 환경에서 소셜 로그인 버튼 숨기기
+    $(document).ready(function() {
+        if (isElectron()) {
+            console.log('[Login] Electron 환경 감지 - 소셜 로그인 버튼 숨기기');
+            $('#googleOauth').hide();
+            $('#naverOauth').hide();
+            
+            // 소셜 로그인 섹션 전체가 비어있으면 숨기기
+            const socialSection = $('.login-form__social');
+            if (socialSection.children(':visible').length === 0) {
+                socialSection.hide();
+            }
+        }
+    });
+
     // storage 이벤트 리스너 추가
     window.addEventListener('storage', function(e) {
         if (e.key === 'access_token' && e.newValue) {

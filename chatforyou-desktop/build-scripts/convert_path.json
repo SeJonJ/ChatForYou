@@ -1,0 +1,18 @@
+{
+  "/templates/login/qr" : [
+    "qrlogin.html",
+    "qrscan.html",
+    "qrlogin.js",
+    "qrscan.js"
+  ],
+  "/templates/login" : [
+    "chatlogin.html",
+    "main.js"
+  ],
+  "/templates/room" : [
+    "kurentoroom.html"
+  ],
+  "/templates" : [
+    "roomlist.html"
+  ]
+}
