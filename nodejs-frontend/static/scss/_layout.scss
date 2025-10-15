@@ -136,6 +136,10 @@
 }
 
 .sidebar {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	background-color: #141414;
 	background-color: #1b1c1e;
 
 	.logo {
@@ -157,6 +161,37 @@
 		&:hover {
 			background-color: rgba(255, 255, 255, 0.1);
 			text-decoration: none;
+		}
+	}
+
+	.sidebar-footer {
+		.btn-logout {
+			width: 100%;
+			background: rgba(255, 255, 255, 0.05); // 기본 배경 추가
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			border-radius: 8px;
+			font-size: 14px;
+			color: #fff;
+			padding: 10px 0;
+			text-align: center;
+			transition: all 0.3s ease;
+			box-shadow: none;
+
+			i {
+				margin-right: 6px;
+			}
+
+			&:hover {
+				background: rgba(187, 134, 252, 0.15); // 보라빛 강조
+				box-shadow: 0 0 12px rgba(187, 134, 252, 0.4);
+				border-color: rgba(187, 134, 252, 0.4);
+				transform: translateY(-1px);
+			}
+
+			&:active {
+				transform: translateY(0);
+				box-shadow: 0 0 6px rgba(187, 134, 252, 0.3);
+			}
 		}
 	}
 }
@@ -300,6 +335,56 @@
 				box-shadow: 0 0 8px $color-primary;
 				transform: scale(1.05);
 			}
+		}
+	}
+
+	.divider {
+		position: relative;
+		text-align: center;
+		color: $color-gray-300;
+		font-size: 0.9rem;
+		margin: 30px 0;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+
+		&::before,
+		&::after {
+			content: "";
+			position: absolute;
+			top: 50%;
+			width: 40%;
+			height: 1px;
+			background: rgba(255, 255, 255, 0.2);
+		}
+		&::before {
+			left: 0;
+		}
+		&::after {
+			right: 0;
+		}
+	}
+
+	.qr-login-btn {
+		width: 100%;
+		padding: 12px;
+		background: rgba(45, 30, 70, 0.9);
+		border: 1px solid #5b3fa3;
+		border-radius: $btn-radius;
+		color: $color-white;
+		font-weight: 500;
+		text-align: center;
+		transition: all 0.3s ease;
+
+		&:hover {
+			background: linear-gradient(90deg, #8a3cff, #c678ff);
+			box-shadow: 0 0 10px rgba($color-primary, 0.4);
+			transform: translateY(-1px);
+		}
+
+		.qr-icon {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
 		}
 	}
 
