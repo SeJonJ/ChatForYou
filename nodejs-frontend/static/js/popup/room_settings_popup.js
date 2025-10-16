@@ -19,6 +19,14 @@ const RoomSettingsPopup = {
      */
     initEvents: function () {
         const self = this;
+        
+        if (localStorage.getItem('access_token') != null) {
+            $('#logoutBtn').removeClass('display-none');
+            $('#loginBtn').addClass('display-none');
+        } else {
+            $('#loginBtn').removeClass('display-none');
+            $('#logoutBtn').addClass('display-none');
+        }
 
         // 방 설정 모달 버튼 클릭
         $(document).off('click', '.configRoomBtn').on('click', '.configRoomBtn', function () {
@@ -40,6 +48,13 @@ const RoomSettingsPopup = {
         $(document).off('click', '#saveRoomConfigBtn').on('click', '#saveRoomConfigBtn', function () {
             self.saveRoomConfig();
         });
+
+        // 로그인 버튼 클릭
+        $('#loginBtn').on('click', function() {
+            window.location.href = '/login/chatlogin.html';
+        });
+
+        // 로그아웃 버튼 클릭
         $('#logoutBtn').on('click', function() {
             const url = window.__CONFIG__.API_BASE_URL + '/login/logout';
             var requestData = {
