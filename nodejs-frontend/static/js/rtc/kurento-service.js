@@ -268,7 +268,7 @@ function register() {
                         let message = {
                             id: 'joinRoom',
                             nickName : nickName,
-                            userId: userId,
+                            userId: nickName,
                             roomId: roomId,
                         }
                         sendMessageToServer(message);

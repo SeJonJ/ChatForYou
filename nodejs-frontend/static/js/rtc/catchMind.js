@@ -58,6 +58,9 @@ const catchMind = {
             this.gameReadyUser = 0 // 게임준비를 누른 유저 수
             this.gameUserList = [] // 게임 유저 정보(리스트)
 
+            // 로그인한 사용자 닉네임으로 설정
+            this.nickName = localStorage.getItem('nickName');
+
             this.isInit = true;
         }
     },
@@ -222,15 +225,14 @@ const catchMind = {
 
         $('#subjectModal').on('shown.bs.modal', function (e) {
             if(self.alreadyPlayedGame) {
-                Toastify({
-                    text: "이미 게임이 진행되었습니다!",
-                    duration: 3000,
-                    gravity: "top",
-                    position: "center",
-                }).showToast();
+                self.showToast("이미 게임이 진행되었습니다!");
                 return;
             }
             $('#maxGameCount').val(self.totalGameRound);
+            // 로그인 사용자의 nickName 으로 설정
+            $('#nickName_ld').val(self.nickName);
+            // 닉네임 수정 불가능하도록 설정
+            $('#nickName_ld').attr('disabled', true);
 
             let $body = $('body');
             spinnerOpt.initByOption(20, 15, 4.0, 'shrink', '#ffffff', '50%', '50%');
@@ -374,7 +376,7 @@ const catchMind = {
 
                 const addReadyUser = {
                     "gameEvent": "addReadyUser",
-                    "gameUser": userId,
+                    "gameUser": self.nickName,
                     "nickName": self.nickName
                 }
                 dataChannel.sendMessage(addReadyUser, 'gameEvent');
@@ -404,13 +406,6 @@ const catchMind = {
 
         // '예' 버튼 클릭 이벤트 핸들러
         $('#acceptGameRequest').off('click').on('click', function () {
-
-            let $nickName = $('#nickName_pt').val();
-            if (!$nickName) {
-                alert("게임 닉네임은 필수값입니다!");
-                return;
-            }
-            self.nickName = $nickName;
             // 게임 참여 수락 처리 로직
             self.isGameParticipant = true;
             // 게임 참여 가능한 총 인원 세팅(현재 방 인원과 동일)
@@ -521,7 +516,7 @@ const catchMind = {
                 let answer = self.replaceStr($userAnswer.val());
                 console.log("사용자가 입력한 정답:", answer);
                 // 정답 처리 로직
-                self.checkAnswer(answer);
+                self.checkAnswer(answer, false);
 
                 // 입력 필드 초기화 및 모달 닫기
                 $userAnswer.val('');
@@ -536,51 +531,114 @@ const catchMind = {
         let text = "이제 정답을 외쳐주세요!";
         self.showToast(text);
 
-        // 음성 인식 언어 설정
+        // 음성 인식 언어 설정 (더 구체적인 설정)
         self.recognition.lang = 'ko-KR';
-
-        // 결과를 실시간으로 반환하지 않도록 설정
-        self.recognition.interimResults = false;
-
-        self.recognition.maxAlternatives = 1000; // maxAlternatives가 숫자가 작을수록 발음대로 적고, 크면 문장의 적합도에 따라 알맞은 단어로 대체
+        
+        // 실시간 결과 활성화 (인식률 향상)
+        self.recognition.interimResults = true;
+        
+        // 연속 인식 활성화
+        self.recognition.continuous = true;
+        
+        // 적절한 대안 수 설정 (너무 크면 오히려 정확도 저하)
+        self.recognition.maxAlternatives = 5;
 
         // console.log("음성 인식 시작");
         self.recognition.start();
 
-        // 3초 동안 음성이 감지되지 않으면 인식 종료
+        // 5초 동안 음성이 감지되지 않으면 인식 종료 (시간 연장)
         let recognitionTimeout = setTimeout(function() {
             self.recognition.stop();
             $('#answerBtn').attr('disabled', false);
-            // console.log("3초 동안 음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
+            // console.log("5초 동안 음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
             self.showToast("음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
-        }, 3000);
+        }, 5000);
 
         // 음성 인식 결과 이벤트
         self.recognition.onresult = function (event) {
             // 타이머 취소
             clearTimeout(recognitionTimeout);
 
-            // 결과 처리
-            let transcript = Array.from(event.results)
-                .map(result => result[0])
-                .map(result => result.transcript)
-                .join('');
+            // 최종 결과만 처리 (실시간 결과는 무시)
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                }
+            }
 
-            transcript = transcript.replaceAll(' ', '');
-            console.log(transcript);
+            // 최종 결과가 있을 때만 처리
+            if (finalTranscript.trim()) {
+                // 텍스트 정제 (공백, 특수문자 제거)
+                finalTranscript = finalTranscript
+                    .replaceAll(' ', '')
+                    .replaceAll(/[^\w가-힣]/g, '')
+                    .toLowerCase();
+                
+                console.log('인식된 텍스트:', finalTranscript);
 
-            self.checkAnswer(transcript);
+                // 여러 대안 결과 확인
+                let alternatives = [];
+                for (let i = 0; i < Math.min(event.results[event.results.length - 1].length, 3); i++) {
+                    let altText = event.results[event.results.length - 1][i].transcript
+                        .replaceAll(' ', '')
+                        .replaceAll(/[^\w가-힣]/g, '')
+                        .toLowerCase();
+                    if (altText && !alternatives.includes(altText)) {
+                        alternatives.push(altText);
+                    }
+                }
 
-            // 음성 인식 종료
-            self.recognition.stop();
-            $('#answerBtn').attr('disabled', false);
+                console.log('대안 결과들:', alternatives);
+
+                // 모든 대안에 대해 정답 확인
+                let answerFound = false;
+                for (let alt of alternatives) {
+                    if (self.checkAnswer(alt, true)) {
+                        answerFound = true;
+                        break;
+                    }
+                }
+
+                // 정답을 찾지 못한 경우 메인 결과로 재시도
+                if (!answerFound) {
+                    self.checkAnswer(finalTranscript, false);
+                }
+
+                // 음성 인식 종료
+                self.recognition.stop();
+                $('#answerBtn').attr('disabled', false);
+            }
         };
 
-        // 음성 인식 에러 이벤트
-        self.recognition.onerror = function() {
+        // 음성 인식 에러 이벤트 (개선된 에러 처리)
+        self.recognition.onerror = function(event) {
             // 타이머 취소
             clearTimeout(recognitionTimeout);
             $('#answerBtn').attr('disabled', false);
+            
+            console.log('음성 인식 에러:', event.error);
+            
+            // 에러 타입별 메시지
+            let errorMessage = '';
+            switch(event.error) {
+                case 'no-speech':
+                    errorMessage = '음성이 감지되지 않았습니다. 다시 시도해주세요.';
+                    break;
+                case 'audio-capture':
+                    errorMessage = '마이크에 접근할 수 없습니다. 마이크 권한을 확인해주세요.';
+                    break;
+                case 'not-allowed':
+                    errorMessage = '마이크 사용 권한이 거부되었습니다.';
+                    break;
+                case 'network':
+                    errorMessage = '네트워크 오류가 발생했습니다.';
+                    break;
+                default:
+                    errorMessage = '음성 인식 중 오류가 발생했습니다.';
+            }
+            
+            self.showToast(errorMessage);
         };
     },
     mobileAnswerEvent : function(){
@@ -607,7 +665,7 @@ const catchMind = {
         if (type === 'self') {
             let gameUser = {
                 "roomId": roomId,
-                "userId": userId,
+                "userId": this.nickName,
                 "nickName": this.nickName
             }
             this.gameUserList.push(gameUser);
@@ -624,7 +682,7 @@ const catchMind = {
             $('#loadingUser').text('다른 참여자를 기다리는 중입니다. : ' + this.gameReadyUser + "/" + this.gameUserCount);
         } else {
             if (this.isAllUserReady() && !this.subject) {
-                $('#readyUser').text("모든 유저가 준비를 완료했습니다. 게임을 시작해주세요!");
+                $('#readyUser').text('모든 유저가 준비를 완료했습니다. 게임을 시작해주세요!');
                 $('#startBtn').attr('disabled', false);
             } else {
                 $('#readyUser').text(this.gameReadyUser + "/" + this.gameUserCount);
@@ -632,7 +690,14 @@ const catchMind = {
         }
     },
     rejectGame: function () {
+        // 게임 참여자 수 감소
         this.gameUserCount -= 1;
+        if(this.gameUserCount === 1 && this.isGameLeader) {
+            self.showToast('다른 게임 참여자가 없어 게임을 시작할 수 없습니다.');
+            $('#subjectModal').modal('hide');
+            return;
+        } 
+        
         if (this.isGameLeader) {
             $('#readyUser').text(this.gameReadyUser + "/" + this.gameUserCount);
         } else {
@@ -652,19 +717,19 @@ const catchMind = {
         $('#clearCanvasBtn').hide();
         $('#answerBtn').attr('disabled', false);
     },
-    checkAnswer: function (answer) {
+    checkAnswer: function (answer, isAltAnswer) {
         let self = this;
-        if (answer !== this.subject) {
+        if (answer !== this.subject && !isAltAnswer) {
             $('#answerBtn').attr('disabled', false);
             let text = "아쉽지만 " + answer + " 는(은) 정답이 아니에요";
             this.showToast(text);
-            return;
+            return false;
         }
 
         const gameData = {
             gameStatus: "WINNER",
             "roomId": roomId,
-            "userId": userId
+            "userId": self.nickName
         };
 
         let successCallback = function (data) {
@@ -938,6 +1003,16 @@ const catchMind = {
         // let 정제된문자열 = 문자열.replace(/AI\s*:\s*/g, "");
         str = str.replace(/[^a-zA-Z0-9가-힣]/g, '');
         return str;
+    },
+    showGameRequestModal: function () {
+        let self = this;
+        let $nickNamePt = $('#nickName_pt');
+        self.nickName = localStorage.getItem('nickName');
+
+        // 로그인한 사용자로 닉네임 설정
+        $nickNamePt.val(self.nickName);
+        $nickNamePt.attr('disabled', true);
+        $('#gameRequestModal').modal('show');
     },
     // /**
     //  * 게임 상태 초기화

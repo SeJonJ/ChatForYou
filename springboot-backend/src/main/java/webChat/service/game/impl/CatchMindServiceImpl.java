@@ -170,7 +170,7 @@ public class CatchMindServiceImpl implements CatchMindService {
     }
 
     @Override
-    public GameSettingInfo getGameResult(String roomId) throws BadRequestException, ExceptionController.SyncGameRound {
+    public GameSettingInfo getGameResult(String roomId) throws BadRequestException {
         KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         // 게임 라운드 확인 및 결과 보내주기
@@ -182,7 +182,7 @@ public class CatchMindServiceImpl implements CatchMindService {
         // 게임 라운드와 전체 라운드가 일치하지 않는 경우
         // 프론트와 서버 간 라운드 정보가 일치하지 않는 경우 일치를 위한  Exception
         if (gameSettingInfo.getGameRound() != gameSettingInfo.getTotalGameRound()) {
-            throw new ExceptionController.SyncGameRound(String.valueOf(gameSettingInfo.getGameRound()));
+            throw new ExceptionController.SyncGameRound(gameSettingInfo.getGameRound());
         }
 
         // score 비교 로직 수행

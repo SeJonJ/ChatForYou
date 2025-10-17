@@ -173,8 +173,8 @@ public class ExceptionController {
 
     public static class SyncGameRound extends BadRequestException {
 
-        public SyncGameRound(String message) {
-            super(message);
+        public SyncGameRound(int message) {
+            super(String.valueOf(message));
         }
     }
 
@@ -184,7 +184,7 @@ public class ExceptionController {
         Map<String, Object> result = new HashMap<>();
         result.put("code", "40040");
         result.put("message", "Syncing game round info.");
-        result.put("data", Integer.parseInt(gameRound));
+        result.put("data", gameRound);
         return result;
     }
 

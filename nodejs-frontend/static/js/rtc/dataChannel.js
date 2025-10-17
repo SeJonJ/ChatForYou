@@ -144,7 +144,7 @@ const dataChannel = {
         let overlayMessage = {
             id: "textOverlay",
             text: text,
-            userId: this.user.userId,
+            userId: this.user.nickName,
             roomId: this.user.roomId
         };
         
@@ -159,7 +159,7 @@ const dataChannel = {
     gameEvent: function (event) {
         switch (event.gameEvent) {
             case 'gameRequest':
-                $('#gameRequestModal').modal('show');
+                catchMind.showGameRequestModal();
                 break;
             case 'rejectGame':
                 catchMind.rejectGame();
