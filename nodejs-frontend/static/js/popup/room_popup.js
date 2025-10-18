@@ -203,7 +203,7 @@ const RoomPopup = {
                 }, function(error){
                     if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                         self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = '/login/chatlogin.html';
+                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
                     }
                 });
                 
@@ -215,7 +215,7 @@ const RoomPopup = {
         let errorCallback = function(error) {
             if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = '/login/chatlogin.html';
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
             } else {
                 console.error(error.responseJSON.message, 'error');
                 self.showToast('비밀번호 확인 중 오류가 발생했습니다.', 'error');
@@ -244,7 +244,7 @@ const RoomPopup = {
                 }, function(error){
                     if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                         self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = '/login/chatlogin.html';
+                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
                     }
                 });
             } else {

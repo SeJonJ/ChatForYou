@@ -212,7 +212,7 @@ const QRLogin = {
         let self = this;
         self.stopPolling();
         self.stopTimer();
-        window.location.href = 'templates/login/chatlogin.html';
+        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
     },
     /*
     * 다시 시도 버튼 클릭

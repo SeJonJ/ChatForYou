@@ -51,20 +51,12 @@ const RoomSettingsPopup = {
 
         // 로그인 버튼 클릭
         $('#loginBtn').on('click', function() {
-            if(isElectron()) {
-                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
-            } else {
-                window.location.href = '/login/chatlogin.html';
-            }
+            window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
         });
 
         // 로그아웃 버튼 클릭
         $('#logoutBtn').on('click', function() {
-            const url = window.__CONFIG__.API_BASE_URL + '/login/logout';
-            if(isElectron()) {
-                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
-            }
-            
+
             var requestData = {
                 email: localStorage.getItem('email')
             };
@@ -75,7 +67,7 @@ const RoomSettingsPopup = {
                 localStorage.removeItem('email');
                 localStorage.removeItem('type');
                 localStorage.removeItem('nickname');
-                window.location.href = '/login/chatlogin.html';
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
             };
             var errorCallback = function(data) {
                 debugger;
