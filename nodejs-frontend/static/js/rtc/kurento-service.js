@@ -280,7 +280,11 @@ function register() {
             console.error('방 정보 조회 실패:', error);
             if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = '/login/chatlogin.html';
+                if(isElectron()) {
+                    window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                } else {
+                    window.location.href = '/login/chatlogin.html';
+                }
             }
         };
         // AJAX 요청 실행

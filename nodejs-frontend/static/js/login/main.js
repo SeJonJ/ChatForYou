@@ -146,14 +146,6 @@
         window.open(window.__CONFIG__.BASE_URL + '/templates/login/qr/qrlogin.html');
     });
 
-    // Electron 환경 감지 함수
-    function isElectron() {
-        return window.navigator.userAgent.toLowerCase().indexOf('electron') > -1 ||
-               (window.process && window.process.versions && window.process.versions.electron) ||
-               (window.require && window.require('electron')) ||
-               window.__dirname !== undefined;
-    }
-
     // Electron 환경에서 소셜 로그인 버튼 숨기기
     $(document).ready(function() {
         if (isElectron()) {

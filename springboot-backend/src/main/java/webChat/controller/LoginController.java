@@ -54,7 +54,7 @@ public class LoginController {
 
     @GetMapping(value = "/qr/create", produces = "application/json; charset=UTF8")
     public ResponseEntity<ChatForYouResponse> createQrSession() throws Exception {
-        log.info("QR 세션 생성 요청");
+        log.debug("QR 세션 생성 요청");
 
         QRLoginResponse response = loginService.createQRSession();
 
@@ -74,7 +74,7 @@ public class LoginController {
                     @RequestParam(value = "emailVerified", defaultValue = "false") boolean emailVerified,
                     @RequestParam("photo") String photo) throws BadRequestException {
 
-        log.info("QR 세션 인증 요청: sessionId={}", sessionId);
+        log.debug("QR 세션 인증 요청: sessionId={}", sessionId);
 
         GoogleOAuth response = loginService.authenticateQRSession(sessionId, accessToken, refreshToken, name, email, emailVerified, photo);
 

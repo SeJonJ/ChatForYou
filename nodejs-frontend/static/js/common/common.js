@@ -7,3 +7,10 @@ let setCookie = function(name, value, exp) {
 	date.setTime(date.getTime() + exp*24*60*60*1000);
 	document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=/';
 };
+
+let isElectron = function() {
+	return window.navigator.userAgent.toLowerCase().indexOf('electron') > -1 ||
+	(window.process && window.process.versions && window.process.versions.electron) ||
+	(window.require && window.require('electron')) ||
+	window.__dirname !== undefined;
+};

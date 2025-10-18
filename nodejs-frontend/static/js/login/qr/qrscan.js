@@ -46,7 +46,7 @@ const QRScan = {
                      console.log('Firebase 로그인 성공:', authResult.user.email);
                      const user = authResult.user;
                      self.authenticateSession(user);
-                     return false; // 리다이렉트 방지
+                     return false;
                  },
                  signInFailure: (error) => {
                      console.error('Firebase 로그인 실패:', error);
@@ -54,8 +54,8 @@ const QRScan = {
                  }
              },
              signInFlow: 'popup', // 팝업 방식 (모바일 친화적)
-             // tosUrl: '/terms', // 약관 URL (선택사항)
-             // privacyPolicyUrl: '/privacy' // 개인정보 처리방침 URL (선택사항)
+             tosUrl: window.__CONFIG__.BASE_URL + '/login/terms.html', // 약관 URL (선택사항)
+             privacyPolicyUrl: window.__CONFIG__.BASE_URL + '/login/privacy.html' // 개인정보 처리방침 URL (선택사항)
          });
     },
     authenticateSession: function(user) {
@@ -88,11 +88,15 @@ const QRScan = {
                 console.log('백엔드 인증 성공:', result);
                 if (result.result && result.data) {
                     console.log('백엔드 인증 성공');
-                    self.showSuccess('✅ 로그인 성공! \n이 창을 닫으셔도 됩니다.');
+                    self.showSpinner(false);
                     
                     // Firebase 로그아웃
                     setTimeout(() => {
                         firebase.auth().signOut();
+                        self.showSuccess('✅ 로그인 성공! \n이 창을 닫으셔도 됩니다.');
+                        // Firebase UI 및 안내 문구 숨김
+                        $('#firebaseui-auth-container').hide();
+                        $('#instructions').hide(); 
                     }, 2000);
                 } else {
                     console.error('백엔드 인증 실패:', result);

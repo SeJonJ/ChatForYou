@@ -6,5 +6,4 @@ window.__CONFIG__ = {
     AUTH_DOMAIN: 'chatforyou-77681.firebaseapp.com',
     PROJECT_ID: 'chatforyou-77681+'
   }
-
 }; 

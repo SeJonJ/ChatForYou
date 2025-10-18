@@ -19,19 +19,29 @@ class ConfigProcessor {
     this.electronConfigTemplate = {
       local: {
         API_BASE_URL: 'http://localhost:8080/chatforyou/api',
-        BASE_URL: './templates/roomlist.html',
+        BASE_URL: './templates',
         PLATFORM: 'electron',
         FILE_PROTOCOL: true,
         DEV_MODE: true,
-        AUTO_UPDATER: false
+        AUTO_UPDATER: false,
+        GOOGLE_OAUTH: {
+          API_KEY: 'AIzaSyAEqUJMfNf_mKZFqWShTDvcGFUSWRgotOM',
+          AUTH_DOMAIN: 'chatforyou-77681.firebaseapp.com',
+          PROJECT_ID: 'chatforyou-77681+'
+        }
       },
       prod: {
         API_BASE_URL: 'https://hjproject.kro.kr/chatforyou/api',
-        BASE_URL: './templates/roomlist.html',
+        BASE_URL: './templates',
         PLATFORM: 'electron',
         FILE_PROTOCOL: true,
         DEV_MODE: false,
-        AUTO_UPDATER: true
+        AUTO_UPDATER: true,
+        GOOGLE_OAUTH: {
+          API_KEY: 'AIzaSyAEqUJMfNf_mKZFqWShTDvcGFUSWRgotOM',
+          AUTH_DOMAIN: 'chatforyou-77681.firebaseapp.com',
+          PROJECT_ID: 'chatforyou-77681+'
+        }
       }
     };
   }
