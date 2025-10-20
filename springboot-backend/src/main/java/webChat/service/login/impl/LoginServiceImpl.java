@@ -43,9 +43,9 @@ public class LoginServiceImpl implements LoginService {
 
     @Transactional
     @Override
-    public GoogleOAuth checkSocialUser(@NonNull String accessToken, @NonNull String refreshToken, @NonNull String name, @NonNull String email, boolean emailVerified, String photo) {
+    public GoogleOAuth checkSocialUser(@NonNull String accessToken, @NonNull String refreshToken, @NonNull String name, @NonNull String email, boolean emailVerified, String photo) throws BadRequestException {
         if (!emailVerified) {
-            // TODO 예외처리?? :: googleOAuth.isEmailVerified() 값이 정확히 뭔지 모르겠어요ㅠㅠ
+            throw new BadRequestException("This email is not verified !!!");
         }
 
         SocialUser socialUser = socialUserRepository.findByEmail(email);
@@ -58,9 +58,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         if(decodeToken == null || !decodeToken.isEmailVerified()){
-            // TODO 예외처리??
-            log.error("google decodeToken 토큰 검증 처리 실패 !!!");
-            return null;
+            throw new BadRequestException("This account is not verified.");
         }
 
         // 계정이 없는 경우
