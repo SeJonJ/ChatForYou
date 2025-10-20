@@ -56,7 +56,7 @@ const RoomSettingsPopup = {
 
         // 로그아웃 버튼 클릭
         $('#logoutBtn').on('click', function() {
-
+            let url = window.__CONFIG__.API_BASE_URL + '/login/logout';
             var requestData = {
                 email: localStorage.getItem('email')
             };
