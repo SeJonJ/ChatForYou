@@ -128,7 +128,7 @@
                             localStorage.setItem('email', result.data.email);
                             localStorage.setItem('type', result.data.type);
                             localStorage.setItem('nickname', result.data.email.split('@')[0]);
-                            window.location.href = '/';
+                            window.location.href = window.__CONFIG__.BASE_URL + '/';
                         } else {
                             alert('로그인에 실패하였습니다 !!!');
                         }
@@ -169,10 +169,10 @@
             // Electron 환경과 일반 웹 환경 구분
             if (isElectron()) {
                 console.log('[Login] Electron 환경 감지');
-                window.location.href = 'templates/roomlist.html';
+                window.location.href = window.__CONFIG__.BASE_URL + '/templates/roomlist.html';
             } else {
                 console.log('[Login] 일반 웹 환경 감지');
-                window.location.href = '/templates/roomlist.html';
+                window.location.href = window.__CONFIG__.BASE_URL + '/';
             }
         }
     });

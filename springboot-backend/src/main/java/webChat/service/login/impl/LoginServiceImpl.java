@@ -100,19 +100,7 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     public void logout(String authorization, String email) throws Exception{
-        FirebaseToken decodeToken = null;
-
-        // 토큰 검증
-        try {
-            decodeToken = new TokenUtils().checkGoogleOAuthToken(authorization);
-        } catch (Exception e) {
-            log.error("google oauth 토큰 인증 실패 !!!");
-        }
-
-        // 레디스 삭제
-        if (!decodeToken.isEmailVerified() || !decodeToken.getEmail().equalsIgnoreCase(email)) {
-            throw new BadRequestException("Invalid Logout Info !!! ");
-        }
+        // 레디스에서 삭제
         redisService.deleteLoginInfo(email);
     }
 

@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-frontend",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Node.js static server for ChatForYou frontend",
   "main": "server.js",
   "scripts": {
