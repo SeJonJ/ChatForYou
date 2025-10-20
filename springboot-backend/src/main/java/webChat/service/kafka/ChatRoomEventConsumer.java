@@ -48,6 +48,11 @@ public class ChatRoomEventConsumer {
                 log.info("===========roomUserCnt==========");
                 sseService.sendRoomUserCntEvent(chatRoom);
             }
+            // 방 설정 변경 (방 이름, 최대 인원 수)
+            case ROOM_UPDATE -> {
+                log.info("===========roomSetting==========");
+                sseService.sendChangeRoomSettingEvent(chatRoom);
+            }
         }
     }
 }
