@@ -28,4 +28,9 @@ public class ChatKafkaProducer {
         KafkaRoomEvent kafkaRoomEvent = KafkaRoomEvent.of(chatRoom.getRoomId(), chatRoom.getInstanceId(), RoomEvent.ROOM_USER_CNT);
         kafkaTemplate.send("room-events", chatRoom.getRoomId(), kafkaRoomEvent);
     }
+
+    public void sendChangedRoomSettingEvent(ChatRoom chatRoom) {
+        KafkaRoomEvent kafkaRoomEvent = KafkaRoomEvent.of(chatRoom.getRoomId(), chatRoom.getInstanceId(), RoomEvent.ROOM_UPDATE);
+        kafkaTemplate.send("room-events", chatRoom.getRoomId(), kafkaRoomEvent);
+    }
 }
