@@ -201,9 +201,9 @@ const QRLogin = {
     */
     showRetryButton: function() {
         let self = this;
-        self.$retryBtn.style.display = 'block';
-        self.$cancelBtn.textContent = '로그인 화면으로';
-        self.$instructions.style.display = 'none';
+        self.$retryBtn.css('display', 'block');
+        self.$cancelBtn.text('로그인 화면으로');
+        self.$instructions.css('display', 'none');
     },
     /*
     * 취소 버튼 클릭
