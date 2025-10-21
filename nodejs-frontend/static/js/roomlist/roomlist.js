@@ -34,8 +34,8 @@ const roomList = {
     const lockIcon = isSecret ? '🔒︎' : '';
     const btnSetting = `<button class='btn btn-primary btn-sm configRoomBtn' data-room-id='${room.roomId}'>채팅방 설정</button>`;
     const roomNameHtml = isSecret
-        ? `<a href="#enterRoomModal" data-bs-toggle="modal" class="enterRoomBtn" data-room-id="${room.roomId}">${room.roomName}</a>`
-        : `<a href="#" class="directEnterBtn" data-room-id="${room.roomId}">${room.roomName}</a>`;
+        ? `<a href="#enterRoomModal" data-bs-toggle="modal" class="enterRoomBtn" id="showPasswordModal" data-room-id="${room.roomId}">${room.roomName}</a>`
+        : `<a href="#" class="directEnterBtn" id="directEnterBtn" data-room-id="${room.roomId}">${room.roomName}</a>`;
 
     if ($('#roomTableBody').find(`[data-room-id='${room.roomId}']`).length === 0) {
       const html = `

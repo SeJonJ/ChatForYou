@@ -43,7 +43,12 @@ public class LoginServiceImpl implements LoginService {
 
     @Transactional
     @Override
-    public GoogleOAuth checkSocialUser(@NonNull String accessToken, @NonNull String refreshToken, @NonNull String name, @NonNull String email, boolean emailVerified, String photo) throws BadRequestException {
+    public GoogleOAuth checkSocialUser(@NonNull String accessToken,
+                                       @NonNull String refreshToken,
+                                       @NonNull String name,
+                                       @NonNull String email,
+                                       boolean emailVerified,
+                                       String photo) throws BadRequestException {
         if (!emailVerified) {
             throw new BadRequestException("This email is not verified !!!");
         }

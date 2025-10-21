@@ -12,7 +12,7 @@ public class TokenUtils {
     /**
      *  google oauth 토큰 검증
      */
-    public FirebaseToken checkGoogleOAuthToken(String token) throws Exception {
+    public static FirebaseToken checkGoogleOAuthToken(String token) throws Exception {
         if(StringUtil.isNullOrEmpty(token)) throw new ExceptionController.NotExistTokenException("token is null or empty");
         try{
             return FirebaseAuth.getInstance().verifyIdToken(token);

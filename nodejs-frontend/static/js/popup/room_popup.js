@@ -20,7 +20,7 @@ const RoomPopup = {
         const self = this;
 
         // 비밀방 패스워드 모달
-        $(document).off('click', '.enterRoomBtn').on('click', '.enterRoomBtn', function(e) {
+        $(document).off('click', '#showPasswordModal').on('click', '#showPasswordModal', function(e) {
             e.preventDefault();
             self.roomId = $(this).data('room-id');
             $('#enterRoomModal').modal('show');
@@ -33,7 +33,7 @@ const RoomPopup = {
         });
 
         // 일반방 입장
-        $(document).off('click', '.directEnterBtn').on('click', '.directEnterBtn', function(e) {
+        $(document).off('click', '#directEnterBtn').on('click', '#directEnterBtn', function(e) {
             e.preventDefault();
             self.roomId = $(this).data('room-id');
             self.enterRoom();

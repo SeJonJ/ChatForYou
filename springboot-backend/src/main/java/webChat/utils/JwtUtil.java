@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import webChat.controller.ExceptionController;
 import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;

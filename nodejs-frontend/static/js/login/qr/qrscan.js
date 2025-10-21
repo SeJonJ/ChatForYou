@@ -44,7 +44,7 @@ const QRScan = {
              callbacks: {
                  signInSuccessWithAuthResult: async (authResult) => {
                      console.log('Firebase 로그인 성공:', authResult.user.email);
-                     const user = authResult.user;
+                     const {user} = authResult;
                      self.authenticateSession(user);
                      return false;
                  },

@@ -29,8 +29,8 @@ const QRLogin = {
             console.log('[QR Login] 세션 생성 성공:', result);
             self.sessionId = result.data.sessionId;
             
-            let qrUrl = result.data.qrUrl;
-            let qrImage = result.data.qrImage;
+            const {qrUrl} = result.data;
+            const {qrImage} = result.data;
 
             console.log('[QR Login] 세션 생성 성공:', self.sessionId);
             console.log('[QR Login] QR 데이터:', qrUrl);

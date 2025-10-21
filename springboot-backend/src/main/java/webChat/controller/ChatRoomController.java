@@ -53,7 +53,7 @@ public class ChatRoomController {
             @RequestBody ChatRoomInVo chatRoomInVo) throws Exception {
 
         // token 확인
-        FirebaseToken token = new TokenUtils().checkGoogleOAuthToken(authorization);
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
         OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
 
         if (oauthRedis == null) {
@@ -86,7 +86,7 @@ public class ChatRoomController {
             HttpServletResponse response) throws Exception {
 
         // token 확인
-        FirebaseToken token = new TokenUtils().checkGoogleOAuthToken(authorization);
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
         OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
 
         if (oauthRedis == null) {
@@ -151,7 +151,7 @@ public class ChatRoomController {
             @RequestParam("roomPwd") String roomPwd,
             @RequestHeader("Authorization") String authorization) throws Exception {
 
-        FirebaseToken token = new TokenUtils().checkGoogleOAuthToken(authorization);
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
         OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
 
         if (oauthRedis == null) {
