@@ -173,8 +173,8 @@ public class ExceptionController {
 
     public static class SyncGameRound extends BadRequestException {
 
-        public SyncGameRound(String message) {
-            super(message);
+        public SyncGameRound(int message) {
+            super(String.valueOf(message));
         }
     }
 
@@ -184,7 +184,7 @@ public class ExceptionController {
         Map<String, Object> result = new HashMap<>();
         result.put("code", "40040");
         result.put("message", "Syncing game round info.");
-        result.put("data", Integer.parseInt(gameRound));
+        result.put("data", gameRound);
         return result;
     }
 
@@ -221,4 +221,59 @@ public class ExceptionController {
         e.printStackTrace();
     }
 
+    public static class NotExistUserException extends BadRequestException {
+        public NotExistUserException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(NotExistUserException.class)
+    public @ResponseBody Map<String, Object> notExistUser(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40050");
+        result.put("message", "Not Exist Account");
+        return result;
+    }
+
+    public static class TokenExpiredException extends BadRequestException {
+        public TokenExpiredException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(TokenExpiredException.class)
+    public @ResponseBody Map<String, Object> tokenExpiredException(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40051");
+        result.put("message", "Token Expired");
+        return result;
+    }
+
+    public static class NotExistTokenException extends BadRequestException {
+        public NotExistTokenException(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(NotExistTokenException.class)
+    public @ResponseBody Map<String, Object> notExistTokenException(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40052");
+        result.put("message", "Not Exist Token");
+        return result;
+    }
+
+    public static class ExpiredQRSession extends BadRequestException {
+        public ExpiredQRSession(String message) {
+            super(message);
+        }
+    }
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ExpiredQRSession.class)
+    public @ResponseBody Map<String, Object> ExpiredQRSession(){
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40060");
+        result.put("message", "QR Session Expired");
+        return result;
+    }
 }

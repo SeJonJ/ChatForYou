@@ -9,6 +9,7 @@ import webChat.model.redis.DataType;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.out.ChatRoomOutVo;
+import webChat.model.user.UserDto;
 import webChat.service.chatroom.ChatRoomService;
 import webChat.service.redis.RedisService;
 import webChat.utils.JwtUtil;
@@ -68,7 +69,7 @@ public class AdminController {
         }
         List<ChatRoomOutVo> responses = new ArrayList<>();
         chatRoomService.getRoomList("", Integer.parseInt(pageNumStr), Integer.parseInt(pageSizeStr), true).forEach(room -> {
-            responses.add(ChatRoomOutVo.ofJoin(room));
+            responses.add(ChatRoomOutVo.ofJoin(room, UserDto.ofAdmin()));
         });
         return ResponseEntity.ok(responses);
     }

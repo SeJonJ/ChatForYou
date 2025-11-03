@@ -254,7 +254,8 @@ function register() {
                         initTurnServer();
                         // 방 정보가 있으면 필요한 데이터 할당
                         if (kurentoRoomInfo) {
-                            userId = kurentoRoomInfo.userId || kurentoRoomInfo.uuid;
+                            // TODO userId 는 '@' 가 있어서 사용 불가능
+                            userId = kurentoRoomInfo.nickName || kurentoRoomInfo.uuid;
                             nickName = kurentoRoomInfo.nickName;
                             roomId = kurentoRoomInfo.roomId;
                             roomName = kurentoRoomInfo.roomName;
@@ -267,7 +268,7 @@ function register() {
                         let message = {
                             id: 'joinRoom',
                             nickName : nickName,
-                            userId: userId,
+                            userId: nickName,
                             roomId: roomId,
                         }
                         sendMessageToServer(message);
@@ -277,9 +278,13 @@ function register() {
         };
         const errorCallback = (error) => {
             console.error('방 정보 조회 실패:', error);
+            if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
+                self.showToast('로그인이 필요한 서비스입니다.');
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+            }
         };
         // AJAX 요청 실행
-        ajax(url, 'GET', false, '', successCallback, errorCallback);
+        tokenAjax(url, 'GET', false, '', successCallback, errorCallback);
     } catch (e) {
         console.error('kurentoRoomInfo 파싱 오류:', e);
     }
@@ -444,7 +449,7 @@ window.onbeforeunload = function () {
 // 결국 replace  되기 때문에 얘도 onbeforeunload 를 탄다
 $('#button-leave').on('click', function(){
     setCookie('room-id', '', -1); // 쿠키 삭제
-    location.replace(window.__CONFIG__.BASE_URL);
+    location.replace(window.__CONFIG__.BASE_URL + '/roomlist.html');
 });
 
 function leaveRoom(type) {

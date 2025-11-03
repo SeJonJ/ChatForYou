@@ -1,5 +1,6 @@
 package webChat.controller;
 
+import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -7,9 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import webChat.model.login.OauthRedis;
+import webChat.model.redis.DataType;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.routing.RoutingCookie;
@@ -19,11 +20,14 @@ import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
+import webChat.model.user.UserDto;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
-import webChat.service.social.PrincipalDetails;
+import webChat.service.user.UserService;
 import webChat.utils.StringUtil;
+import webChat.utils.TokenUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,13 +41,24 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final RoutingService routingService;
     private final RoutingInstanceProvider instanceProvider;
+    private final RedisService redisService;
+    private final UserService userService;
 
     // 채팅방 생성
     @PostMapping("/room")
     public ResponseEntity<ChatForYouResponse> createRoom(
             HttpServletRequest request,
             HttpServletResponse response,
-            @RequestBody ChatRoomInVo chatRoomInVo) throws BadRequestException {
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody ChatRoomInVo chatRoomInVo) throws Exception {
+
+        // token 확인
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+
+        if (oauthRedis == null) {
+            throw new ExceptionController.NotExistUserException("");
+        }
 
         String roomId = routingService.getCookie(request, RoutingCookie.ROOM_ID_COOKIE);
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
@@ -65,10 +80,18 @@ public class ChatRoomController {
     // 채팅방 입장
     @GetMapping("/room/{roomId}")
     public ResponseEntity<ChatForYouResponse> joinRoom(
-            Model model,
             @PathVariable String roomId,
+            @RequestHeader("Authorization") String authorization,
             HttpServletRequest request,
-            HttpServletResponse response) throws BadRequestException {
+            HttpServletResponse response) throws Exception {
+
+        // token 확인
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+
+        if (oauthRedis == null) {
+            throw new ExceptionController.NotExistUserException("");
+        }
 
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
 
@@ -91,12 +114,11 @@ public class ChatRoomController {
             }
         }
 
-        model.addAttribute("room", chatRoom);
-
         if (ChatType.MSG.equals(chatRoom.getChatType())) {
             return ResponseEntity.ok(null);
         }else{
-            return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom));
+            UserDto userDto = userService.getUserInfo(oauthRedis);
+            return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom, userDto));
         }
     }
 
@@ -104,8 +126,7 @@ public class ChatRoomController {
     public ResponseEntity<List<ChatRoomOutVo>> goChatRooms(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNum", required = false, defaultValue = "0") String pageNumStr,
-            @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr,
-            @AuthenticationPrincipal PrincipalDetails principalDetails){
+            @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr){
         List<ChatRoomOutVo> responses = new ArrayList<>();
 
         // TODO 로그인 기능 도입 시 필요
@@ -127,7 +148,15 @@ public class ChatRoomController {
     @PostMapping(value = "/room/validatePwd/{roomId}")
     public ResponseEntity<ChatForYouResponse> validatePwd(
             @PathVariable String roomId,
-            @RequestParam("roomPwd") String roomPwd) throws BadRequestException {
+            @RequestParam("roomPwd") String roomPwd,
+            @RequestHeader("Authorization") String authorization) throws Exception {
+
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+
+        if (oauthRedis == null) {
+            throw new ExceptionController.NotExistUserException("");
+        }
 
         // 넘어온 roomId 와 roomPwd 를 이용해서 비밀번호 찾기
         // 찾아서 입력받은 roomPwd 와 room pwd 와 비교해서 맞으면 true, 아니면  false

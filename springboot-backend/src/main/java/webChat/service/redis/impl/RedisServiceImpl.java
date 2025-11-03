@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import webChat.model.login.OauthRedis;
+import webChat.model.login.QRSession;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
@@ -339,6 +341,8 @@ public class RedisServiceImpl implements RedisService {
         String redisKey = "";
         if (DataType.LOGIN_USER.equals(dataType) || DataType.USER_REFRESH_TOKEN.equals(dataType) || DataType.USER_LAST_LOGIN_DATE.equals(dataType)) {
             redisKey = key.contains("user:") ? key : "user:" + key;
+        } else if (DataType.SOCIAL_USER.equals(dataType)) {
+            redisKey = SOCIAL_USER_PREFIX.getPrefix() + key;
         } else {
             redisKey = makeRedisKey(key);
         }
@@ -359,6 +363,8 @@ public class RedisServiceImpl implements RedisService {
                 return clazz.cast(slaveTemplate.opsForValue().get(key));
             case INSTANCE_COOKIE:
                 return clazz.cast(slaveTemplate.opsForValue().get(key));
+            case SOCIAL_USER:
+                return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.SOCIAL_USER.getType()));
             default:
                 throw new BadRequestException("Dose Not Exist DataType");
         }
@@ -465,7 +471,7 @@ public class RedisServiceImpl implements RedisService {
                 }
 
                 return roomName.equals(roomNameVal.toString())
-                        && RoomState.ACTIVE.equals(stateVal);
+                        && (RoomState.ACTIVE.equals(stateVal) || RoomState.CREATED.equals(stateVal));
             } catch (Exception e) {
                 log.error("Error occurred while checking room state in Redis for key: {}", key, e);
                 return false;
@@ -514,13 +520,13 @@ public class RedisServiceImpl implements RedisService {
      */
     @Override
     public Map<String, String> getAllInstanceCookies() {
-        String pattern = RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + "*";
+        String pattern = INSTANCE_COOKIE_PREFIX.getPrefix() + "*";
         Set<String> keys = slaveTemplate.keys(pattern);
 
         Map<String, String> cookieMap = new HashMap<>();
         if (!CollectionUtils.isEmpty(keys)) {
             for (String key : keys) {
-                String instanceId = key.replace(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix(), "");
+                String instanceId = key.replace(INSTANCE_COOKIE_PREFIX.getPrefix(), "");
                 // Replication lag 보안을 위해 master 에서 읽어옴
                 String cookie = (String) masterTemplate.opsForValue().get(key);
                 if (cookie != null) {
@@ -531,4 +537,29 @@ public class RedisServiceImpl implements RedisService {
         return cookieMap;
     }
 
+    @Override
+    public void insertGoogleOauthToken(OauthRedis oauthRedis, long time) {
+        String redisKey = OAUTH_PREFIX.getPrefix() + oauthRedis.getEmail();
+        masterTemplate.opsForHash().put(redisKey, DataType.SOCIAL_USER.getType(), oauthRedis);
+        masterTemplate.opsForHash().put(redisKey, "email", oauthRedis.getEmail());
+        masterTemplate.opsForHash().put(redisKey, "nickname", oauthRedis.getEmail().split("@")[0]);
+        masterTemplate.opsForHash().put(redisKey, "lastLoginDate", time);
+    }
+
+    @Override
+    public void deleteLoginInfo(String email) {
+        masterTemplate.delete(SOCIAL_USER_PREFIX.getPrefix() + email);
+    }
+
+    @Override
+    public void insertQRSession(QRSession qrSession){
+        String redisKey = QR_SESSION_PREFIX.getPrefix() + qrSession.getSessionId();
+        masterTemplate.opsForValue().set(redisKey, qrSession, 5, TimeUnit.MINUTES);
+    }
+
+    @Override
+    public QRSession getQRSession(String sessionId){
+        String redisKey = QR_SESSION_PREFIX.getPrefix() + sessionId;
+        return (QRSession) slaveTemplate.opsForValue().get(redisKey);
+    }
 }

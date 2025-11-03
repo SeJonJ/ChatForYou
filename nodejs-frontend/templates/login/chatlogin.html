@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<base href="/chatforyou/">
+	<title>Chat For You Login</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--===============================================================================================-->
+	<link rel="icon" type="image/png" href="static/images/login/icons/favicon.ico"/>
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/bootstrap/css/bootstrap.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/fonts/font-awesome-4.7.0/css/font-awesome.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/fonts/iconic/css/material-design-iconic-font.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/animate/animate.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/css-hamburgers/hamburgers.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/animsition/css/animsition.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/select2/select2.min.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/vendor/daterangepicker/daterangepicker.css">
+<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="static/css/login/util.css">
+  <link rel="stylesheet" href="static/css/chatroom/common.css">
+<!--===============================================================================================-->
+</head>
+<body class="page-login">
+  <div class="login">
+    <div class="login__container">
+      <div class="login__wrap">
+        <form class="login-form" autocomplete="off">
+          <div class="login-form__logo">
+            <img src="static/images/logo/chatforyou_logo.png" alt="ChatForYou Logo">
+          </div>
+
+          <h1 class="login-form__title">Login</h1>
+
+          <div class="login-form__field" data-validate="Enter username">
+            <input class="login-form__input" type="text" name="username" placeholder="Username">
+            <span class="login-form__icon" data-placeholder="&#xf207;"></span>
+          </div>
+
+          <div class="login-form__field" data-validate="Enter password">
+            <input class="login-form__input" type="password" name="password" placeholder="Password">
+            <span class="login-form__icon" data-placeholder="&#xf191;"></span>
+          </div>
+
+          <div class="login-form__actions">
+            <button id="loginBtn" class="btn btn--primary">Login</button>
+          </div>
+
+          <div class="login-form__social">
+            <button type="button" id="googleOauth" class="btn btn--google"></button>
+            <button type="button" id="naverOauth" class="btn btn--naver"></button>
+          </div>
+
+          <div class="login-form__guest display-none">
+            <a class="login-form__link" href="/">로그인 없이 채팅하기</a>
+          </div>
+          
+          <div class="divider">또는</div>
+
+          <!-- QR 로그인 -->
+          <button class="qr-login-btn" id="qrLoginBtn" type="button">
+            <span class="qr-icon">QR 코드로 로그인</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+	<div id="dropDownSelect1"></div>
+	
+<!--===============================================================================================-->
+	<script src="static/vendor/jquery/jquery-3.2.1.min.js"></script>
+<!--===============================================================================================-->
+	<script src="static/vendor/animsition/js/animsition.min.js"></script>
+<!--===============================================================================================-->
+	<script src="static/vendor/bootstrap/js/popper.js"></script>
+	<script src="static/vendor/bootstrap/js/bootstrap.min.js"></script>
+<!--===============================================================================================-->
+	<script src="static/vendor/select2/select2.min.js"></script>
+<!--===============================================================================================-->
+	<script src="static/vendor/daterangepicker/moment.min.js"></script>
+	<script src="static/vendor/daterangepicker/daterangepicker.js"></script>
+<!--===============================================================================================-->
+	<script src="static/vendor/countdowntime/countdowntime.js"></script>
+<!--===============================================================================================-->
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-auth.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-firestore.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.6.5/firebase-storage.js"></script>
+  <script src="js/common/common.js"></script>
+	<script src="js/login/main.js"></script>
+	<script src="config/config.js"></script>
+	<script src="js/common/ajaxUtil.js"></script>
+
+</body>
+</html>

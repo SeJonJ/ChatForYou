@@ -1,2 +1,8 @@
 /* _mixins.scss */
 @use "variables" as *;
+
+@mixin flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

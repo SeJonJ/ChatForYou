@@ -5,28 +5,30 @@ $color-black: #000000;
 // Primary / Accent (ChatForYou 로고 기반)
 $color-primary: #9a4dff;
 $color-accent: #d15fff;
-$gradient-start: #8e4fff;
-$gradient-end: #e079ff;
+
+// Gradient (ChatForYou 시그니처)
+$gradient-start: #8e4fff; // 그라데이션 시작
+$gradient-end: #e079ff; // 그라데이션 끝
 
 // Gray Scale
-$color-gray-100: #f9f9fc;
-$color-gray-200: #f4f4f9;
-$color-gray-300: #e9e9f0;
-$color-gray-400: #c8c8d5;
-$color-gray-500: #9999aa;
-$color-gray-600: #77778a;
-$color-gray-700: #55556b;
-$color-gray-800: #333348;
-$color-gray-900: #1f1f2e; // 다크 배경에 적합
+$color-gray-100: #faf9fd;
+$color-gray-200: #f5f2fa;
+$color-gray-300: #e8e4f2;
+$color-gray-400: #c6bedc;
+$color-gray-500: #9e96b8;
+$color-gray-600: #7a7293;
+$color-gray-700: #5a536f;
+$color-gray-800: #38314b;
+$color-gray-900: #1f1a2e;
 
 // Table & UI
 $color-border: $color-gray-400;
 $color-placeholder: $color-gray-600;
-$color-text: #2d2d3c; // 기본 텍스트: 가독성 있는 다크 그레이
+$color-text: #2a213c;
 
 // BACKGROUND GRADIENTS
-$background-light: linear-gradient(135deg, $gradient-start, $gradient-end); // ChatForYou 스타일
-$background-dark: linear-gradient(135deg, #1f1f2e, #2c2f36); // 다크 모드에 어울리는 보라빛 계열
+$background-light: linear-gradient(135deg, $gradient-start, $gradient-end);
+$background-dark: linear-gradient(135deg, #1f1a2e, #2c2f36);
 
 // FONT
 $font-base:
@@ -39,8 +41,8 @@ $font-size-base: 1rem;
 $line-height-base: 1.58;
 
 // BUTTON
-$btn-radius: 4px; // 약간 더 부드러운 테두리
-$btn-shadow: 0 2px 6px rgba(154, 77, 255, 0.2); // 보라색 그림자
+$btn-radius: 6px;
+$btn-shadow: 0 4px 10px rgba($color-primary, 0.25);
 
 // Z-INDEX
 $z-toast: 9999;

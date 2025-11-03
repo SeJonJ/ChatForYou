@@ -19,10 +19,18 @@ const RoomSettingsPopup = {
      */
     initEvents: function () {
         const self = this;
+        
+        if (localStorage.getItem('access_token') != null) {
+            $('#logoutBtn').removeClass('display-none');
+            $('#loginBtn').addClass('display-none');
+        } else {
+            $('#loginBtn').removeClass('display-none');
+            $('#logoutBtn').addClass('display-none');
+        }
 
         // 방 설정 모달 버튼 클릭
         $(document).off('click', '.configRoomBtn').on('click', '.configRoomBtn', function () {
-            self.roomId = $(this).data('id');
+            self.roomId = $(this).data('room-id');
             $('#validatePwdModal').modal('show');
         });
 
@@ -39,6 +47,32 @@ const RoomSettingsPopup = {
         // 방 수정 저장 버튼 클릭
         $(document).off('click', '#saveRoomConfigBtn').on('click', '#saveRoomConfigBtn', function () {
             self.saveRoomConfig();
+        });
+
+        // 로그인 버튼 클릭
+        $('#loginBtn').on('click', function() {
+            window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+        });
+
+        // 로그아웃 버튼 클릭
+        $('#logoutBtn').on('click', function() {
+            let url = window.__CONFIG__.API_BASE_URL + '/login/logout';
+            var requestData = {
+                email: localStorage.getItem('email')
+            };
+
+            var successCallback = function(data) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('email');
+                localStorage.removeItem('type');
+                localStorage.removeItem('nickname');
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+            };
+            var errorCallback = function(data) {
+                debugger;
+            };
+            tokenAjax(url, 'POST', true, requestData, successCallback, errorCallback);
         });
 
         // 비밀번호 변경 체크박스
@@ -107,15 +141,17 @@ const RoomSettingsPopup = {
         };
 
         let errorCallback = function (error) {
-            if (error.responseJSON && error.responseJSON.message) {
-                self.showToast(error.responseJSON.message, 'error');
+            if (['40050', '40051', '40052'].includes(error.responseJSON?.code)) {
+                self.showToast('로그인이 필요한 서비스입니다.');
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
             } else {
+                self.showToast(error.responseJSON.message, 'error');
                 self.showToast('방 정보 로딩 중 오류가 발생했습니다.', 'error');
-            }
+            }        
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId;
-        ajax(url, 'GET', true, '', successCallback, errorCallback);
+        tokenAjax(url, 'GET', true, '', successCallback, errorCallback);
     },
 
     /**
@@ -133,7 +169,7 @@ const RoomSettingsPopup = {
         };
 
         let errorCallback = function (error) {
-            if (error.responseJSON && error.responseJSON.message) {
+            if (error.responseJSON?.message) {
                 self.showToast(error.responseJSON.message, 'error');
             } else {
                 self.showToast('비밀번호 확인 중 오류가 발생했습니다.', 'error');
@@ -145,7 +181,7 @@ const RoomSettingsPopup = {
         const requestData = {
             roomPwd: password
         };
-        ajax(url, 'POST', true, requestData, successCallback, errorCallback);
+        tokenAjax(url, 'POST', true, requestData, successCallback, errorCallback);
     },
 
     /**
@@ -204,7 +240,7 @@ const RoomSettingsPopup = {
             maxUserCnt: parseInt(maxUserCnt),
             roomPwd: newPwd
         };
-        ajaxToJson(url, 'PUT', true, requestData, successCallback, errorCallback);
+        tokenAjaxToJson(url, 'PUT', true, requestData, successCallback, errorCallback);
     },
 
     /**
@@ -228,7 +264,7 @@ const RoomSettingsPopup = {
         };
 
         let errorCallback = function (error) {
-            if (error.responseJSON && error.responseJSON.message) {
+            if (error.responseJSON?.message) {
                 self.showToast(error.responseJSON.message, 'error');
             } else {
                 self.showToast('방 삭제 중 오류가 발생했습니다.', 'error');
@@ -236,7 +272,7 @@ const RoomSettingsPopup = {
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId;
-        ajax(url, 'DELETE', true, '', successCallback, errorCallback);
+        tokenAjax(url, 'DELETE', true, '', successCallback, errorCallback);
     },
 
     /**

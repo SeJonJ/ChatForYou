@@ -7,4 +7,5 @@ public enum ChatForYouResponseResult {
     SUCCESS,
     REDIRECT_ROOM,
     REDIRECT_DASHBOARD,
+    ;
 }

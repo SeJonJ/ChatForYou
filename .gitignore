@@ -143,6 +143,13 @@ springboot-backend/src/main/resources/application-*.properties
 springboot-backend/src/main/resources/ssl/
 springboot-backend/src/main/resources/keystore/
 springboot-backend/src/main/resources/secrets/
+springboot-backend/src/main/resources/firebase/
+# NetBeans (실제 사용 안 하면 삭제 가능)
+springboot-backend/nbproject/private/
+springboot-backend/nbbuild/
+springboot-backend/dist/
+springboot-backend/nbdist/
+springboot-backend/.nb-gradle/
 
 # 데이터베이스 관련
 springboot-backend/src/main/resources/data/

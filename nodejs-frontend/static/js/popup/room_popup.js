@@ -19,23 +19,23 @@ const RoomPopup = {
     bindEvents: function() {
         const self = this;
 
-        // 비밀방 입장 버튼 클릭
-        $(document).off('click', '.enterRoomBtn').on('click', '.enterRoomBtn', function(e) {
+        // 비밀방 패스워드 모달
+        $(document).off('click', '#showPasswordModal').on('click', '#showPasswordModal', function(e) {
             e.preventDefault();
-            self.roomId = $(this).data('id');
+            self.roomId = $(this).data('room-id');
             $('#enterRoomModal').modal('show');
         });
 
-        // 일반방 바로 입장 버튼 클릭
-        $(document).off('click', '.directEnterBtn').on('click', '.directEnterBtn', function(e) {
-            e.preventDefault();
-            const id = $(this).data('roomid');
-            self.chkRoomUserCnt(id);
-        });
-
-        // 비밀방 모달에서 '입장하기' 버튼 클릭
+        // 비밀방 입장 이벤트
         $(document).off('click', '#enterRoomBtn').on('click', '#enterRoomBtn', function(e) {
             e.preventDefault();
+            self.enterSecretRoom();
+        });
+
+        // 일반방 입장
+        $(document).off('click', '#directEnterBtn').on('click', '#directEnterBtn', function(e) {
+            e.preventDefault();
+            self.roomId = $(this).data('room-id');
             self.enterRoom();
         });
 
@@ -111,8 +111,11 @@ const RoomPopup = {
             };
 
             let errorCallback = function(err) {
-                if(err.responseJSON && err.responseJSON.code === '40042'){
+                if(err.responseJSON?.code === '40042'){
                     self.showToast('이미 존재하는 방입니다. \n 다른 방 이름을 입력해주세요.');
+                } else if (['40050', '40051', '40052'].includes(err.responseJSON?.code)) {
+                    self.showToast('로그인이 필요한 서비스입니다.');
+                    window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
                 } else {
                     self.showToast('방 생성에 실패했습니다. \n 잠시뒤에 다시 시도해주세요.');
                 }
@@ -123,7 +126,7 @@ const RoomPopup = {
             };
 
             const url = window.__CONFIG__.API_BASE_URL + '/chat/room';
-            ajaxToJson(url, 'POST', true, requestData, successCallback, errorCallback);
+            tokenAjaxToJson(url, 'POST', true, requestData, successCallback, errorCallback);
         }
     },    
     /**
@@ -179,7 +182,7 @@ const RoomPopup = {
     },    /**
      * 방 입장 처리 (비밀방)
      */
-    enterRoom: function() {
+    enterSecretRoom: function() {
         const self = this;
         const pwd = $('#enterPwd').val();
         
@@ -189,38 +192,61 @@ const RoomPopup = {
         }
 
         let successCallback = function(result) {
-            if (result && result.data && result.result === 'success') {
+            if (result?.data && result?.result === 'success') {
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
                 $('#enterRoomModal').modal('hide');
-                location.href = window.__CONFIG__.BASE_URL + '/kurentoroom.html?roomId=' + self.roomId;
+
+                let url = window.__CONFIG__.BASE_URL + '/room/kurentoroom.html?roomId=' + self.roomId;
+                tokenAjax(url, 'GET', true, '', function(){
+                    console.log('tokenCheck');
+                    location.href = url;
+                }, function(error){
+                    if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
+                        self.showToast('로그인이 필요한 서비스입니다.');
+                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                    }
+                });
+                
             } else {
                 self.showToast('비밀번호가 일치하지 않습니다.', 'error');
             }
         };
 
         let errorCallback = function(error) {
-            if (error.responseJSON && error.responseJSON.message) {
-                self.showToast(error.responseJSON.message, 'error');
+            if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
+                self.showToast('로그인이 필요한 서비스입니다.');
+                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
             } else {
-                self.showToast('방 입장 중 오류가 발생했습니다.', 'error');
-            }
+                console.error(error.responseJSON.message, 'error');
+                self.showToast('비밀번호 확인 중 오류가 발생했습니다.', 'error');
+            } 
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/validatePwd/' + self.roomId;
         const requestData = { roomPwd: pwd };
-        ajax(url, 'POST', true, requestData, successCallback, errorCallback);
+        tokenAjax(url, 'POST', true, requestData, successCallback, errorCallback);
     },
 
     /**
      * 방 인원 수 체크 후 입장 (일반방)
      */
-    chkRoomUserCnt: function(roomId) {
+    enterRoom: function() {
         const self = this;
         
         let successCallback = function(result) {
-            if (result && result.data && result.result === 'success') {
+            if (result?.data && result?.result === 'success') {
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
-                location.href = window.__CONFIG__.BASE_URL + '/kurentoroom.html?roomId=' + roomId;
+
+                let url = window.__CONFIG__.BASE_URL + '/room/kurentoroom.html?roomId=' + self.roomId;
+                tokenAjax(url, 'GET', true, '', function(){
+                    console.log('tokenCheck');
+                    location.href = url;
+                }, function(error){
+                    if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
+                        self.showToast('로그인이 필요한 서비스입니다.');
+                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                    }
+                });
             } else {
                 self.showToast('현재는 방에 입장 할 수 없습니다.');
             }
@@ -234,8 +260,8 @@ const RoomPopup = {
             }
         };
 
-        const url = window.__CONFIG__.API_BASE_URL + '/chat/room/chkUserCnt/' + roomId;
-        ajax(url, 'GET', true, '', successCallback, errorCallback);
+        const url = window.__CONFIG__.API_BASE_URL + '/chat/room/chkUserCnt/' + self.roomId;
+        tokenAjax(url, 'GET', true, '', successCallback, errorCallback);
     },    /**
      * 토스트 메시지 표시
      */

@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-frontend",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Node.js static server for ChatForYou frontend",
   "main": "server.js",
   "scripts": {
@@ -14,5 +14,10 @@
   "license": "by-nc-sa 4.0",
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "firebase": "^8.6.5",
+    "firebase-app": "^0.0.1",
+    "firebase-tools": "^14.10.1"
   }
 }
