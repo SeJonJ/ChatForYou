@@ -117,10 +117,15 @@ try {
     const mappingPath = path.join(__dirname, '../../build-scripts/convert_path.json');
     if (fs.existsSync(mappingPath)) {
         pathMapping = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
-        log.info(`경로 매핑 설정 로드됨: ${Object.keys(pathMapping).length}개 파일`);
+        log.info(`경로 매핑 설정 로드됨: ${Object.keys(pathMapping).length}개 경로`);
+        if (isDev) {
+            log.debug(`경로 매핑 내용: ${JSON.stringify(pathMapping, null, 2)}`);
+        }
+    } else {
+        log.warn(`경로 매핑 파일이 존재하지 않음: ${mappingPath}`);
     }
 } catch (error) {
-    log.warn(`경로 매핑 설정 로드 실패: ${error.message}`);
+    log.error(`경로 매핑 설정 로드 실패: ${error.message}`);
 }
 
 // 자동 업데이트 설정 - 플랫폼별 처리
@@ -690,10 +695,16 @@ app.on('web-contents-created', (event, contents) => {
                 let correctPath;
                 let mappedPath = null;
                 
+                // pathMapping 객체가 비어있는지 확인
+                if (Object.keys(pathMapping).length === 0) {
+                    log.warn(`경로 매핑이 비어있음. 파일: ${fileName}`);
+                }
+                
                 // 새로운 구조에서 파일명 찾기: {"경로": ["파일명들"]}
                 for (const [dirPath, fileList] of Object.entries(pathMapping)) {
-                    if (fileList.includes(fileName)) {
+                    if (Array.isArray(fileList) && fileList.includes(fileName)) {
                         mappedPath = dirPath;
+                        log.debug(`경로 매핑 발견: ${fileName} -> ${dirPath}`);
                         break;
                     }
                 }
@@ -701,11 +712,13 @@ app.on('web-contents-created', (event, contents) => {
                 if (mappedPath) {
                     // 설정 파일에서 매핑된 경로 사용
                     correctPath = path.join(__dirname, '..', mappedPath, fileName);
-                    log.debug(`동적 경로 매핑: ${fileName} -> ${mappedPath}`);
+                    log.debug(`동적 경로 매핑 적용: ${fileName} -> ${mappedPath} -> ${correctPath}`);
                 } else {
                     // 기본 경로 사용
                     correctPath = path.join(__dirname, '../templates', fileName);
-                    log.debug(`기본 경로 사용: ${fileName} -> templates`);
+                    log.warn(`경로 매핑을 찾을 수 없음. 기본 경로 사용: ${fileName} -> ${correctPath}`);
+                    log.warn(`원본 URL: ${url}`);
+                    log.warn(`사용 가능한 매핑: ${JSON.stringify(Object.keys(pathMapping))}`);
                 }
                 const correctUrl = `file://${correctPath}${queryString}`;
                 
@@ -715,7 +728,7 @@ app.on('web-contents-created', (event, contents) => {
                     return;
                 }
                 
-                log.debug(`HTML 네비게이션 수정: ${url} -> ${correctUrl}`);
+                log.info(`HTML 네비게이션 수정: ${fileName} -> ${correctPath}`);
                 contents.loadURL(correctUrl);
                 return;
             }
