@@ -9,4 +9,5 @@ public interface FriendService {
     List<FriendDto> getFriendList(String userId);
     void addFriend(FriendInVo friendInVo);
     void deleteFriend(String userId, String friendId);
+    void updateFriend(FriendInVo friendInVo, String userId);
 }

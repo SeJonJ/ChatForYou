@@ -42,4 +42,14 @@ public class FriendServiceImpl implements FriendService {
         }
         friendsRepository.delete(friend);
     }
+
+    @Override
+    public void updateFriend(FriendInVo friendRequest, String userId) {
+        Friend friend = friendsRepository.findByUserIdAndFriendId(userId, friendRequest.getFriendId());
+        if (friend == null) {
+            throw new RuntimeException("Not exist friend");
+        }
+        friend.setNickname(friendRequest.getNickname());
+        friendsRepository.save(friend);
+    }
 }

@@ -80,5 +80,25 @@ public class FriendController {
                 .build());
     }
 
+    /**
+     *  친구 수정
+     *  닉네임 수정만 임시 개발
+     *
+     */
+    @PostMapping(value = "/update", produces = "application/json; charset=UTF8")
+    public ResponseEntity<ChatForYouResponse> updateFriend(@RequestHeader("Authorization") String authorization,
+                                                           @RequestBody FriendInVo friendInVo) throws Exception {
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        if (!token.isEmailVerified()) {
+            throw new BadRequestException("This account is not verified.");
+        }
+        String userId = token.getEmail();
+        friendService.updateFriend(friendInVo, userId);
+
+        return ResponseEntity.ok(ChatForYouResponse.builder()
+                .result("success")
+                .build());
+    }
+
 
 }
