@@ -68,6 +68,22 @@ public class KurentoRoomManager {
     // 참여자 map 에 유저명과 유저에 관한 정보를 갖는 userSession 객체를 저장
     kurentoParticipantService.addParticipant(room.getRoomId(), participant);
 
+    // 방이 녹화 중이면 새 참여자를 Composite에 연결
+    if (room.isRoomRecording()) {
+      log.info("ROOM {}: Recording in progress, connecting new participant {} to Composite", room.getRoomId(), userId);
+      try {
+        org.kurento.client.Composite composite = webChat.repository.KurentoCompositeMap.getComposite(room.getRoomId());
+        if (composite != null) {
+          participant.connectToComposite(composite);
+          log.info("ROOM {}: New participant {} connected to Composite successfully", room.getRoomId(), userId);
+        } else {
+          log.warn("ROOM {}: Composite not found for recording room", room.getRoomId());
+        }
+      } catch (Exception e) {
+        log.error("ROOM {}: Failed to connect new participant {} to Composite: {}", room.getRoomId(), userId, e.getMessage());
+      }
+    }
+
     // 참여자 정보를 기존 참여자들에게 알림
     this.sendParticipantNames(room, participant);
 
