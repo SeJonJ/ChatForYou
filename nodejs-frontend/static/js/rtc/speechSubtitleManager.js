@@ -328,8 +328,10 @@ class SpeechRecognitionManager {
         
         try {
             const message = {
-                id: 'textOverlay',
+                event: 'TEXT_OVERLAY',
                 roomId: roomId,
+                senderId: userId,
+                senderNickName: nickName,
                 text: text
             };
             
@@ -826,6 +828,65 @@ function applySpeechRecognitionPreset(preset) {
     return false;
 }
 
+/**
+ * 자막 활성화 여부 확인
+ */
+function isSpeechRecognitionEnabled() {
+    if (speechRecognitionManager) {
+        return speechRecognitionManager.isEnabled;
+    }
+    return false;
+}
+
+/**
+ * 녹화 기능에 따른 자막 기능 처리
+ */
+function handleRecordingStart() {
+    if (speechRecognitionManager) {
+        speechRecognitionManager.stop();
+    }
+}
+
+function handleRecordingStop() {
+    if (speechRecognitionManager) {
+        speechRecognitionManager.start();
+    }
+}
+
+/**
+ * 녹화 여부에 따른 자막 기능 처리
+ * @param {boolean} isRecording 
+ */
+function handlingSubtitleByRecording(isRecording) {
+    if(isRecording) {
+        Toastify({
+            text: '녹화 시작으로 인해 자막 기능을 비활성화합니다',
+            duration: 3000,
+            newWindow: true,
+            close: true,
+            gravity: 'top',
+            position: 'center',
+        }).showToast();
+
+        stopSpeechRecognition();
+        
+        // 자막 버튼 disabled 처리
+        $('#subtitleBtn').prop('disabled', true);
+    } else {
+        Toastify({
+            text: '녹화 중지로 인해 자막 기능을 다시 사용할 수 있습니다',
+            duration: 3000,
+            newWindow: true,
+            close: true,
+            gravity: 'top',
+            position: 'center',
+        }).showToast();
+
+        // 자막 버튼 enabled 처리
+        $('#subtitleBtn').prop('disabled', false);
+    }
+}
+
 // 전역 스코프에 유틸리티 함수들 노출
 window.speechRecognitionUtils = {
     updateConfig: updateSpeechRecognitionConfig,
@@ -834,5 +895,6 @@ window.speechRecognitionUtils = {
     cleanup: cleanupSpeechRecognition,
     restart: restartSpeechRecognition,
     debug: debugSpeechRecognition,
-    applyPreset: applySpeechRecognitionPreset
+    applyPreset: applySpeechRecognitionPreset,
+    handlingSubtitleByRecording: handlingSubtitleByRecording
 }; 

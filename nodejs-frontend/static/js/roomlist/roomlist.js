@@ -67,7 +67,7 @@ const roomList = {
     eventSource.addEventListener('roomDeleted', function(event) {
       const { roomId } = JSON.parse(event.data);
       $('#roomTableBody')
-          .find(`[data-room-id='${deletedRoomId}']`)
+          .find(`[data-room-id='${roomId}']`)
           .closest('tr')
           .remove();
     });
