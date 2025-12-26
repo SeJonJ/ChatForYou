@@ -23,7 +23,7 @@ public class KafkaTest {
     private KafkaConsumerTest kafkaConsumerTest;
 
     @Test
-    @DisplayName("kafka test")
+    @DisplayName("kafka server event test")
     void sendAndReceive() throws Exception {
         kafkaConsumerTest.resetLatch();            // Latch 초기화
         kafkaProducerTest.sendMessage("test-topic", "hello"); // 메시지 전송
