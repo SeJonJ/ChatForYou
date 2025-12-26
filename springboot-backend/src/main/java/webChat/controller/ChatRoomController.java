@@ -123,7 +123,7 @@ public class ChatRoomController {
     }
 
     @GetMapping("/room/list")
-    public ResponseEntity<List<ChatRoomOutVo>> goChatRooms(
+    public ResponseEntity<List<ChatRoomOutVo>> getChatRoomList(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNum", required = false, defaultValue = "0") String pageNumStr,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr){
@@ -136,9 +136,9 @@ public class ChatRoomController {
 //            model.addAttribute("user", principalDetails.getUser());
 //            log.debug("user [{}] ",principalDetails);
 //        }
-
 //        model.addAttribute("user", "hey");
-        chatRoomService.getRoomList(keyword, Integer.parseInt(pageNumStr), Integer.parseInt(pageSizeStr), false).forEach(room -> {
+        chatRoomService.getRoomList(keyword, Integer.parseInt(pageNumStr), Integer.parseInt(pageSizeStr), false)
+                .forEach(room -> {
             responses.add(ChatRoomOutVo.of(room));
         });
         return ResponseEntity.ok(responses);
@@ -180,14 +180,13 @@ public class ChatRoomController {
 
     // 채팅방 삭제
     @DeleteMapping("/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> delChatRoom(@PathVariable String roomId) throws BadRequestException, ExceptionController.DelRoomException {
+    public ResponseEntity<ChatForYouResponse> delChatRoom(@PathVariable String roomId) throws BadRequestException {
 
         // roomId 기준으로 chatRoomMap 에서 삭제, 해당 채팅룸 안에 있는 사진 삭제
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
                 .data(chatRoomService.delChatRoom(roomId))
                 .build());
-
     }
 
     // 유저 카운트

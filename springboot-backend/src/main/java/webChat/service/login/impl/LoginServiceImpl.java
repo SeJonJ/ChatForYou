@@ -147,7 +147,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         // 소셜 유저 체크
-        GoogleOAuth auth = checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
+        GoogleOAuth auth = this.checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
 
         // QR session 에 저장
         // TODO 굳이 저장해야하나? 삭제하면 안됨?

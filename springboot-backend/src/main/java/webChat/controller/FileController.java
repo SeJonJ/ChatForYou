@@ -14,7 +14,7 @@ import webChat.service.file.FileService;
 @Slf4j
 public class FileController {
 
-    private final FileService fileService;
+    private final FileService minioFileServiceImpl;
 
     // 프론트에서 ajax 를 통해 /upload 로 MultipartFile 형태로 파일과 roomId 를 전달받는다.
     // 전달받은 file 를 uploadFile 메서드를 통해 업로드한다.
@@ -23,7 +23,7 @@ public class FileController {
             @RequestPart("file") MultipartFile file,
             @RequestParam("roomId") String roomId){
 
-        FileDto uploadFile = fileService.uploadFile(file, roomId);
+        FileDto uploadFile = minioFileServiceImpl.uploadFile(file, roomId);
         log.info("최종 upload Data {}", uploadFile);
 
         // fileReq 객체 리턴
@@ -39,7 +39,7 @@ public class FileController {
         log.info("fileDir : fileName [{} : {}]", filePath, fileName);
         try {
             // 변환된 byte, httpHeader 와 HttpStatus 가 포함된 ResponseEntity 객체를 return 한다.
-            return fileService.getObject(fileName, filePath);
+            return minioFileServiceImpl.getObject(fileName, filePath);
         } catch (Exception e) {
             throw new ExceptionController.InternalServerError(e.getMessage());
         }
