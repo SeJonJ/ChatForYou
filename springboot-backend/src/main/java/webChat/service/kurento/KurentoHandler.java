@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.BadRequestException;
 import org.kurento.client.IceCandidate;
 import org.kurento.client.KurentoClient;
 import org.kurento.client.MediaPipeline;
@@ -14,16 +15,22 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import webChat.model.kurento.KurentoMessage;
+import webChat.model.kurento.KurentoOverlayMessage;
+import webChat.model.kurento.KurentoRTCMessage;
+import webChat.model.kurento.KurentoRecordingMessage;
+import webChat.model.record.RecordingStatus;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
 import webChat.repository.KurentoPiplineMap;
-import webChat.service.chatroom.ChatRoomService;
+import webChat.repository.KurentoRecorderMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.kafka.ChatKafkaProducer;
+import webChat.service.recording.RecordingService;
 import webChat.service.redis.RedisService;
-import webChat.utils.JsonUtils;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
@@ -45,84 +52,128 @@ public class KurentoHandler extends TextWebSocketHandler {
     // kurento room 기능
     private final KurentoRoomManager kurentoRoomManager;
     private final KurentoClient kurentoClient;
-
     private final RedisService redisService;
     private final KurentoParticipantService participantService;
     private final ChatKafkaProducer chatKafkaProducer;
     private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPiplineMap.getInstance();
+    private final RecordingService recordingService;
 
     @Override
     public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        final JsonObject jsonMessage = gson.fromJson(message.getPayload(), JsonObject.class);
-
-        String roomId = JsonUtils.getStrOrEmpty(jsonMessage, "roomId");
+        final KurentoMessage kurentoMessage = gson.fromJson(message.getPayload(), KurentoMessage.class);
         final KurentoUserSession user = participantService.getBySessionId(session);
 
         if (user != null) {
-            log.debug("Incoming message from user '{}': {}", user.getUserId(), jsonMessage);
+            log.debug("Incoming message from user '{}': {}", user.getUserId(), kurentoMessage.toString());
         } else {
-            log.debug("Incoming message from new user: {}", jsonMessage);
+            log.debug("Incoming message from new user: {}", kurentoMessage.toString());
         }
 
-        // 일전에 내가 만들었던 시그널링 서버와 동일하게 handleTextMessage 파라미터 message 로 값이 들어오면
-        // swtich 문으로 해당 message 를 잘라서 사용한다.
-        // 이때 message 는 json 형태로 들어온다
-        // key : id 에 대하여
-        switch (jsonMessage.get("id").getAsString()) {
-            case "joinRoom": // value : joinRoom 인 경우
-                joinRoom(jsonMessage, session); // joinRoom 메서드를 실행
+        // kurento event 가 어떤 내용인지 확인
+        switch (kurentoMessage.getEvent()) {
+            case JOIN_ROOM: // event 가 joinRoom 인 경우
+                joinRoom(KurentoRTCMessage.of(message.getPayload()), session); // joinRoom 메서드를 실행
                 break;
-
-            case "receiveVideoFrom": // receiveVideoFrom 인 경우
-                try {
-                    // sender 명 - 사용자명 - 과
-                    final String senderUserId = jsonMessage.get("sender").getAsString();
-                    // 유저명을 통해 session 값을 가져온다
-                    final KurentoUserSession sender = participantService.getParticipant(roomId, senderUserId);
-                    // TODO sender 예외처리
-                    // jsonMessage 에서 sdpOffer 값을 가져온다
-                    final String sdpOffer = jsonMessage.get("sdpOffer").getAsString();
-                    // 이후 receiveVideoFrom 실행 => 아마도 특정 유저로부터 받은 비디오를 다른 유저에게 넘겨주는게 아닌가...?
-                    user.receiveVideoFrom(sender, sdpOffer);
-                } catch (Exception e){
-                    e.printStackTrace();
-                    connectException(user, e);
-                }
+            case RECEIVE_VIDEO_FROM: // receiveVideoFrom 인 경우
+                processReceiveVideo(KurentoRTCMessage.of(message.getPayload()), user);
                 break;
-
-            case "leaveRoom": // 유저가 나간 경우
+            case ON_ICE_CANDIDATE: // 유저에 대해 IceCandidate 프로토콜을 실행할 때
+                processIceCandidate(KurentoRTCMessage.of(message.getPayload()), user);
+                break;
+            case LEAVE_ROOM: // 유저가 나간 경우
                 leaveRoom(user);
                 break;
-
-            case "onIceCandidate": // 유저에 대해 IceCandidate 프로토콜을 실행할 때
-                JsonObject candidate = jsonMessage.get("candidate").getAsJsonObject();
-
-                if (user != null) {
-                    IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
-                            candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
-                    user.addCandidate(cand, jsonMessage.get("name").getAsString());
-                }
+            case TEXT_OVERLAY: // 텍스트 오버레이 요청
+                processTextOverlay(KurentoOverlayMessage.of(message.getPayload()), user);
                 break;
-
-            case "textOverlay": // 텍스트 오버레이 요청
-                if (user != null) {
-                    String overlayText = JsonUtils.getStrOrEmpty(jsonMessage, "text");
-                    log.debug("Received text overlay request from user {}: {}", user.getUserId(), overlayText);
-
-                    // 텍스트 오버레이 적용
-                    user.showTextOverlay(overlayText);
-
-                    // 성공 응답 전송
-                    JsonObject response = new JsonObject();
-                    response.addProperty("id", "textOverlayResponse");
-                    response.addProperty("status", "success");
-                    response.addProperty("message", "Text overlay applied successfully");
-                    user.sendMessage(response);
-                }
+            case RECORDING_START: // 녹화 시작
+                processRecordingStart(KurentoRecordingMessage.of(message.getPayload()), user);
                 break;
-
+            case RECORDING_STOP: // 녹화 중지
+                processRecordingStop(KurentoRecordingMessage.of(message.getPayload()), user);
             default:
                 break;
+        }
+    }
+
+    private void processRecordingStart(KurentoRecordingMessage message, KurentoUserSession user) throws BadRequestException {
+        String roomId = user.getRoomId();
+        String userId = user.getUserId();
+        KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+
+        try {
+            // 방 녹화 여부 체크
+            if (room.isRoomRecording()) {
+                throw new BadRequestException("This room is already being recorded.");
+            }
+
+            // 방 녹화 권한 체크
+            if (room.isRecordingInProgress()) {
+                throw new BadRequestException("Recording already exists for this room.");
+            }
+
+            // 2. 녹화 시작
+            String recordId = recordingService.startRecording(room, user);
+
+            // 3. 방 정보 업데이트
+            redisService.updateChatRoom(room);
+
+            // 4. 성공 응답
+            JsonObject response = new JsonObject();
+            response.addProperty("id", "startRecording");
+            response.addProperty("status", RecordingStatus.RECORDING.name());
+            response.addProperty("recordId", recordId);
+            response.addProperty("message", "녹화가 시작되었습니다.");
+            user.sendMessage(response);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            log.error("Error starting recording for user {}: {}", userId, e.getMessage());
+//            sendErrorResponse(user, "startRecordingResponse", "녹화 시작 중 오류가 발생했습니다.");
+        }
+    }
+
+    private void processRecordingStop(KurentoRecordingMessage message, KurentoUserSession user) throws BadRequestException {
+        String roomId = user.getRoomId();
+        String userId = user.getUserId();
+        String recordId = message.getRecordingId();
+        KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+
+        try {
+            // 녹화 중인지 확인
+            if (!room.isRoomRecording()) {
+                // TODO 예외처리 확실하게
+                throw new IOException("No active room recording to stop for room: " + roomId);
+            }
+
+            // Map에서 실제 RecorderEndpoint가 있는지 확인
+            if (!KurentoRecorderMap.hasRecorder(roomId)) {
+                // TODO 예외처리 확실하게
+                throw new IOException("No active room recording to stop for room: " + roomId);
+            }
+
+            // 녹화 중지 권한이 있는지 확인
+            if(!room.getRecordingInfo().getRecordingUserId().equals(user.getUserId())){
+                throw new BadRequestException("You don't have permission to stop this recording");
+            }
+
+            // 녹화 정지
+            recordingService.stopRecording(room, user);
+
+            // 방 정보 업데이트
+            redisService.updateChatRoom(room);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("id", "stopRecording");
+            response.addProperty("status", RecordingStatus.STOPPED.name());
+            response.addProperty("recordId", recordId);
+            response.addProperty("message", "녹화가 완료되었습니다.");
+            user.sendMessage(response);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            log.error("Error stopping recording for user {}: {}", userId, e.getMessage());
+//            sendErrorResponse(user, "stopRecordingResponse", "녹화 정지 중 오류가 발생했습니다.");
         }
     }
 
@@ -135,11 +186,11 @@ public class KurentoHandler extends TextWebSocketHandler {
     }
 
     // 유저가 Room 에 입장했을 때
-    private void joinRoom(JsonObject params, WebSocketSession session) throws IOException {
-        // json 형태의 params 에서 room 과 userId, nickName 을 분리해온다
-        final String roomId = params.get("roomId").getAsString();
-        final String userId = params.get("userId").getAsString();
-        final String nickName = params.get("nickName").getAsString();
+    private void joinRoom(KurentoRTCMessage message, WebSocketSession session) throws IOException {
+        // kurento RTC 객체에서 각 값을 가져온다
+        final String roomId = message.getRoomId() ;
+        final String userId = message.getSenderId();
+        final String nickName = message.getSenderNickName();
 
         log.info("PARTICIPANT {}: trying to join room {}", userId, roomId);
 
@@ -157,6 +208,8 @@ public class KurentoHandler extends TextWebSocketHandler {
 
         if (!kurentoPiplineMap.containsKey(roomId)) {
             kurentoPiplineMap.put(roomId, kurentoRoom.getKurento().createMediaPipeline());
+            // userHub 초기화
+            kurentoRoom.initUserHubPort();
         }
         kurentoRoom.activate();
         kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
@@ -183,6 +236,48 @@ public class KurentoHandler extends TextWebSocketHandler {
         chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
     }
 
+    private void processReceiveVideo(KurentoRTCMessage message, KurentoUserSession user) throws IOException {
+        try {
+            // sender 명 - 사용자명 - 과
+            final String senderUserId = message.getSenderId();
+            // 유저명을 통해 session 값을 가져온다
+            final KurentoUserSession sender = participantService.getParticipant(message.getRoomId(), senderUserId);
+            // TODO sender 예외처리
+            // jsonMessage 에서 sdpOffer 값을 가져온다
+            final String sdpOffer = message.getSdpOffer();
+            // 이후 receiveVideoFrom 실행 => 아마도 특정 유저로부터 받은 비디오를 다른 유저에게 넘겨주는게 아닌가...?
+            user.receiveVideoFrom(sender, sdpOffer);
+        } catch (Exception e){
+            e.printStackTrace();
+            connectException(user, e);
+        }
+    }
+
+    private void processIceCandidate(KurentoRTCMessage message, KurentoUserSession user) throws IOException {
+        JsonObject candidate = message.getCandidate();
+
+        if (user != null) {
+            IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
+                    candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
+            user.addCandidate(cand, message.getSenderId());
+        }
+    }
+
+    private void processTextOverlay(KurentoOverlayMessage message, KurentoUserSession user) throws IOException {
+        String overlayText = message.getText();
+        log.debug("Received text overlay request from user {}: {}", user.getUserId(), overlayText);
+
+        // 텍스트 오버레이 적용
+        user.showTextOverlay(overlayText);
+
+        // 성공 응답 전송
+        JsonObject response = new JsonObject();
+        response.addProperty("id", "textOverlayResponse");
+        response.addProperty("status", "success");
+        response.addProperty("message", "Text overlay applied successfully");
+        user.sendMessage(response);
+    }
+
     private void connectException(KurentoUserSession user, Exception e) throws IOException {
         JsonObject message = new JsonObject();
         message.addProperty("id", "ConnectionFail");
@@ -190,5 +285,68 @@ public class KurentoHandler extends TextWebSocketHandler {
 
         user.sendMessage(message);
 
+    }
+
+    /**
+     * 방의 모든 참가자에게 메시지 브로드캐스트
+     * @param roomId 방 ID
+     * @param message 전송할 메시지
+     */
+    public void broadcastToRoom(String roomId, JsonObject message) {
+        try {
+            Collection<KurentoUserSession> participants = participantService.getParticipantList(roomId);
+            log.debug("Broadcasting message to {} participants in room {}", participants.size(), roomId);
+
+            for (KurentoUserSession participant : participants) {
+                try {
+                    participant.sendMessage(message);
+                } catch (IOException e) {
+                    log.error("Failed to send message to participant {}: {}",
+                             participant.getUserId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to broadcast message to room {}: {}", roomId, e.getMessage());
+        }
+    }
+
+    /**
+     * 녹화 업로드 완료 알림
+     * @param roomId 방 ID
+     * @param recordingId 녹화 ID
+     * @param downloadUrl 다운로드 URL
+     * @param fileSize 파일 크기 (bytes)
+     */
+    public void notifyRecordingUploadCompleted(String roomId, String recordingId,
+                                              String downloadUrl, long fileSize) {
+        JsonObject message = new JsonObject();
+        message.addProperty("id", "recordingUploadCompleted");
+        message.addProperty("status", RecordingStatus.COMPLETED.name());
+        message.addProperty("recordingId", recordingId);
+        message.addProperty("downloadUrl", downloadUrl);
+        message.addProperty("fileSize", fileSize);
+        message.addProperty("fileSizeMB", fileSize / 1024 / 1024);
+        message.addProperty("message", "녹화 파일 업로드가 완료되었습니다.");
+
+        broadcastToRoom(roomId, message);
+        log.info("Broadcast recording upload completed notification to room {}", roomId);
+    }
+
+    /**
+     * 녹화 업로드 실패 알림
+     * @param roomId 방 ID
+     * @param recordingId 녹화 ID
+     * @param errorMessage 에러 메시지
+     */
+    public void notifyRecordingUploadFailed(String roomId, String recordingId, String errorMessage) {
+        JsonObject message = new JsonObject();
+        message.addProperty("id", "recordingUploadFailed");
+        message.addProperty("status", RecordingStatus.FAILED.name());
+        message.addProperty("recordingId", recordingId);
+        message.addProperty("error", errorMessage);
+        message.addProperty("message", "녹화 파일 업로드에 실패했습니다.");
+
+        broadcastToRoom(roomId, message);
+        log.error("Broadcast recording upload failed notification to room {}: {}", roomId, errorMessage);
     }
 }
