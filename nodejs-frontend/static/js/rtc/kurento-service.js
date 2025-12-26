@@ -56,12 +56,13 @@ var initTurnServer = function(){
         });
 }
 
-var initScript = function () {
+let initScript = function () {
     dataChannel.init();
     dataChannelChatting.init();
     dataChannelFileUtil.init();
     catchMind.init();
-    
+    recording.init();
+
     // 실시간 자막 기능
     initSpeechRecognition();
     initSubtitleUI();
@@ -162,16 +163,77 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     function getDummyVideoTrack() {
         // 캔버스를 생성하여 더미 이미지를 그립니다.
         const canvas = document.createElement('canvas');
-        // canvas.width = 1280;
-        // canvas.height = 720;
+        canvas.width = 640;
+        canvas.height = 480;
+        canvas.style.position = 'fixed';
+        canvas.style.top = '10px';
+        canvas.style.right = '10px';
+        canvas.style.border = '2px solid red';
+        canvas.style.zIndex = '9999';
+
+        // 디버깅용: 캔버스를 화면에 표시
+        document.body.appendChild(canvas);
+
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'gray';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 애니메이션을 위한 변수
+        let hue = 0;
+        let frameCount = 0;
+
+        // 애니메이션 함수 - 화면이 살아있는 것처럼 보이게 함
+        function drawFrame() {
+            frameCount++;
+
+            // 배경 그라디언트
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, `hsl(${hue}, 70%, 40%)`);
+            gradient.addColorStop(1, `hsl(${(hue + 60) % 360}, 70%, 30%)`);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 중앙에 텍스트 표시
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 5;
+            ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = '20px Arial';
+            ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 10);
+
+            // 프레임 카운터 표시
+            ctx.font = '16px Arial';
+            ctx.fillText(`Frame: ${frameCount}`, canvas.width / 2, canvas.height / 2 + 50);
+
+            hue = (hue + 2) % 360;
+            requestAnimationFrame(drawFrame);
+        }
+
+        drawFrame();
 
         // 캔버스의 내용을 기반으로 더미 비디오 스트림을 생성합니다.
-        const dummyStream = canvas.captureStream(60);
+        const dummyStream = canvas.captureStream(30);
+        const videoTrack = dummyStream.getVideoTracks()[0];
+
+        console.log('더미 비디오 트랙 생성:', {
+            id: videoTrack.id,
+            enabled: videoTrack.enabled,
+            muted: videoTrack.muted,
+            readyState: videoTrack.readyState,
+            label: videoTrack.label,
+            settings: videoTrack.getSettings()
+        });
+
+        // 5초 후 캔버스 제거 (디버깅 완료 후)
+        setTimeout(() => {
+            if (canvas.parentNode) {
+                document.body.removeChild(canvas);
+            }
+        }, 5000);
+
         // 더미 비디오 트랙을 반환합니다.
-        return dummyStream.getVideoTracks()[0];
+        return videoTrack;
     }
 }
 
@@ -213,6 +275,12 @@ ws.onmessage = function (message) {
             break;
         case 'textOverlayResponse':
             console.debug('textOverlayResponse', parsedMessage);
+            break;
+        case 'startRecording':
+            console.debug('startRecording', parsedMessage);
+            break;
+        case 'stopRecording':
+            console.debug('stopRecording', parsedMessage);
             break;
         default:
             console.error('Unrecognized message', parsedMessage);
@@ -266,10 +334,10 @@ function register() {
                         $('#room').css('display', 'block');
     
                         let message = {
-                            id: 'joinRoom',
-                            nickName : nickName,
-                            userId: nickName,
+                            event: 'JOIN_ROOM',
                             roomId: roomId,
+                            senderNickName : nickName,
+                            senderId: userId,
                         }
                         sendMessageToServer(message);
                     
@@ -321,6 +389,9 @@ function onExistingParticipants(msg) {
 
     function handleSuccess(stream) {
         var hasVideo = constraints.video && stream.getVideoTracks().length > 0
+
+        // 로컬 스트림 백업 (화면 공유 복원용)
+        participant.setLocalStream(stream);
 
         var options = {
             localVideo: hasVideo ? video : null,
@@ -418,15 +489,158 @@ function receiveVideo(sender) {
         });
 
     participant.rtcPeer.peerConnection.onaddstream = function(event) {
-        audio.srcObject = event.stream;
+        console.log('onaddstream 이벤트 발생 - userId:', sender.userId);
+        console.log('스트림 ID:', event.stream.id);
+        console.log('오디오 트랙:', event.stream.getAudioTracks());
+        console.log('비디오 트랙:', event.stream.getVideoTracks());
+
+        // 비디오와 오디오 트랙 확인
+        const audioTracks = event.stream.getAudioTracks();
+        const videoTracks = event.stream.getVideoTracks();
+
+        console.log('오디오 트랙 개수:', audioTracks.length);
+        console.log('비디오 트랙 개수:', videoTracks.length);
+
+        if (audioTracks.length > 0) {
+            console.log('오디오 트랙 상태:', {
+                id: audioTracks[0].id,
+                enabled: audioTracks[0].enabled,
+                muted: audioTracks[0].muted,
+                readyState: audioTracks[0].readyState,
+                label: audioTracks[0].label
+            });
+        } else {
+            console.warn('오디오 트랙이 없습니다!');
+        }
+
+        if (videoTracks.length > 0) {
+            console.log('비디오 트랙 상태:', {
+                id: videoTracks[0].id,
+                enabled: videoTracks[0].enabled,
+                muted: videoTracks[0].muted,
+                readyState: videoTracks[0].readyState,
+                label: videoTracks[0].label
+            });
+        } else {
+            console.warn('비디오 트랙이 없습니다!');
+        }
+
+        // 스트림 할당
+        // CRITICAL FIX: 동일한 MediaStream을 video와 audio에 모두 할당하면
+        // 브라우저가 하나만 재생함 (브라우저 제약)
+        // 해결: video는 전체 stream, audio는 오디오 트랙만 분리하여 새 stream 생성
+
+        // Video 요소: 전체 스트림 (비디오+오디오) - 비디오 표시용
         video.srcObject = event.stream;
+
+        // Audio 요소: 오디오 트랙만 포함한 별도 MediaStream - 오디오 재생용
+        if (audioTracks.length > 0) {
+            const audioOnlyStream = new MediaStream(audioTracks);
+            audio.srcObject = audioOnlyStream;
+            console.log('오디오 전용 스트림 생성:', audioOnlyStream.id);
+        }
+
+        // 원격 비디오/오디오는 음소거 해제하고 볼륨 설정
+        video.muted = false;
+        audio.muted = false;
+
+        // 오디오 볼륨 설정 (초기값 0.5에서 1.0으로 업데이트)
+        audio.volume = 0.5;  // 일반적인 기본 음량
+        video.volume = 0.5;  // 비디오 요소의 음량도 0.5로 설정 (오디오 음량에 미치는 영향)
+
+        console.log('비디오 요소 상태:', {
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight,
+            readyState: video.readyState,
+            srcObject: video.srcObject ? 'assigned' : 'null',
+            muted: video.muted,
+            volume: video.volume
+        });
+
+        console.log('오디오 요소 상태:', {
+            readyState: audio.readyState,
+            srcObject: audio.srcObject ? 'assigned' : 'null',
+            muted: audio.muted,
+            volume: audio.volume,
+            autoplay: audio.autoplay
+        });
+
+        // 오디오 재생 시도 (브라우저 자동재생 정책 준수)
+        // muted=false인 상태에서는 자동재생이 제한되므로,
+        // 일시적으로 음소거 후 재생하고 해제하는 방식 사용
+        const playAudio = function() {
+            if (audio && audio.srcObject && audio.readyState >= 2) {
+                // 자동재생 정책을 우회하기 위해 일시적으로 음소거
+                audio.muted = true;
+
+                audio.play().then(function() {
+                    console.log('오디오 재생 시작됨');
+                    // 재생 시작 후 음소거 해제
+                    audio.muted = false;
+                }).catch(function(error) {
+                    console.error('오디오 재생 실패:', error);
+                    // 오디오 재생 실패 시 음소거 해제 (음소거 상태로 두지 않기)
+                    audio.muted = false;
+                    if (error.name === 'NotAllowedError') {
+                        console.warn('오디오 자동재생이 제한되었습니다. 사용자 상호작용 후 재생됩니다.');
+                    }
+                });
+            }
+        };
+
+        // 비디오 메타데이터 로드 이벤트
+        video.onloadedmetadata = function() {
+            console.log('비디오 메타데이터 로드됨:', {
+                width: video.videoWidth,
+                height: video.videoHeight
+            });
+
+            // 메타데이터 로드 후 비디오 재생 시도
+            video.play().then(function() {
+                console.log('비디오 재생 시작됨');
+            }).catch(function(error) {
+                console.error('비디오 재생 실패:', error);
+            });
+
+            // 오디오도 재생 시도 (메타데이터 로드 후)
+            playAudio();
+        };
+
+        // pause 이벤트 리스너 - 자동으로 다시 재생
+        video.onpause = function() {
+            console.warn('비디오가 일시정지됨, 다시 재생 시도');
+            setTimeout(function() {
+                if (video.paused && video.srcObject) {
+                    video.play().catch(function(error) {
+                        console.error('비디오 재재생 실패:', error);
+                    });
+                }
+            }, 100);
+        };
+
+        // 즉시 비디오 재생 시도
+        video.play().then(function() {
+            console.log('비디오 재생 시작됨');
+        }).catch(function(error) {
+            console.error('비디오 자동 재생 실패:', error);
+        });
+
+        // 오디오도 즉시 재생 시도 (최소 100ms 지연으로 srcObject 안정화 대기)
+        setTimeout(playAudio, 100);
+
+        // 녹화 중이면 새 참가자의 오디오를 AudioMixer에 추가
+        if (typeof recording !== 'undefined' && recording.isRecording) {
+            recording.addParticipantAudio(sender.userId, event.stream);
+        }
     };
 }
 
 var leftUserfunc = function(){
     // 서버로 연결 종료 메시지 전달
     sendMessageToServer({
-        id: 'leaveRoom'
+        event: 'LEAVE_ROOM',
+        roomId: roomId,
+        senderId: userId
     });
 
     // 진행 중인 모든 연결을 종료
@@ -464,11 +678,38 @@ function leaveRoom(type) {
 }
 
 function onParticipantLeft(request) {
+    console.log('[FIX] Participant ' + request.name + ' left');
 
     var participant = participants[request.name];
-    //console.log('Participant ' + request.name + ' left');
-    participant.dispose();
-    delete participants[request.name];
+
+    if (!participant) {
+        console.warn('[FIX] 참가자를 찾을 수 없습니다:', request.name);
+        return;
+    }
+
+    try {
+        // 1. 먼저 AudioMixer에서 제거 (참가자가 여전히 존재할 때)
+        if (typeof recording !== 'undefined' && recording.audioMixer) {
+            recording.removeParticipantAudio(request.name);
+            console.log('[FIX] AudioMixer에서 제거:', request.name);
+        }
+
+        // 2. [FIX] 짧은 딜레이 후 participant 정리
+        // onaddstream이나 다른 이벤트 핸들러가 완료될 시간을 줌
+        setTimeout(function() {
+            try {
+                if (participants[request.name]) {  // 다시 확인
+                    participant.dispose();
+                    delete participants[request.name];
+                    console.log('[FIX] 참가자 정리 완료:', request.name);
+                }
+            } catch (error) {
+                console.error('[FIX] 참가자 정리 중 에러:', error);
+            }
+        }, 100);  // 100ms 딜레이
+    } catch (error) {
+        console.error('[FIX] 참가자 제거 중 에러:', error);
+    }
 }
 
 function sendMessageToServer(message) {
@@ -1154,7 +1395,14 @@ function ScreenHandler() {
                 googHighStartBitrate: true,
                 googVeryHighBitrate: true
             },
-            audio: false // 화면 공유 시 오디오는 기본적으로 비활성화
+            audio: {
+                // 시스템 오디오 캡처 활성화
+                echoCancellation: false,  // 화면 공유 오디오에는 에코 제거 불필요
+                noiseSuppression: false,  // 원본 소리 그대로 전달
+                autoGainControl: false,   // 자동 볼륨 조절 비활성화
+                sampleRate: 48000,        // 고품질 오디오
+                channelCount: 2           // 스테레오
+            }
         };
 
         if (navigator.mediaDevices.getDisplayMedia) {
@@ -1332,15 +1580,17 @@ async function startScreenShare() {
         }
 
         const video = participant.getVideoElement();
-        
+
         // 기존 스트림 백업
-    participant.setLocalSteam(video.srcObject);
-        
+        participant.setLocalStream(video.srcObject);
+
         // 로컬 비디오에 화면 공유 표시
         video.srcObject = shareView;
         
-        // 원격 참가자들에게 화면 공유 전송
+        // 원격 참가자들에게 화면 공유 전송 (비디오 + 오디오)
         const senders = participant.rtcPeer.peerConnection.getSenders();
+        
+        // 비디오 트랙 교체
         for (const sender of senders) {
             if (sender.track && sender.track.kind === 'video') {
                 const videoTrack = shareView.getVideoTracks()[0];
@@ -1350,14 +1600,88 @@ async function startScreenShare() {
                     
                     // 트랙 교체
                     await sender.replaceTrack(videoTrack);
-                    console.log('화면 공유 트랙으로 교체 완료');
+                    console.log('화면 공유 비디오 트랙으로 교체 완료');
                 }
                 break;
             }
         }
         
+        // 오디오 트랙 처리: 시스템 오디오 + 마이크 오디오 믹싱
+        const audioTracks = shareView.getAudioTracks();
+        if (audioTracks.length > 0) {
+            // 시스템 오디오가 있는 경우, 마이크와 믹싱
+            for (const sender of senders) {
+                if (sender.track && sender.track.kind === 'audio') {
+                    const systemAudioTrack = audioTracks[0];
+                    const microphoneTrack = sender.track;
+
+                    try {
+                        // [FIX] 이전 AudioContext가 있으면 먼저 정리
+                        if (participant.audioContext) {
+                            try {
+                                participant.systemSource?.disconnect();
+                                participant.micSource?.disconnect();
+                                participant.destination?.disconnect();
+                                await participant.audioContext.close();
+                                console.log('[FIX] 이전 AudioContext 정리 완료');
+                            } catch (cleanupError) {
+                                console.error('[FIX] 이전 AudioContext 정리 실패:', cleanupError);
+                            }
+                        }
+
+                        // Web Audio API를 사용한 오디오 믹싱
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                        // 시스템 오디오 소스 생성
+                        const systemStream = new MediaStream([systemAudioTrack]);
+                        const systemSource = audioContext.createMediaStreamSource(systemStream);
+
+                        // 마이크 오디오 소스 생성
+                        const micStream = new MediaStream([microphoneTrack]);
+                        const micSource = audioContext.createMediaStreamSource(micStream);
+
+                        // Destination (믹싱 출력)
+                        const destination = audioContext.createMediaStreamDestination();
+
+                        // 두 오디오를 destination으로 연결 (믹싱)
+                        systemSource.connect(destination);
+                        micSource.connect(destination);
+
+                        // 믹싱된 오디오 트랙
+                        const mixedAudioTrack = destination.stream.getAudioTracks()[0];
+
+                        // [FIX] 기존 트랙 백업 및 노드 참조 저장 (정리용)
+                        participant.originalAudioTrack = microphoneTrack;
+                        participant.audioContext = audioContext;
+                        participant.systemSource = systemSource;
+                        participant.micSource = micSource;
+                        participant.destination = destination;
+
+                        // 믹싱된 트랙으로 교체
+                        await sender.replaceTrack(mixedAudioTrack);
+                        console.log('화면 공유: 시스템 오디오 + 마이크 오디오 믹싱 완료');
+                    } catch (error) {
+                        console.error('오디오 믹싱 실패, 시스템 오디오만 사용:', error);
+                        // 믹싱 실패 시 시스템 오디오만 사용
+                        participant.originalAudioTrack = sender.track;
+                        await sender.replaceTrack(systemAudioTrack);
+                        console.log('화면 공유 시스템 오디오 트랙으로 교체 완료');
+                    }
+                    break;
+                }
+            }
+        } else {
+            console.log('화면 공유에 시스템 오디오가 포함되지 않았습니다. 마이크 오디오만 유지됩니다.');
+        }
+
         console.log('화면 공유가 시작되었습니다.');
-        
+
+        // 녹화 중이라면 믹싱된 오디오가 자동으로 녹화에 포함됩니다
+        // (WebRTC를 통해 전송되므로 별도 처리 불필요)
+        if (typeof recording !== 'undefined' && recording.isRecording) {
+            console.log('화면 공유 중 녹화: 시스템 오디오 + 마이크 오디오가 모두 녹화됩니다.');
+        }
+
     } catch (error) {
         console.error('화면 공유 시작 실패:', error);
         showScreenShareError(error);
@@ -1383,8 +1707,10 @@ async function stopScreenShare() {
         if (originalStream) {
             video.srcObject = originalStream;
             
-            // 원격 참가자들에게 원래 비디오 전송
+            // 원격 참가자들에게 원래 비디오/오디오 전송
             const senders = participant.rtcPeer.peerConnection.getSenders();
+            
+            // 비디오 트랙 복원
             for (const sender of senders) {
                 if (sender.track && sender.track.kind === 'video') {
                     const videoTrack = originalStream.getVideoTracks()[0];
@@ -1395,18 +1721,76 @@ async function stopScreenShare() {
                     break;
                 }
             }
+            
+            // 오디오 트랙 복원 (백업된 오디오 트랙이 있는 경우)
+            if (participant.originalAudioTrack) {
+                for (const sender of senders) {
+                    if (sender.track && sender.track.kind === 'audio') {
+                        await sender.replaceTrack(participant.originalAudioTrack);
+                        console.log('원래 마이크 오디오 트랙으로 복원 완료');
+
+                        // 백업 제거
+                        delete participant.originalAudioTrack;
+                        break;
+                    }
+                }
+            }
+
+            // [FIX] Web Audio 노드 및 AudioContext 정리
+            if (participant.systemSource) {
+                try {
+                    participant.systemSource.disconnect();
+                    delete participant.systemSource;
+                } catch (error) {
+                    console.error('[FIX] systemSource 정리 중 에러:', error);
+                }
+            }
+
+            if (participant.micSource) {
+                try {
+                    participant.micSource.disconnect();
+                    delete participant.micSource;
+                } catch (error) {
+                    console.error('[FIX] micSource 정리 중 에러:', error);
+                }
+            }
+
+            if (participant.destination) {
+                try {
+                    participant.destination.disconnect();
+                    delete participant.destination;
+                } catch (error) {
+                    console.error('[FIX] destination 정리 중 에러:', error);
+                }
+            }
+
+            if (participant.audioContext) {
+                try {
+                    participant.audioContext.close();
+                    console.log('[FIX] AudioContext 정리 완료');
+                    delete participant.audioContext;
+                } catch (error) {
+                    console.error('[FIX] AudioContext 정리 중 에러:', error);
+                }
+            }
         }
-        
+
         // 화면 공유 스트림 정리
         await screenHandler.end();
-        
+
         // 버튼 상태 초기화
         const screenShareBtn = $("#screenShareBtn");
         screenShareBtn.data("flag", false);
         screenShareBtn.attr("src", "/images/webrtc/screen-share-on.svg");
-        
+
         console.log('화면 공유가 중지되었습니다.');
-        
+
+        // 녹화 중이라면 원래 마이크 오디오로 자동 전환됩니다
+        // (WebRTC를 통해 전송되므로 별도 처리 불필요)
+        if (typeof recording !== 'undefined' && recording.isRecording) {
+            console.log('화면 공유 종료: 마이크 오디오로 전환되었습니다.');
+        }
+
     } catch (error) {
         console.error('화면 공유 중지 실패:', error);
     }
@@ -2704,37 +3088,37 @@ function toggleSubtitle() {
  * 자막 버튼 UI 업데이트
  */
 function updateSubtitleButtonUI(status) {
-    const subtitleBtn = document.getElementById('subtitleBtn');
-    if (!subtitleBtn) return;
+    const $subtitleBtn = $('#subtitleBtn')[0];
+    if (!$subtitleBtn) return;
     
     const { isEnabled, isRecognizing, status: currentStatus } = status;
     
     // 버튼 상태 업데이트
-    subtitleBtn.setAttribute('data-flag', isEnabled.toString());
+    $subtitleBtn.setAttribute('data-flag', isEnabled.toString());
     
     // 아이콘 변경
     if (isEnabled) {
-        subtitleBtn.src = 'images/webrtc/subtitle-on.svg';
-        subtitleBtn.title = '실시간 자막 (켜짐)';
+        $subtitleBtn.src = 'images/webrtc/subtitle-on.svg';
+        $subtitleBtn.title = '실시간 자막 (켜짐)';
     } else {
-        subtitleBtn.src = 'images/webrtc/subtitle-off.svg';
-        subtitleBtn.title = '실시간 자막 (꺼짐)';
+        $subtitleBtn.src = 'images/webrtc/subtitle-off.svg';
+        $subtitleBtn.title = '실시간 자막 (꺼짐)';
     }
     
     // 상태에 따른 시각적 피드백
-    subtitleBtn.style.opacity = isEnabled ? '1.0' : '0.6';
+    $subtitleBtn.style.opacity = isEnabled ? '1.0' : '0.6';
     
     // 인식 중일 때 애니메이션 효과
     if (isRecognizing) {
-        subtitleBtn.style.animation = 'pulse 1.5s infinite';
+        $subtitleBtn.style.animation = 'pulse 1.5s infinite';
     } else {
-        subtitleBtn.style.animation = 'none';
+        $subtitleBtn.style.animation = 'none';
     }
     
     // 에러 상태 처리
     if (currentStatus === 'error' || currentStatus === 'permission-denied') {
-        subtitleBtn.style.opacity = '0.4';
-        subtitleBtn.title = '자막 기능 오류';
+        $subtitleBtn.style.opacity = '0.4';
+        $subtitleBtn.title = '자막 기능 오류';
     }
 }
 
