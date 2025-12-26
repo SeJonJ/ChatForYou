@@ -17,7 +17,7 @@ RUN chmod +x gradlew
 RUN ./gradlew clean build -x test --no-daemon
 
 # 런타임 단계
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 # Spring Boot 애플리케이션 실행에 필요한 포트 노출
 EXPOSE 8443
