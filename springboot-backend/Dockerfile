@@ -1,5 +1,5 @@
 # 빌드 단계
-FROM openjdk:17-jdk-slim AS builder
+FROM eclipse-temurin:17-jdk-jammy AS builder
 
 # 작업 디렉토리 설정
 WORKDIR /workspace/app
