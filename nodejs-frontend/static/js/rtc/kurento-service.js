@@ -139,18 +139,24 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         // 원래의 getUserMedia 메서드를 호출합니다.
         return customGetUserMedia(cs).catch(function (error) {
 
-            // 비디오 요청이 실패한 경우
+            // 비디오 요청이 실패한 경우에만 더미 비디오 사용
             if (cs.video) {
                 console.warn("Video error occurred, using dummy video instead.", error);
 
-                // 오디오 스트림만 요청합니다.
-                return navigator.mediaDevices.getUserMedia({ audio: cs.audio })
+                // 오디오 스트림만 요청
+                return customGetUserMedia({ audio: cs.audio })
                     .then(function (audioStream) {
                         // 오디오 스트림에 더미 비디오 트랙을 추가합니다.
                         const dummyVideoTrack = getDummyVideoTrack();
                         audioStream.addTrack(dummyVideoTrack);
+                        console.log(' Dummy video track added due to camera error');
                         // 수정된 스트림을 반환합니다.
                         return audioStream;
+                    })
+                    .catch(function (audioError) {
+                        // 오디오도 실패한 경우
+                        console.error('Audio also failed:', audioError);
+                        return Promise.reject(audioError);
                     });
             }
 
@@ -165,55 +171,70 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
-        canvas.style.position = 'fixed';
-        canvas.style.top = '10px';
-        canvas.style.right = '10px';
-        canvas.style.border = '2px solid red';
-        canvas.style.zIndex = '9999';
-
-        // 디버깅용: 캔버스를 화면에 표시
-        document.body.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
 
-        // 애니메이션을 위한 변수
-        let hue = 0;
-        let frameCount = 0;
+        // [NEW] 랜덤 이미지 선택 (1~4)
+        const randomImageNum = Math.floor(Math.random() * 4) + 1;
+        const imagePath = `images/webrtc/non-video/non_video_${randomImageNum}.png`;
 
-        // 애니메이션 함수 - 화면이 살아있는 것처럼 보이게 함
-        function drawFrame() {
-            frameCount++;
+        console.log(`Loading dummy video image: ${imagePath}`);
 
-            // 배경 그라디언트
-            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-            gradient.addColorStop(0, `hsl(${hue}, 70%, 40%)`);
-            gradient.addColorStop(1, `hsl(${(hue + 60) % 360}, 70%, 30%)`);
-            ctx.fillStyle = gradient;
+        // 이미지 로드
+        const img = new Image();
+
+        img.onload = function() {
+            // 이미지를 Canvas 크기에 맞춰 그리기 (비율 유지)
+            const imgRatio = img.width / img.height;
+            const canvasRatio = canvas.width / canvas.height;
+
+            let drawWidth, drawHeight, x, y;
+
+            if (imgRatio > canvasRatio) {
+                // 이미지가 더 넓음 - 너비에 맞춤
+                drawWidth = canvas.width;
+                drawHeight = img.height * (canvas.width / img.width);
+                x = 0;
+                y = (canvas.height - drawHeight) / 2;
+            } else {
+                // 이미지가 더 좁음 - 높이에 맞춤
+                drawHeight = canvas.height;
+                drawWidth = img.width * (canvas.height / img.height);
+                x = (canvas.width - drawWidth) / 2;
+                y = 0;
+            }
+
+            // 배경 검정색으로 채우기
+            ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 중앙에 텍스트 표시
+            // 이미지 그리기
+            ctx.drawImage(img, x, y, drawWidth, drawHeight);
+
+            console.log('Dummy video image loaded successfully');
+        };
+
+        img.onerror = function(error) {
+            // [FALLBACK] 이미지 로딩 실패 시 기본 화면 표시
+            console.error('Failed to load dummy video image, using fallback:', error);
+
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
             ctx.fillStyle = 'white';
             ctx.font = 'bold 32px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'black';
-            ctx.shadowBlur = 5;
-            ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 20);
             ctx.font = '20px Arial';
-            ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
+        };
 
-            // 프레임 카운터 표시
-            ctx.font = '16px Arial';
-            ctx.fillText(`Frame: ${frameCount}`, canvas.width / 2, canvas.height / 2 + 50);
-
-            hue = (hue + 2) % 360;
-            requestAnimationFrame(drawFrame);
-        }
-
-        drawFrame();
+        img.src = imagePath;
 
         // 캔버스의 내용을 기반으로 더미 비디오 스트림을 생성합니다.
-        const dummyStream = canvas.captureStream(30);
+        // 1fps로 충분 (정적 이미지이므로)
+        const dummyStream = canvas.captureStream(1);
         const videoTrack = dummyStream.getVideoTracks()[0];
 
         console.log('더미 비디오 트랙 생성:', {
@@ -222,15 +243,9 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             muted: videoTrack.muted,
             readyState: videoTrack.readyState,
             label: videoTrack.label,
-            settings: videoTrack.getSettings()
+            settings: videoTrack.getSettings(),
+            imagePath: imagePath
         });
-
-        // 5초 후 캔버스 제거 (디버깅 완료 후)
-        setTimeout(() => {
-            if (canvas.parentNode) {
-                document.body.removeChild(canvas);
-            }
-        }, 5000);
 
         // 더미 비디오 트랙을 반환합니다.
         return videoTrack;
@@ -281,6 +296,15 @@ ws.onmessage = function (message) {
             break;
         case 'stopRecording':
             console.debug('stopRecording', parsedMessage);
+            break;
+        // case 'recordingUploadProgress':
+        //     console.debug('recordingUploadProgress', parsedMessage);
+        //     break;
+        case 'recordingUploadCompleted':
+            console.debug('recordingUploadCompleted', parsedMessage);
+            break;
+        case 'recordingUploadFailed':
+            console.debug('recordingUploadFailed', parsedMessage);
             break;
         default:
             console.error('Unrecognized message', parsedMessage);
@@ -678,12 +702,12 @@ function leaveRoom(type) {
 }
 
 function onParticipantLeft(request) {
-    console.log('[FIX] Participant ' + request.name + ' left');
+    console.log('Participant ' + request.name + ' left');
 
     var participant = participants[request.name];
 
     if (!participant) {
-        console.warn('[FIX] 참가자를 찾을 수 없습니다:', request.name);
+        console.warn('참가자를 찾을 수 없습니다:', request.name);
         return;
     }
 
@@ -691,24 +715,24 @@ function onParticipantLeft(request) {
         // 1. 먼저 AudioMixer에서 제거 (참가자가 여전히 존재할 때)
         if (typeof recording !== 'undefined' && recording.audioMixer) {
             recording.removeParticipantAudio(request.name);
-            console.log('[FIX] AudioMixer에서 제거:', request.name);
+            console.log('AudioMixer에서 제거:', request.name);
         }
 
-        // 2. [FIX] 짧은 딜레이 후 participant 정리
+        // 2. 짧은 딜레이 후 participant 정리
         // onaddstream이나 다른 이벤트 핸들러가 완료될 시간을 줌
         setTimeout(function() {
             try {
                 if (participants[request.name]) {  // 다시 확인
                     participant.dispose();
                     delete participants[request.name];
-                    console.log('[FIX] 참가자 정리 완료:', request.name);
+                    console.log('참가자 정리 완료:', request.name);
                 }
             } catch (error) {
-                console.error('[FIX] 참가자 정리 중 에러:', error);
+                console.error('참가자 정리 중 에러:', error);
             }
         }, 100);  // 100ms 딜레이
     } catch (error) {
-        console.error('[FIX] 참가자 제거 중 에러:', error);
+        console.error('참가자 제거 중 에러:', error);
     }
 }
 
@@ -1616,16 +1640,16 @@ async function startScreenShare() {
                     const microphoneTrack = sender.track;
 
                     try {
-                        // [FIX] 이전 AudioContext가 있으면 먼저 정리
+                        // 이전 AudioContext가 있으면 먼저 정리
                         if (participant.audioContext) {
                             try {
                                 participant.systemSource?.disconnect();
                                 participant.micSource?.disconnect();
                                 participant.destination?.disconnect();
                                 await participant.audioContext.close();
-                                console.log('[FIX] 이전 AudioContext 정리 완료');
+                                console.log('이전 AudioContext 정리 완료');
                             } catch (cleanupError) {
-                                console.error('[FIX] 이전 AudioContext 정리 실패:', cleanupError);
+                                console.error('이전 AudioContext 정리 실패:', cleanupError);
                             }
                         }
 
@@ -1650,7 +1674,7 @@ async function startScreenShare() {
                         // 믹싱된 오디오 트랙
                         const mixedAudioTrack = destination.stream.getAudioTracks()[0];
 
-                        // [FIX] 기존 트랙 백업 및 노드 참조 저장 (정리용)
+                        // 기존 트랙 백업 및 노드 참조 저장 (정리용)
                         participant.originalAudioTrack = microphoneTrack;
                         participant.audioContext = audioContext;
                         participant.systemSource = systemSource;
@@ -1736,13 +1760,13 @@ async function stopScreenShare() {
                 }
             }
 
-            // [FIX] Web Audio 노드 및 AudioContext 정리
+            // Web Audio 노드 및 AudioContext 정리
             if (participant.systemSource) {
                 try {
                     participant.systemSource.disconnect();
                     delete participant.systemSource;
                 } catch (error) {
-                    console.error('[FIX] systemSource 정리 중 에러:', error);
+                    console.error('systemSource 정리 중 에러:', error);
                 }
             }
 
@@ -1751,7 +1775,7 @@ async function stopScreenShare() {
                     participant.micSource.disconnect();
                     delete participant.micSource;
                 } catch (error) {
-                    console.error('[FIX] micSource 정리 중 에러:', error);
+                    console.error('micSource 정리 중 에러:', error);
                 }
             }
 
@@ -1760,17 +1784,17 @@ async function stopScreenShare() {
                     participant.destination.disconnect();
                     delete participant.destination;
                 } catch (error) {
-                    console.error('[FIX] destination 정리 중 에러:', error);
+                    console.error('destination 정리 중 에러:', error);
                 }
             }
 
             if (participant.audioContext) {
                 try {
                     participant.audioContext.close();
-                    console.log('[FIX] AudioContext 정리 완료');
+                    console.log('AudioContext 정리 완료');
                     delete participant.audioContext;
                 } catch (error) {
-                    console.error('[FIX] AudioContext 정리 중 에러:', error);
+                    console.error('AudioContext 정리 중 에러:', error);
                 }
             }
         }

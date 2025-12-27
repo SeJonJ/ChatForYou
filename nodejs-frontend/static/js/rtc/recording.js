@@ -77,7 +77,7 @@ const recording = {
 
         // 녹화 시작 버튼
         self.$recordingStartBtn.click(function (e) {
-            // [FIX] 다른 사용자가 녹화 중이거나 이미 녹화 중이면 차단
+            // 다른 사용자가 녹화 중이거나 이미 녹화 중이면 차단
             if (self.isOtherUserRecording || self.isRecording) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -95,7 +95,7 @@ const recording = {
 
         // 녹화 중지 버튼
         self.$recordingStopBtn.click(function (e) {
-            // [FIX] 다른 사용자가 녹화 중이거나 녹화 중이 아니면 차단
+            // 다른 사용자가 녹화 중이거나 녹화 중이 아니면 차단
             if (self.isOtherUserRecording || !self.isRecording) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -522,7 +522,7 @@ const recording = {
                 break;
 
             case 'disabled':
-                // [FIX] 다른 사용자가 녹화 중일 때: 모든 버튼 완전 비활성화
+                // 다른 사용자가 녹화 중일 때: 모든 버튼 완전 비활성화
                 self.$recordingStartBtn.prop('disabled', true);
                 self.$recordingStartBtn.attr('src', 'images/webrtc/recording/record-start-disabled.svg');
                 self.$recordingStartBtn.css({
