@@ -5,7 +5,6 @@ import io.github.dengliming.redismodule.redisearch.index.Document;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import webChat.controller.ExceptionController;
@@ -20,7 +19,8 @@ import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.analysis.AnalysisService;
-import webChat.service.file.FileService;
+import webChat.service.file.impl.MinioFileService;
+import webChat.service.file.impl.RecordingFileService;
 import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
@@ -33,14 +33,14 @@ import java.util.*;
 @RequiredArgsConstructor
 @Slf4j
 public class ChatRoomService {
-    @Qualifier("minioFileService")
-    private final FileService minioFileService;
-    private final RedisService redisService;
     private final KurentoRoomManager kurentoRoomManager;
-    private final AnalysisService analysisService;
-    private final SseService sseService;
+    private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
     private final ChatKafkaProducer chatKafkaProducer;
+    private final SseService sseService;
+    private final MinioFileService minioFileService;
+    private final RecordingFileService recordingFileService;
+    private final AnalysisService analysisService;
 
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
@@ -163,6 +163,9 @@ public class ChatRoomService {
 
             // 채팅방 안에 있는 파일 삭제
             minioFileService.deleteFileDir(kurentoRoom.getRoomId());
+
+            // 채팅방 녹화 파일 삭제
+            recordingFileService.deleteFileDir(kurentoRoom.getRoomId());
 
             log.info("Room {} deleted permanently", kurentoRoom.getRoomId());
         } catch (Exception e) {

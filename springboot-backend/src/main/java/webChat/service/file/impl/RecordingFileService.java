@@ -1,58 +1,30 @@
 package webChat.service.file.impl;
 
 import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.http.Method;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import webChat.config.MinioConfig;
-import webChat.model.file.FileDto;
 import webChat.model.record.RecordingInfo;
-import webChat.service.file.FileService;
+import webChat.service.file.AbstractFileService;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
-@Qualifier("recordingFileService")
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class RecordingFileServiceImpl implements FileService {
-    private final MinioConfig minioConfig;
-    private MinioClient minioClient;
-
-    @PostConstruct
-    private void initMinioClient() {
-        minioClient = minioConfig.getMinioClient();
+public class RecordingFileService extends AbstractFileService {
+    public RecordingFileService(MinioConfig minioConfig) {
+        super(minioConfig);
     }
 
     @Override
-    public FileDto uploadFile(MultipartFile file, String roomId) {
-        return null;
-    }
-
-    @Override
-    public void deleteFileDir(String roomId) {
-
-    }
-
-    @Override
-    public ResponseEntity<byte[]> getObject(String fileName, String filePath) throws Exception {
-        return null;
-    }
-
-    @Override
-    public void uploadFileSizeCheck(MultipartFile file) {
-
+    protected String getBucketName() {
+        return minioConfig.getRecordingBucketName();
     }
 
     /**
@@ -62,7 +34,7 @@ public class RecordingFileServiceImpl implements FileService {
      * @return MinIO 다운로드 URL (24시간 유효)
      * @throws Exception 업로드 실패 시
      */
-    public String uploadRecording(String localFilePath, RecordingInfo recordingInfo) throws Exception {
+    public String uploadRecording(RecordingInfo recordingInfo, String localFilePath, int expiredTime) throws Exception {
         // file:// 프리픽스 제거
         String cleanPath = localFilePath.replace("file://", "");
         File localFile = new File(cleanPath);
@@ -90,7 +62,7 @@ public class RecordingFileServiceImpl implements FileService {
                                    "video/mp4" : "video/webm";
 
                 PutObjectArgs args = PutObjectArgs.builder()
-                        .bucket(minioConfig.getRecordingBucketName())
+                        .bucket(getBucketName()) // 현재 extends 된 클래스에 따라서 bucketName 을 가져옴
                         .object(minioPath)
                         .stream(fileStream, localFile.length(), -1)
                         .contentType(contentType)
@@ -100,13 +72,13 @@ public class RecordingFileServiceImpl implements FileService {
                 log.info("Recording uploaded to MinIO successfully: {}", minioPath);
             }
 
-            // Presigned URL 생성 (24시간 유효)
+            // Presigned URL 생성 (1시간 유효)
             String downloadUrl = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
-                            .bucket(minioConfig.getRecordingBucketName())
+                            .bucket(getBucketName())
                             .object(minioPath)
-                            .expiry(24, TimeUnit.HOURS)
+                            .expiry(expiredTime, TimeUnit.HOURS)
                             .build()
             );
 
@@ -126,5 +98,4 @@ public class RecordingFileServiceImpl implements FileService {
             throw new Exception("Recording upload failed: " + e.getMessage(), e);
         }
     }
-
 }
