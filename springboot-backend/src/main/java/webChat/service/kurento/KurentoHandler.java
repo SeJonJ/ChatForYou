@@ -56,6 +56,8 @@ public class KurentoHandler extends TextWebSocketHandler {
     private final KurentoParticipantService participantService;
     private final ChatKafkaProducer chatKafkaProducer;
     private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPiplineMap.getInstance();
+
+    // 녹화 관련
     private final RecordingService recordingService;
 
     @Override
@@ -308,45 +310,5 @@ public class KurentoHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to broadcast message to room {}: {}", roomId, e.getMessage());
         }
-    }
-
-    /**
-     * 녹화 업로드 완료 알림
-     * @param roomId 방 ID
-     * @param recordingId 녹화 ID
-     * @param downloadUrl 다운로드 URL
-     * @param fileSize 파일 크기 (bytes)
-     */
-    public void notifyRecordingUploadCompleted(String roomId, String recordingId,
-                                              String downloadUrl, long fileSize) {
-        JsonObject message = new JsonObject();
-        message.addProperty("id", "recordingUploadCompleted");
-        message.addProperty("status", RecordingStatus.COMPLETED.name());
-        message.addProperty("recordingId", recordingId);
-        message.addProperty("downloadUrl", downloadUrl);
-        message.addProperty("fileSize", fileSize);
-        message.addProperty("fileSizeMB", fileSize / 1024 / 1024);
-        message.addProperty("message", "녹화 파일 업로드가 완료되었습니다.");
-
-        broadcastToRoom(roomId, message);
-        log.info("Broadcast recording upload completed notification to room {}", roomId);
-    }
-
-    /**
-     * 녹화 업로드 실패 알림
-     * @param roomId 방 ID
-     * @param recordingId 녹화 ID
-     * @param errorMessage 에러 메시지
-     */
-    public void notifyRecordingUploadFailed(String roomId, String recordingId, String errorMessage) {
-        JsonObject message = new JsonObject();
-        message.addProperty("id", "recordingUploadFailed");
-        message.addProperty("status", RecordingStatus.FAILED.name());
-        message.addProperty("recordingId", recordingId);
-        message.addProperty("error", errorMessage);
-        message.addProperty("message", "녹화 파일 업로드에 실패했습니다.");
-
-        broadcastToRoom(roomId, message);
-        log.error("Broadcast recording upload failed notification to room {}: {}", roomId, errorMessage);
     }
 }

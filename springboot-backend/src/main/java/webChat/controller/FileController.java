@@ -6,15 +6,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import webChat.model.file.FileDto;
-import webChat.service.file.FileService;
+import webChat.service.file.impl.MinioFileService;
 
 @RestController
 @RequestMapping("/chatforyou/api/file")
 @RequiredArgsConstructor
 @Slf4j
 public class FileController {
-
-    private final FileService minioFileServiceImpl;
+    private final MinioFileService minioFileService;
 
     // 프론트에서 ajax 를 통해 /upload 로 MultipartFile 형태로 파일과 roomId 를 전달받는다.
     // 전달받은 file 를 uploadFile 메서드를 통해 업로드한다.
@@ -23,7 +22,7 @@ public class FileController {
             @RequestPart("file") MultipartFile file,
             @RequestParam("roomId") String roomId){
 
-        FileDto uploadFile = minioFileServiceImpl.uploadFile(file, roomId);
+        FileDto uploadFile = minioFileService.uploadFile(file, roomId);
         log.info("최종 upload Data {}", uploadFile);
 
         // fileReq 객체 리턴
@@ -37,9 +36,11 @@ public class FileController {
             @RequestParam("fileName")String fileName,
             @RequestParam("filePath")String filePath){
         log.info("fileDir : fileName [{} : {}]", filePath, fileName);
+
+        // TODO 다운로드 시 권한 체크 및 bucketName 체크 필수
         try {
             // 변환된 byte, httpHeader 와 HttpStatus 가 포함된 ResponseEntity 객체를 return 한다.
-            return minioFileServiceImpl.getObject(fileName, filePath);
+            return minioFileService.getObject(fileName, filePath);
         } catch (Exception e) {
             throw new ExceptionController.InternalServerError(e.getMessage());
         }
