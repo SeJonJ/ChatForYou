@@ -361,27 +361,27 @@ function Participant(userId, nickName, roomId) {
 	 * 참가자 객체를 정리하고 DOM에서 제거합니다
 	 */
 	this.dispose = function() {
-		console.log('[FIX] Disposing participant ' + this.userId);
+		console.log('Disposing participant ' + this.userId);
 
 		try {
 			// 1. 미디어 요소의 srcObject 정리
 			if (video) {
 				try {
 					video.pause();
-					video.srcObject = null;  // [FIX] 스트림 참조 해제
+					video.srcObject = null;  // 스트림 참조 해제
 					video.load();  // 정리 신호
 				} catch (e) {
-					console.error('[FIX] 비디오 정리 중 에러:', e);
+					console.error('비디오 정리 중 에러:', e);
 				}
 			}
 
 			if (audio) {
 				try {
 					audio.pause();
-					audio.srcObject = null;  // [FIX] 스트림 참조 해제
+					audio.srcObject = null;  // 스트림 참조 해제
 					audio.load();  // 정리 신호
 				} catch (e) {
-					console.error('[FIX] 오디오 정리 중 에러:', e);
+					console.error('오디오 정리 중 에러:', e);
 				}
 			}
 
@@ -393,11 +393,11 @@ function Participant(userId, nickName, roomId) {
 							track.stop();
 							track.enabled = false;
 						} catch (trackError) {
-							console.error('[FIX] 트랙 정리 중 에러:', trackError);
+							console.error('트랙 정리 중 에러:', trackError);
 						}
 					});
 				} catch (streamError) {
-					console.error('[FIX] 스트림 정리 중 에러:', streamError);
+					console.error('스트림 정리 중 에러:', streamError);
 				}
 			}
 
@@ -406,7 +406,7 @@ function Participant(userId, nickName, roomId) {
 				try {
 					this.rtcPeer.dispose();
 				} catch (peerError) {
-					console.error('[FIX] Peer 정리 중 에러:', peerError);
+					console.error('Peer 정리 중 에러:', peerError);
 				}
 			}
 
@@ -415,13 +415,13 @@ function Participant(userId, nickName, roomId) {
 				try {
 					container.parentNode.removeChild(container);
 				} catch (domError) {
-					console.error('[FIX] DOM 제거 중 에러:', domError);
+					console.error('DOM 제거 중 에러:', domError);
 				}
 			}
 
-			console.log('[FIX] 참가자 정리 완료: ' + this.userId);
+			console.log('참가자 정리 완료: ' + this.userId);
 		} catch (error) {
-			console.error('[FIX] 참가자 정리 중 예상치 못한 에러:', error);
+			console.error('참가자 정리 중 예상치 못한 에러:', error);
 		}
 	};
 
