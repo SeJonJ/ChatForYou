@@ -20,10 +20,10 @@ public class MinioConfig {
     @Value("${minio.access.secret}")
     private String secretKey;
 
-    @Value("${minio.bucket.name}")
+    @Value("${minio.bucket-name:chatforyou-storage}")
     private String bucketName;
 
-    @Value("${minio.recording_bucket.name:chatforyou-recording-storage}")
+    @Value("${minio.recording-bucket-name:chatforyou-recording-storage}")
     private String recordingBucketName;
 
     @Value("${minio.url}")

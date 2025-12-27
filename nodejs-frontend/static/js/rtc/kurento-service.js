@@ -302,9 +302,11 @@ ws.onmessage = function (message) {
         //     break;
         case 'recordingUploadCompleted':
             console.debug('recordingUploadCompleted', parsedMessage);
+            alert('녹화 완료', parsedMessage.message);
             break;
         case 'recordingUploadFailed':
             console.debug('recordingUploadFailed', parsedMessage);
+            alert('녹화 실패', parsedMessage.message);
             break;
         default:
             console.error('Unrecognized message', parsedMessage);
