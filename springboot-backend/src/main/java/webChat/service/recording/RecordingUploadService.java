@@ -120,7 +120,7 @@ public class RecordingUploadService {
                                 this,
                                 roomId,
                                 recordingId,
-                                file.getFileFullPath(),
+                                file.getDownloadUrl(),
                                 file.getFileSize()
                         ));
 

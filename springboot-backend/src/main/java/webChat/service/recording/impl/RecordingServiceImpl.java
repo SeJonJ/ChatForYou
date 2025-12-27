@@ -28,7 +28,7 @@ public class RecordingServiceImpl implements RecordingService {
     private final KurentoParticipantService kurentoParticipantService;
     private final RecordingUploadService recordingUploadService;
 
-    @Value("${kms.recording.ext:}")
+    @Value("${kms.recording-ext:}")
     private String RECORDING_EXT;
 
     @Override

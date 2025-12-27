@@ -47,7 +47,7 @@ public class RecordingFileService extends AbstractFileService {
         log.info("Starting upload to MinIO - File: {}, Size: {} bytes",
                  localFile.getName(), localFile.length());
 
-        // MinIO 경로 생성: roomId/recordingId/filename.webm
+        // MinIO 경로 생성: roomId/recordingId/filename
         String minioPath = String.format("%s/%s/%s",
                 recordingInfo.getRoomId(),
                 recordingInfo.getRecordingId(),
@@ -82,7 +82,7 @@ public class RecordingFileService extends AbstractFileService {
                             .build()
             );
 
-            log.info("Download URL generated: {} (expires in 24 hours)", downloadUrl);
+            log.info("Download URL generated: {} (expires in {} hours)", downloadUrl, expiredTime);
 
             // 로컬 파일 삭제
             if (localFile.delete()) {
