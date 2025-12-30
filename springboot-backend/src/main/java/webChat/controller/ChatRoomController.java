@@ -21,6 +21,7 @@ import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
 import webChat.model.user.UserDto;
+import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
@@ -43,6 +44,7 @@ public class ChatRoomController {
     private final RoutingInstanceProvider instanceProvider;
     private final RedisService redisService;
     private final UserService userService;
+    private final JwtRoomProvider jwtRoomProvider;
 
     // 채팅방 생성
     @PostMapping("/room")
@@ -82,6 +84,7 @@ public class ChatRoomController {
     public ResponseEntity<ChatForYouResponse> joinRoom(
             @PathVariable String roomId,
             @RequestHeader("Authorization") String authorization,
+            @RequestHeader(value = "X-Room-Token", required = false) String roomToken,
             HttpServletRequest request,
             HttpServletResponse response) throws Exception {
 
@@ -94,6 +97,11 @@ public class ChatRoomController {
         }
 
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+
+        // JWT 토큰 검증
+        if (chatRoom.isSecretChk()) {
+            jwtRoomProvider.validate(roomToken, chatRoom.getRoomId());
+        }
 
         if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
             // TODO 서버가 죽었을때 예외처리 필요 :: 방 삭제 및 임시 조치로 메인 대시보드로 이동
@@ -163,7 +171,7 @@ public class ChatRoomController {
         // TODO 추후 401 권한 에러로 수정할 것
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
-                .data(chatRoomService.validatePwd(roomId, roomPwd))
+                .data(chatRoomService.validatePwd(oauthRedis.getEmail(), roomId, roomPwd))
                 .build());
     }
 

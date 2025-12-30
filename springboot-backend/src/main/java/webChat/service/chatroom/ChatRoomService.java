@@ -18,6 +18,7 @@ import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
+import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.analysis.AnalysisService;
 import webChat.service.file.FileService;
 import webChat.service.kafka.ChatKafkaProducer;
@@ -49,6 +50,8 @@ public class ChatRoomService {
     private final RoutingService routingService;
 
     private final ChatKafkaProducer chatKafkaProducer;
+
+    private final JwtRoomProvider jwtRoomProvider;
 
     @Value("${chatforyou.room.max_user_count}")
     private int MAX_USER_COUNT;
@@ -134,16 +137,23 @@ public class ChatRoomService {
     }
 
     // 채팅방 비밀번호 조회
-    public boolean validatePwd(String roomId, String roomPwd) throws BadRequestException {
+    public Map<String, Object> validatePwd(String email, String roomId, String roomPwd) throws BadRequestException {
+        Map<String, Object> result = new HashMap<>();
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
         if(chatRoom == null) {
             // TODO 방정보 찾을 수 없는 경우 예외처리
         }
-
         boolean validPwd = chatRoom.getRoomPwd().equals(roomPwd);
         boolean overUserCnt = chatRoom.getUserCount() + 1 > chatRoom.getMaxUserCnt();
+        boolean isValidate = validPwd && !overUserCnt;
+        result.put("isValidate", isValidate);
 
-        return validPwd && !overUserCnt;
+        // jwt 토큰 발급
+        if (isValidate) {
+            String token = jwtRoomProvider.create(chatRoom.getRoomId(), email);
+            result.put("token", token);
+        }
+        return result;
     }
 
     // maxUserCnt 에 따른 채팅방 입장 여부
