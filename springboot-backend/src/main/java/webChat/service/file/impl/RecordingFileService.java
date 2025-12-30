@@ -73,7 +73,7 @@ public class RecordingFileService extends AbstractFileService {
             }
 
             // Presigned URL 생성 (1시간 유효)
-            String downloadUrl = minioClient.getPresignedObjectUrl(
+            String internalUrl = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(getBucketName())
@@ -82,6 +82,8 @@ public class RecordingFileService extends AbstractFileService {
                             .build()
             );
 
+            // 외부 접근 가능 url 로 변환
+            String downloadUrl = convertToExternalUrl(internalUrl);
             log.info("Download URL generated: {} (expires in {} hours)", downloadUrl, expiredTime);
 
             // 로컬 파일 삭제
