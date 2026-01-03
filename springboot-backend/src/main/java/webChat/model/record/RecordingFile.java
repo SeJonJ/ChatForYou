@@ -28,6 +28,7 @@ public class RecordingFile {
     public static RecordingFile of(String filePath, String downloadUrl, long fileSize, long createdAt, long expiresAt) {
         return RecordingFile.builder()
                 .filePath(filePath)
+                .downloadUrl(downloadUrl)
                 .fileSize(fileSize)
                 .createdAt(createdAt)
                 .expiresAt(expiresAt)

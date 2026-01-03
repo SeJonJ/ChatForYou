@@ -36,13 +36,6 @@ public abstract class AbstractFileService {
     protected abstract String getBucketName();
 
     /**
-     * presignedURL 을 외부 접근 가능한 URL로 변환
-     */
-    protected String convertToExternalUrl(String presignedUrl) {
-        return minioConfig.convertToExternalUrl(presignedUrl);
-    }
-
-    /**
      * roomId 하위의 모든 디렉토리/파일 삭제
      * @param roomId 방 roomID
      */
