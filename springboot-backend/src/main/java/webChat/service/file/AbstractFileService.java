@@ -1,6 +1,7 @@
 package webChat.service.file;
 
 import io.minio.*;
+import io.minio.http.Method;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import webChat.utils.StringUtil;
 import javax.annotation.PostConstruct;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -100,5 +102,26 @@ public abstract class AbstractFileService {
         if (!allowedFileExtensions.contains(extension)) {
             throw new ExceptionController.FileExtensionException("file extension exception");
         }
+    }
+
+    /**
+     * presigned URL 생성
+     * 외부 도메인 기준으로 서명이 생성되어 클라이언트가 다운로드 가능
+     *
+     * @param objectPath MinIO 객체 경로
+     * @param expiry 만료 시간
+     * @param timeUnit 시간 단위
+     * @return presigned URL (외부 도메인 기준)
+     * @throws Exception presigned URL 생성 실패 시
+     */
+    protected String generatePresignedUrl(String objectPath, int expiry, TimeUnit timeUnit) throws Exception {
+        return minioConfig.getExternalMinioClient().getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                        .method(Method.GET)
+                        .bucket(getBucketName())
+                        .object(objectPath)
+                        .expiry(expiry, timeUnit)
+                        .build()
+        );
     }
 }
