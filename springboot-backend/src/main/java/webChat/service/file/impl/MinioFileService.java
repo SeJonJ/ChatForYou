@@ -59,7 +59,7 @@ public class MinioFileService extends AbstractFileService {
                     .fileName(originFileName)
                     .roomId(roomId)
                     .filePath(fullPath)
-                    .minioDataUrl(convertToExternalUrl(url))
+                    .minioDataUrl(url)
                     .contentType(file.getContentType())
                     .status(FileDto.Status.UPLOADED)
                     .build();

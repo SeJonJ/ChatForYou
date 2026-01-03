@@ -301,11 +301,11 @@ ws.onmessage = function (message) {
         //     console.debug('recordingUploadProgress', parsedMessage);
         //     break;
         case 'recordingUploadCompleted':
-            console.debug('recordingUploadCompleted', parsedMessage);
+            console.log('recordingUploadCompleted', parsedMessage);
             alert('녹화 완료', parsedMessage.message);
             break;
         case 'recordingUploadFailed':
-            console.debug('recordingUploadFailed', parsedMessage);
+            console.log('recordingUploadFailed', parsedMessage);
             alert('녹화 실패', parsedMessage.message);
             break;
         default:
