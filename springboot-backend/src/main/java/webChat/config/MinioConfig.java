@@ -28,38 +28,56 @@ public class MinioConfig {
     @Value("${minio.recording-bucket-name:chatforyou-recording-storage}")
     private String recordingBucketName;
 
-    @Value("${minio.internal-url}")
+    @Value("${minio.internal-url:https://minio-service.minio-storage.svc.cluster.local:9000}")
     private String internalUrl;
 
+    @Value("${minio.external-url:https://hjproject.kro.kr:32090}")
+    private String externalUrl;
 
-    private MinioClient minioClient;
+    private MinioClient internalMinioClient;  // 내부 업로드용
+    private MinioClient externalMinioClient;  // 외부 다운로드용
 
     // minio 의 url 을 세팅하기 위한 postConstruct
     // 환경변수로 url 이 들어오면 해당 url 을 사용하고, 아니면 properties 에 정의 된 값을 사용
     @PostConstruct
     private void initMinioClient(){
-
+        // 환경변수 처리
         String envMinioInternalUrl = System.getenv("MINIO_INTERNAL_URL");
         if(!StringUtil.isNullOrEmpty(envMinioInternalUrl)){
             internalUrl = envMinioInternalUrl;
         }
 
-        minioClient = MinioClient.builder()
-                .endpoint(this.getInternalUrl())
-                .credentials(this.getAccessKey(), this.getSecretKey())
-                .build();
+        String envMinioExternalUrl = System.getenv("MINIO_EXTERNAL_URL");
+        if(!StringUtil.isNullOrEmpty(envMinioExternalUrl)){
+            externalUrl = envMinioExternalUrl;
+        }
 
         log.info("============================================");
         log.info("MinIO Client Configuration");
         log.info("  Internal URL (upload): {}", internalUrl);
+        log.info("  External URL (presigned): {}", externalUrl);
         log.info("  Bucket: {}", bucketName);
         log.info("  Recording Bucket: {}", recordingBucketName);
         log.info("============================================");
 
+        // 내부 MinioClient 생성
+        internalMinioClient = MinioClient.builder()
+                .endpoint(internalUrl)
+                .credentials(accessKey, secretKey)
+                .build();
+
+        // 외부 MinioClient 생성
+        externalMinioClient = MinioClient.builder()
+                .endpoint(externalUrl)
+                .credentials(accessKey, secretKey)
+                .build();
+
         try {
-            minioClient.ignoreCertCheck(); // ssl 인증 연결 무시
-            log.info("MinIO client initialized successfully");
+            internalMinioClient.ignoreCertCheck();
+            externalMinioClient.ignoreCertCheck();
+            log.info("MinIO clients (internal/external) initialized successfully");
         } catch (KeyManagementException | NoSuchAlgorithmException e) {
+            log.error("Failed to initialize MinIO clients", e);
             throw new RuntimeException(e);
         }
     }

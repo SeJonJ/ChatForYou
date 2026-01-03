@@ -1,8 +1,6 @@
 package webChat.service.file.impl;
 
-import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.PutObjectArgs;
-import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,15 +42,11 @@ public class MinioFileService extends AbstractFileService {
                     .contentType(file.getContentType())
                     .build();
 
+            // 내부 클라이언트로 업로드
             minioClient.putObject(args);
 
-            String url = minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(getBucketName())
-                            .object(fullPath)
-                            .expiry(10, TimeUnit.MINUTES) // 다운로드 시간 제한
-                            .build());
+            // Presigned URL 생성
+            String url = generatePresignedUrl(fullPath, 10, TimeUnit.MINUTES);
 
             // uploadDTO 객체 리턴
             return new FileDto().builder()

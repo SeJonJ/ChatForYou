@@ -1,8 +1,6 @@
 package webChat.service.file.impl;
 
-import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.PutObjectArgs;
-import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import webChat.config.MinioConfig;
@@ -68,19 +66,13 @@ public class RecordingFileService extends AbstractFileService {
                         .contentType(contentType)
                         .build();
 
+                // 내부 클라이언트로 업로드
                 minioClient.putObject(args);
                 log.info("Recording uploaded to MinIO successfully: {}", minioPath);
             }
 
-            // Presigned URL 생성 (1시간 유효)
-            String downloadUrl = minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(getBucketName())
-                            .object(minioPath)
-                            .expiry(expiredTime, TimeUnit.HOURS)
-                            .build()
-            );
+            // Presigned URL 생성(1시간 제한)
+            String downloadUrl = generatePresignedUrl(minioPath, expiredTime, TimeUnit.HOURS);
 
             log.info("Download URL generated: {} (expires in {} hours)", downloadUrl, expiredTime);
 
