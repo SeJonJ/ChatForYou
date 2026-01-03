@@ -30,11 +30,6 @@ public abstract class AbstractFileService {
     @Value("${allowed.file_extension}")
     ArrayList<String> allowedFileExtensions;
 
-    @PostConstruct
-    protected void initMinioClient() {
-        minioClient = minioConfig.getMinioClient();
-    }
-
     protected abstract String getBucketName();
 
     /**
