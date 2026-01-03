@@ -32,6 +32,11 @@ public abstract class AbstractFileService {
 
     protected abstract String getBucketName();
 
+    @PostConstruct
+    private void initMinioClient() {
+        this.minioClient = minioConfig.getInternalMinioClient();
+    }
+
     /**
      * roomId 하위의 모든 디렉토리/파일 삭제
      * @param roomId 방 roomID
