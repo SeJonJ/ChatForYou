@@ -1,21 +1,19 @@
 package webChat.service.recording;
 
-import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import webChat.model.event.RecordingEvent;
-import webChat.model.record.RecordingStatus;
-import webChat.service.kurento.KurentoHandler;
+import webChat.service.kurento.KurentoMessageBuilder;
+import webChat.service.kurento.KurentoMessageSender;
 
 @Service
-@Async
 @Slf4j
 @RequiredArgsConstructor
 public class RecordingHandler {
-    private final KurentoHandler kurentoHandler;
+    private final KurentoMessageSender messageSender;
 
 
     /**
@@ -23,7 +21,7 @@ public class RecordingHandler {
      * kafka 의 이벤트 발행 - 구독 기능을 spring 에서 쓸 수 있도록 함
      */
     @EventListener
-    @Async
+    @Async("taskExecutor")
     public void handleRecordingEvent(RecordingEvent event){
         event.handle(this);
     }
@@ -37,17 +35,13 @@ public class RecordingHandler {
      */
     public void notifyRecordingUploadCompleted(String roomId, String recordingId,
                                                String downloadUrl, long fileSize) {
-        JsonObject message = new JsonObject();
-        message.addProperty("id", "recordingUploadCompleted");
-        message.addProperty("status", RecordingStatus.COMPLETED.name());
-        message.addProperty("recordingId", recordingId);
-        message.addProperty("downloadUrl", downloadUrl);
-        message.addProperty("fileSize", fileSize);
-        message.addProperty("fileSizeMB", fileSize / 1024 / 1024);
-        message.addProperty("message", "녹화 파일 업로드가 완료되었습니다.");
-
-        kurentoHandler.broadcastToRoom(roomId, message);
-        log.info("Broadcast recording upload completed notification to room {}", roomId);
+        messageSender.broadcastSuccess(
+            roomId,
+            KurentoMessageBuilder.uploadCompleted()
+                .recordingId(recordingId)
+                .downloadUrl(downloadUrl)
+                .fileSize(fileSize)
+        );
     }
 
     /**
@@ -57,12 +51,13 @@ public class RecordingHandler {
      * @param errorMessage 에러 메시지
      */
     public void notifyRecordingUploadFailed(String roomId, String recordingId, String errorMessage) {
-        JsonObject message = new JsonObject();
-        message.addProperty("id", "recordingUploadFailed");
-        message.addProperty("status", RecordingStatus.FAILED.name());
-        message.addProperty("recordingId", recordingId);
-        message.addProperty("error", errorMessage);
-        message.addProperty("message", "녹화 파일 업로드에 실패했습니다.");
+        messageSender.broadcastError(
+            roomId,
+            KurentoMessageBuilder.uploadFailed()
+                .recordingId(recordingId)
+                .error(errorMessage)
+        );
+    }
 
     /**
      * 녹화 자동중지 이벤트
@@ -72,7 +67,7 @@ public class RecordingHandler {
      * @param eventMessage 녹화 일시 중지 메시지
      */
     public void notifyAutoStopRecording(String roomId, String recordingId, int minutes, String eventMessage) {
-        messageHelper.broadcastSuccess(
+        messageSender.broadcastSuccess(
             roomId,
             KurentoMessageBuilder.autoStopped()
                 .recordingId(recordingId)
@@ -90,7 +85,7 @@ public class RecordingHandler {
      * @param errorMessage 에러 메시지
      */
     public void notifyAutoStopRecordingFailed(String roomId, String recordingId, int minutes, String errorMessage) {
-        messageHelper.broadcastError(
+        messageSender.broadcastError(
             roomId,
             KurentoMessageBuilder.autoStopFailed()
                 .recordingId(recordingId)

@@ -68,7 +68,7 @@ public class CookieCheckEvent {
     private static final int MAX_INTERVAL_MS = 1000; // 최대 간격 1초
 
     @EventListener(WebServerInitializedEvent.class)
-    @Async
+    @Async("taskExecutor")
     public void collectOwnCookieAsync() throws InterruptedException, BadRequestException {
         instanceProvider.initInstanceId();
         // Kafka consumer 준비 대기

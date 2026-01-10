@@ -188,6 +188,7 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       
       // Redis 상태 업데이트
       this.isRoomRecording = true;
+      this.isRecordingInProgress = true;
 //      this.currentRecordId = recordId;
 
       log.info("Room recording started for room {} with recordId {} - all users will be recorded in single file", roomId, recordId);
@@ -222,7 +223,7 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       } else {
         log.warn("RecorderEndpoint not found in map for room: {} (may be on different server)", roomId);
       }
-        this.isRecordingInProgress = true;
+        this.isRecordingInProgress = false;
     } catch (Exception e) {
       log.error("Error stopping room recording for room {}: {}", roomId, e.getMessage());
     } finally {

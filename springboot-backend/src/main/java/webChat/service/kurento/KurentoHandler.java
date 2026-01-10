@@ -1,7 +1,5 @@
 package webChat.service.kurento;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import org.apache.coyote.BadRequestException;
@@ -19,7 +17,6 @@ import webChat.model.kurento.KurentoMessage;
 import webChat.model.kurento.KurentoOverlayMessage;
 import webChat.model.kurento.KurentoRTCMessage;
 import webChat.model.kurento.KurentoRecordingMessage;
-import webChat.model.record.RecordingStatus;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
 import webChat.repository.KurentoPiplineMap;
@@ -28,9 +25,9 @@ import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.recording.RecordingService;
 import webChat.service.redis.RedisService;
+import webChat.utils.JsonUtils;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
@@ -44,11 +41,6 @@ public class KurentoHandler extends TextWebSocketHandler {
     // 로깅을 위한 객체 생성
     private static final Logger log = LoggerFactory.getLogger(KurentoHandler.class);
 
-    // 데이터를 json 으로 넘겨 받고, 넘기기 때문에 관련 라이브러리로 GSON 을 사용함
-    // gson은 json구조를 띄는 직렬화된 데이터를 JAVA의 객체로 역직렬화, 직렬화 해주는 자바 라이브러리 입니다.
-    // 즉, JSON Object -> JAVA Object 또는 그 반대의 행위를 돕는 라이브러리 입니다.
-    private static final Gson gson = new GsonBuilder().create();
-
     // kurento room 기능
     private final KurentoRoomManager kurentoRoomManager;
     private final KurentoClient kurentoClient;
@@ -59,10 +51,11 @@ public class KurentoHandler extends TextWebSocketHandler {
 
     // 녹화 관련
     private final RecordingService recordingService;
+    private final KurentoMessageSender kurentoMessageSender;
 
     @Override
     public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        final KurentoMessage kurentoMessage = gson.fromJson(message.getPayload(), KurentoMessage.class);
+        final KurentoMessage kurentoMessage = JsonUtils.jsonToObj(message.getPayload(), KurentoMessage.class);
         final KurentoUserSession user = participantService.getBySessionId(session);
 
         if (user != null) {
@@ -89,7 +82,7 @@ public class KurentoHandler extends TextWebSocketHandler {
                 processTextOverlay(KurentoOverlayMessage.of(message.getPayload()), user);
                 break;
             case RECORDING_START: // 녹화 시작
-                processRecordingStart(KurentoRecordingMessage.of(message.getPayload()), user);
+                processRecordingStart(user);
                 break;
             case RECORDING_STOP: // 녹화 중지
                 processRecordingStop(KurentoRecordingMessage.of(message.getPayload()), user);
@@ -98,20 +91,26 @@ public class KurentoHandler extends TextWebSocketHandler {
         }
     }
 
-    private void processRecordingStart(KurentoRecordingMessage message, KurentoUserSession user) throws BadRequestException {
+    private void processRecordingStart(KurentoUserSession user) throws BadRequestException {
         String roomId = user.getRoomId();
         String userId = user.getUserId();
         KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         try {
-            // 방 녹화 여부 체크
+            // 방에 이미 녹화 파일이 존재하는지 확인
             if (room.isRoomRecording()) {
-                throw new BadRequestException("This room is already being recorded.");
+                kurentoMessageSender.broadcastErrorAndThrow(
+                        roomId,
+                        KurentoMessageBuilder.recordingFileExistsError(),
+                        "Recording file already exists for room : " + roomId);
             }
 
-            // 방 녹화 권한 체크
+            // 방에서 이미 녹화중인지 확인
             if (room.isRecordingInProgress()) {
-                throw new BadRequestException("Recording already exists for this room.");
+                kurentoMessageSender.broadcastErrorAndThrow(
+                        roomId,
+                        KurentoMessageBuilder.alreadyRecordingError(),
+                        "Already recording in room : " + roomId);
             }
 
             // 2. 녹화 시작
@@ -121,12 +120,11 @@ public class KurentoHandler extends TextWebSocketHandler {
             redisService.updateChatRoom(room);
 
             // 4. 성공 응답
-            JsonObject response = new JsonObject();
-            response.addProperty("id", "startRecording");
-            response.addProperty("status", RecordingStatus.RECORDING.name());
-            response.addProperty("recordId", recordId);
-            response.addProperty("message", "녹화가 시작되었습니다.");
-            user.sendMessage(response);
+            kurentoMessageSender.sendToUser(
+                user,
+                KurentoMessageBuilder.recordingStarted()
+                    .recordingId(recordId)
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -142,21 +140,29 @@ public class KurentoHandler extends TextWebSocketHandler {
         KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         try {
-            // 녹화 중인지 확인
-            if (!room.isRoomRecording()) {
-                // TODO 예외처리 확실하게
-                throw new IOException("No active room recording to stop for room: " + roomId);
+
+            // 녹화 중 여부 확인
+            if(!room.isRecordingInProgress()){
+                kurentoMessageSender.broadcastErrorAndThrow(
+                        roomId,
+                        KurentoMessageBuilder.notRecordingError(),
+                        "No active room recording to stop for room : " + roomId);
             }
 
-            // Map에서 실제 RecorderEndpoint가 있는지 확인
+            // Map에서 실제 RecorderEndpoint 가 있는지 확인
             if (!KurentoRecorderMap.hasRecorder(roomId)) {
-                // TODO 예외처리 확실하게
-                throw new IOException("No active room recording to stop for room: " + roomId);
+                kurentoMessageSender.broadcastErrorAndThrow(
+                        roomId,
+                        KurentoMessageBuilder.recordingEndpointNotFoundError(),
+                        "Recording endpoint not found for room: " + roomId);
             }
 
             // 녹화 중지 권한이 있는지 확인
             if(!room.getRecordingInfo().getRecordingUserId().equals(user.getUserId())){
-                throw new BadRequestException("You don't have permission to stop this recording");
+                kurentoMessageSender.broadcastErrorAndThrow(
+                        roomId,
+                        KurentoMessageBuilder.permissionDeniedError(),
+                        "No active room recording to stop for room: " + roomId);
             }
 
             // 녹화 정지
@@ -165,12 +171,11 @@ public class KurentoHandler extends TextWebSocketHandler {
             // 방 정보 업데이트
             redisService.updateChatRoom(room);
 
-            JsonObject response = new JsonObject();
-            response.addProperty("id", "stopRecording");
-            response.addProperty("status", RecordingStatus.STOPPED.name());
-            response.addProperty("recordId", recordId);
-            response.addProperty("message", "녹화가 완료되었습니다.");
-            user.sendMessage(response);
+            kurentoMessageSender.sendToUser(
+                user,
+                KurentoMessageBuilder.recordingStopped()
+                    .recordingId(recordId)
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -213,6 +218,7 @@ public class KurentoHandler extends TextWebSocketHandler {
             // userHub 초기화
             kurentoRoom.initUserHubPort();
         }
+
         kurentoRoom.activate();
         kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
         redisService.incrementUserCount(kurentoRoom);
@@ -250,7 +256,6 @@ public class KurentoHandler extends TextWebSocketHandler {
             // 이후 receiveVideoFrom 실행 => 아마도 특정 유저로부터 받은 비디오를 다른 유저에게 넘겨주는게 아닌가...?
             user.receiveVideoFrom(sender, sdpOffer);
         } catch (Exception e){
-            e.printStackTrace();
             connectException(user, e);
         }
     }
@@ -273,42 +278,17 @@ public class KurentoHandler extends TextWebSocketHandler {
         user.showTextOverlay(overlayText);
 
         // 성공 응답 전송
-        JsonObject response = new JsonObject();
-        response.addProperty("id", "textOverlayResponse");
-        response.addProperty("status", "success");
-        response.addProperty("message", "Text overlay applied successfully");
-        user.sendMessage(response);
+        kurentoMessageSender.sendToUser(
+            user,
+            KurentoMessageBuilder.textOverlaySuccess()
+        );
     }
 
-    private void connectException(KurentoUserSession user, Exception e) throws IOException {
-        JsonObject message = new JsonObject();
-        message.addProperty("id", "ConnectionFail");
-        message.addProperty("data", "connection error");
-
-        user.sendMessage(message);
-
-    }
-
-    /**
-     * 방의 모든 참가자에게 메시지 브로드캐스트
-     * @param roomId 방 ID
-     * @param message 전송할 메시지
-     */
-    public void broadcastToRoom(String roomId, JsonObject message) {
-        try {
-            Collection<KurentoUserSession> participants = participantService.getParticipantList(roomId);
-            log.debug("Broadcasting message to {} participants in room {}", participants.size(), roomId);
-
-            for (KurentoUserSession participant : participants) {
-                try {
-                    participant.sendMessage(message);
-                } catch (IOException e) {
-                    log.error("Failed to send message to participant {}: {}",
-                             participant.getUserId(), e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to broadcast message to room {}: {}", roomId, e.getMessage());
-        }
+    private void connectException(KurentoUserSession user, Exception e) {
+        log.error("Connection failed for user {}: {}", user.getUserId(), e.getMessage());
+        kurentoMessageSender.sendErrorToUser(
+            user,
+            KurentoMessageBuilder.connectionFailed()
+        );
     }
 }
