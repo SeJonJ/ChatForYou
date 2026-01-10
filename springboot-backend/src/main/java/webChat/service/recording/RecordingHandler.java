@@ -64,7 +64,40 @@ public class RecordingHandler {
         message.addProperty("error", errorMessage);
         message.addProperty("message", "녹화 파일 업로드에 실패했습니다.");
 
-        kurentoHandler.broadcastToRoom(roomId, message);
-        log.error("Broadcast recording upload failed notification to room {}: {}", roomId, errorMessage);
+    /**
+     * 녹화 자동중지 이벤트
+     * @param roomId 방 ID
+     * @param recordingId 녹화 ID
+     * @param minutes 녹화 중지 타이머(시간)
+     * @param eventMessage 녹화 일시 중지 메시지
+     */
+    public void notifyAutoStopRecording(String roomId, String recordingId, int minutes, String eventMessage) {
+        messageHelper.broadcastSuccess(
+            roomId,
+            KurentoMessageBuilder.autoStopped()
+                .recordingId(recordingId)
+                .minutes(minutes)
+                .formatMessage("녹화가 %d분 경과로 자동 종료되었습니다.", minutes)
+        );
+        log.info("Broadcast :: {}", eventMessage);
+    }
+
+    /**
+     * 녹화 자동 중지 실패 알림
+     * @param roomId 방 ID
+     * @param recordingId 녹화 ID
+     * @param minutes 녹화 중지 타이머(시간)
+     * @param errorMessage 에러 메시지
+     */
+    public void notifyAutoStopRecordingFailed(String roomId, String recordingId, int minutes, String errorMessage) {
+        messageHelper.broadcastError(
+            roomId,
+            KurentoMessageBuilder.autoStopFailed()
+                .recordingId(recordingId)
+                .minutes(minutes)
+                .error(errorMessage)
+                .formatMessage("%d분 자동 녹화 중지에 실패했습니다. 자세한 사항은 관리자에게 문의부탁드립니다.", minutes)
+        );
+        log.error("Broadcast AutoStop recording room {} : {}", roomId, errorMessage);
     }
 }
