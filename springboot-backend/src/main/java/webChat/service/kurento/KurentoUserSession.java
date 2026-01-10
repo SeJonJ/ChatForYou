@@ -103,7 +103,7 @@ public class KurentoUserSession extends UserDto implements Closeable {
     // 텍스트 오버레이 필터 생성 (한글 지원 폰트 fallback 체인)
     // 실시간 비디오 스트림에 자막을 표시하기 위해 outgoingMedia에서 직접 연결
     this.textOverlayFilter = new GStreamerFilter.Builder(pipeline,
-        "textoverlay text='' font-desc='Noto Sans CJK KR' halignment=center valignment=top deltay=50")
+            "textoverlay text='' font-desc='Noto Sans CJK KR Bold 24' halignment=center valignment=top deltay=50")
         .build();
 
     log.debug("TextOverlay filter created for user: {}", userId);

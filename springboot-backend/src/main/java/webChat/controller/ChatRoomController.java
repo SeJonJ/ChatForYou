@@ -71,14 +71,14 @@ public class ChatRoomController {
                     .build();
         }
 
-        log.info("CREATE Chat [Room Id {}] :: [Room Name {}] :: [InstanceId {}]", room.getRoomName(), room.getRoomName(), room.getInstanceId());
+        log.info("CREATE Chat [Room Id {}] :: [Room Name {}] :: [InstanceId {}]", room.getRoomId(), room.getRoomName(), room.getInstanceId());
 
         return ResponseEntity.ok(ChatForYouResponse.ofCreateRoom(room));
     }
 
     // 채팅방 입장
     @GetMapping("/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> joinRoom(
+    public ResponseEntity<ChatForYouResponse> joinRoom (
             @PathVariable String roomId,
             @RequestHeader("Authorization") String authorization,
             @RequestHeader(value = "X-Room-Token", required = false) String roomToken,
