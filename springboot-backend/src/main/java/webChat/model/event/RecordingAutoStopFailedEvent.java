@@ -4,29 +4,37 @@ import lombok.Getter;
 import webChat.service.recording.RecordingHandler;
 
 /**
- * 녹화 파일 업로드 실패 이벤트
+ * 자동 녹화 중지 실패 이벤트
  */
 @Getter
-public class RecordingUploadFailedEvent implements RecordingEvent{
+public class RecordingAutoStopFailedEvent implements RecordingEvent {
     private final String roomId;
     private final String recordingId;
     private final String errorMessage;
+    private final int minutes;
 
-    public RecordingUploadFailedEvent(
+    public RecordingAutoStopFailedEvent(
             String roomId,
             String recordingId,
+            int autoStopMinutes,
             String errorMessage
     ) {
         this.roomId = roomId;
         this.recordingId = recordingId;
+        this.minutes = autoStopMinutes;
         this.errorMessage = errorMessage;
     }
 
+    /**
+     * 녹화 자동 중지 이벤트 처리
+     */
     @Override
     public void handle(RecordingHandler handler) {
-        handler.notifyRecordingUploadFailed(
+        handler.notifyAutoStopRecordingFailed(
                 roomId,
                 recordingId,
-                errorMessage);
+                minutes,
+                errorMessage
+        );
     }
 }

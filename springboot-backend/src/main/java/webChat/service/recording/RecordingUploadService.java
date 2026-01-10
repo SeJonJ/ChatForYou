@@ -22,12 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 녹화 파일 업로드 후처리를 담당하는 서비스
- * 책임:
- * 1. 녹화 파일 업로드 (RecordingFileService 사용)
- * 2. 업로드 상태 관리 (UPLOADING → COMPLETED/FAILED)
- * 3. DB 업데이트 (ChatRoomService 사용)
- * 4. 업로드 완료 이벤트 발행 (ApplicationEventPublisher 사용)
- * 5. 재시도 로직 (ThreadUtils 사용)
+ * 추후 다른 스토리지로 확장 시 interface 로 공통화 필요
  */
 @Service
 @RequiredArgsConstructor
@@ -38,11 +33,11 @@ public class RecordingUploadService {
     private final ThreadPoolConfig threadPoolConfig;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${kms.recording.expire:1}")
+    @Value("${recording.url-expire.minutes:60}")
     private int recordingExpire;
 
     /**
-     * 녹화 파일을 MinIO에 비동기로 업로드 (재시도 로직 포함)
+     * 녹화 파일을 MinIO에 비동기로 업로드
      *
      * @param room 방 정보
      * @param recordingInfo 녹화 정보
@@ -53,7 +48,7 @@ public class RecordingUploadService {
         String recordingId = recordingInfo.getRecordingId();
 
         return ThreadUtils.executeAsyncTask(
-            // Task: 업로드 작업
+            // 비동기 Task: 업로드 작업
             () -> {
                 try {
                     log.info("Starting upload for recording: {} in room: {}", recordingId, roomId);
@@ -89,7 +84,7 @@ public class RecordingUploadService {
                             downloadUrl,
                             fileSize,
                             recordingInfo.getStartAt(),
-                            System.currentTimeMillis() + TimeUnit.HOURS.toMillis(recordingExpire)
+                            System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(recordingExpire)
                     );
 
                     recordingInfo.setRecordingFile(updatedFile);
@@ -117,7 +112,6 @@ public class RecordingUploadService {
 
                         // 업로드 완료 이벤트 발행
                         eventPublisher.publishEvent(new RecordingUploadCompletedEvent(
-                                this,
                                 roomId,
                                 recordingId,
                                 file.getDownloadUrl(),
@@ -141,7 +135,6 @@ public class RecordingUploadService {
 
             // 업로드 실패 이벤트 발행
             eventPublisher.publishEvent(new RecordingUploadFailedEvent(
-                    this,
                     roomId,
                     recordingId,
                     ex.getMessage()
