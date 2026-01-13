@@ -19,12 +19,15 @@ import java.util.Map;
 
 @Component
 public class JwtRoomProvider {
-    private static final long EXPIRE_MS = 1000L * 60 * 30;
-
+    private final long EXPIRE_MS;
     private final JwtCoreProvider jwtCore;
 
-    public JwtRoomProvider(@Qualifier("roomJwtKey") Key key) {
+    public JwtRoomProvider(
+            @Qualifier("roomJwtKey") Key key,
+            @Value("${jwt.room.expire-ms:1800000}") long expireMs
+    ) {
         this.jwtCore = new JwtCoreProvider(key);
+        this.EXPIRE_MS = expireMs;
     }
 
     public String create(String roomId, String userId) {
