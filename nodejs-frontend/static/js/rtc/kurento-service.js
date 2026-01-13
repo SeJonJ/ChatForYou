@@ -281,6 +281,9 @@ function register() {
             if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
                 window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+            } else if (error?.responseJSON && '40061' === error.responseJSON.code) {
+                alert("입장 정보가 확인되지 않았습니다. 다시 시도해주세요.")
+                window.location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
             }
         };
         // AJAX 요청 실행

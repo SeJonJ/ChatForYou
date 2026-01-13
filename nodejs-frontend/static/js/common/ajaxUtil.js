@@ -58,6 +58,14 @@ function ajaxToJson(url, method, async, data, successCallback, errorCallback, co
 }
 
 function tokenAjax(url, method, async, data, successCallback, errorCallback, completeCallback) {
+    var headers = {
+        'Authorization': localStorage.getItem('access_token') || ''
+    };
+
+    var roomToken = sessionStorage.getItem('roomAccessToken');
+    if (roomToken) {
+        headers['X-Room-Token'] = roomToken;
+    }
     $.ajax({
         url: url,
         type: method,
@@ -66,9 +74,7 @@ function tokenAjax(url, method, async, data, successCallback, errorCallback, com
         xhrFields: {
             withCredentials: true
         },
-        headers: {
-            'Authorization': localStorage.getItem('access_token') || ''
-        },
+        headers: headers,
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
                 successCallback(data);

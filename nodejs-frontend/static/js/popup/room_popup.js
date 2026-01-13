@@ -192,7 +192,9 @@ const RoomPopup = {
         }
 
         let successCallback = function(result) {
-            if (result?.data && result?.result === 'success') {
+            if (result?.data?.isValidate === true) {
+                var roomToken = result.data.token;
+                sessionStorage.setItem('roomAccessToken', roomToken);
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
                 $('#enterRoomModal').modal('hide');
 

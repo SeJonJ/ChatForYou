@@ -276,4 +276,20 @@ public class ExceptionController {
         result.put("message", "QR Session Expired");
         return result;
     }
+
+    public static class InvalidRoomAccessException extends BadRequestException {
+        public InvalidRoomAccessException(String message) {
+            super(message);
+        }
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(InvalidRoomAccessException.class)
+    @ResponseBody
+    public Map<String, Object> handleInvalidRoomAccess() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", "40061");
+        result.put("message", "Invalid or missing room access token");
+        return result;
+    }
 }

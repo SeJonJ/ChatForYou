@@ -54,7 +54,7 @@ public class SslConfig implements WebMvcConfigurer {
         registry.addMapping("/**")
                 .allowedOrigins("http://localhost:3000", "https://hjproject.kro.kr:8653", "https://hjproject.kro.kr/chatforyou")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("Authorization", "Content-Type", "X-Requested-With")
+                .allowedHeaders("Authorization", "Content-Type", "X-Requested-With", "X-Room-Token")
                 .exposedHeaders("Custom-Header")
                 .allowCredentials(true)
                 .maxAge(3600);

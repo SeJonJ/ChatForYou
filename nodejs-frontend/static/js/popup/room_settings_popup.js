@@ -162,6 +162,10 @@ const RoomSettingsPopup = {
 
         let successCallback = function (result) {
             if (result && result.result === 'success' && result.data) {
+                var roomToken = result.data.token;
+                if (roomToken) {
+                    sessionStorage.setItem('roomAccessToken', roomToken);
+                }
                 self.loadRoomInfo();
             } else {
                 self.showToast('비밀번호가 일치하지 않습니다.', 'error');
