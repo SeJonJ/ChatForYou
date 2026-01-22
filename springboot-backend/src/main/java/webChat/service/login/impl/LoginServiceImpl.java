@@ -83,6 +83,7 @@ public class LoginServiceImpl implements LoginService {
 
         // 레디스 insert
         OauthRedis oauthRedis = new OauthRedis();
+        oauthRedis.setIdx(socialUser.getIdx());
         oauthRedis.setEmail(socialUser.getEmail());
         oauthRedis.setAccessToken(accessToken);
         oauthRedis.setRefreshToken(refreshToken);
@@ -103,8 +104,12 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     public void logout(String authorization, String email) throws Exception{
+        SocialUser user = socialUserRepository.findByEmail(email);
+        if (user == null) {
+            throw new BadRequestException("Not exist user !!!");
+        }
         // 레디스에서 삭제
-        redisService.deleteLoginInfo(email);
+        redisService.deleteLoginInfo(user.getIdx());
     }
 
     @Override
