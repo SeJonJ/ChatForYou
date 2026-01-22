@@ -56,7 +56,7 @@ public class ChatRoomController {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
-        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+        OauthRedis oauthRedis = userService.getFriendRedisInfo(token.getEmail(), OauthRedis.class);
 
         if (oauthRedis == null) {
             throw new ExceptionController.NotExistUserException("");
@@ -90,7 +90,7 @@ public class ChatRoomController {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
-        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
+        OauthRedis oauthRedis = userService.getFriendRedisInfo(token.getEmail(), OauthRedis.class);
 
         if (oauthRedis == null) {
             throw new ExceptionController.NotExistUserException("");
