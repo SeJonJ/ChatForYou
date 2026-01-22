@@ -342,7 +342,7 @@ public class RedisServiceImpl implements RedisService {
         if (DataType.LOGIN_USER.equals(dataType) || DataType.USER_REFRESH_TOKEN.equals(dataType) || DataType.USER_LAST_LOGIN_DATE.equals(dataType)) {
             redisKey = key.contains("user:") ? key : "user:" + key;
         } else if (DataType.SOCIAL_USER.equals(dataType)) {
-            redisKey = SOCIAL_USER_PREFIX.getPrefix() + key;
+            redisKey = OAUTH_PREFIX.getPrefix() + key;
         } else {
             redisKey = makeRedisKey(key);
         }
@@ -539,16 +539,17 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void insertGoogleOauthToken(OauthRedis oauthRedis, long time) {
-        String redisKey = OAUTH_PREFIX.getPrefix() + oauthRedis.getEmail();
+        String redisKey = OAUTH_PREFIX.getPrefix() + oauthRedis.getIdx();
         masterTemplate.opsForHash().put(redisKey, DataType.SOCIAL_USER.getType(), oauthRedis);
+        masterTemplate.opsForHash().put(redisKey, "idx", oauthRedis.getIdx());
         masterTemplate.opsForHash().put(redisKey, "email", oauthRedis.getEmail());
         masterTemplate.opsForHash().put(redisKey, "nickname", oauthRedis.getEmail().split("@")[0]);
         masterTemplate.opsForHash().put(redisKey, "lastLoginDate", time);
     }
 
     @Override
-    public void deleteLoginInfo(String email) {
-        masterTemplate.delete(SOCIAL_USER_PREFIX.getPrefix() + email);
+    public void deleteLoginInfo(long idx) {
+        masterTemplate.delete(OAUTH_PREFIX.getPrefix() + idx);
     }
 
     @Override

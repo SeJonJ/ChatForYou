@@ -12,6 +12,9 @@ import lombok.*;
 @Builder
 public class SocialUser {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private long idx;
+    @Column
     private String email;
     @Column
     private String nickname;
