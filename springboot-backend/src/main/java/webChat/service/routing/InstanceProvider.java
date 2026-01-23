@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy; // 이것만 추가!
+import org.springframework.context.annotation.Lazy;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -18,6 +18,7 @@ import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 import webChat.utils.StringUtil;
+
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.*;

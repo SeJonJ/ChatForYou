@@ -21,6 +21,54 @@
  * - 오디오 믹싱 (AudioMixer)
  */
 
+/**
+ * UI 버튼 상태 설정
+ */
+const RECORDING_UI_STATES = {
+    recording: {
+        startBtn: { disabled: true, opacity: 0.5, cursor: 'not-allowed', image: 'disabled' },
+        stopBtn: { disabled: false, opacity: 1, cursor: 'pointer', image: 'active' }
+    },
+    idle: {
+        startBtn: { disabled: false, opacity: 1, cursor: 'pointer', image: 'active' },
+        stopBtn: { disabled: true, opacity: 0.5, cursor: 'not-allowed', image: 'disabled' }
+    },
+    disabled: {
+        startBtn: { disabled: true, opacity: 0.5, cursor: 'not-allowed', image: 'disabled' },
+        stopBtn: { disabled: true, opacity: 0.5, cursor: 'not-allowed', image: 'disabled' }
+    },
+    enabled: {
+        startBtn: { disabled: false, opacity: 1, cursor: 'pointer', image: 'active' },
+        stopBtn: { disabled: true, opacity: 0.5, cursor: 'not-allowed', image: 'disabled' }
+    },
+    permanentlyDisabled: {
+        startBtn: { disabled: true, opacity: 0.3, cursor: 'not-allowed', image: 'disabled', filter: 'grayscale(100%)' },
+        stopBtn: { disabled: true, opacity: 0.3, cursor: 'not-allowed', image: 'disabled', filter: 'grayscale(100%)' }
+    }
+};
+
+/**
+ * Toast 메시지 테마 설정
+ */
+const TOAST_THEMES = {
+    success: { background: "linear-gradient(to right, #00b09b, #96c93d)" },
+    warning: { background: "linear-gradient(to right, #FF6B6B, #FFE66D)" },
+    error: { background: "linear-gradient(to right, #ff5f6d, #ffc371)" },
+    info: { background: "linear-gradient(to right, #4facfe, #00f2fe)" }
+};
+
+/**
+ * Toast 기본 설정
+ */
+const TOAST_DEFAULT_CONFIG = {
+    duration: 3000,
+    newWindow: true,
+    close: true,
+    gravity: "top",
+    position: "center",
+    stopOnFocus: true
+};
+
 const recording = {
     // UI 요소
     $recordingStartBtn: $('#recordingStartBtn'),
@@ -29,6 +77,9 @@ const recording = {
     // 녹화 상태
     isRecording: false,
     isOtherUserRecording: false,
+
+    // 해당 방에서 녹화 사용 여부
+    isReadyRecording: false,
 
     // 서버 측 녹화
     serverRecordingId: null,
@@ -145,23 +196,28 @@ const recording = {
 
     /**
      * Toast 메시지 표시
+     * @param {string} text - 메시지 텍스트
+     * @param {number} duration - 표시 시간 (ms), 기본값 3000
+     * @param {string} theme - 테마 (success, warning, error, info), 기본값 'info'
      */
-    showToast: function (text, duration = 3000) {
+    showToast: function (text, duration, theme) {
+        // 기본값 설정
+        duration = duration || TOAST_DEFAULT_CONFIG.duration;
+        theme = theme || 'info';
+        
         if (typeof Toastify !== 'undefined') {
             Toastify({
                 text: text,
                 duration: duration,
-                newWindow: true,
-                close: true,
-                gravity: "top",
-                position: "center",
-                stopOnFocus: true,
-                style: {
-                    background: "linear-gradient(to right, #00b09b, #96c93d)",
-                },
+                newWindow: TOAST_DEFAULT_CONFIG.newWindow,
+                close: TOAST_DEFAULT_CONFIG.close,
+                gravity: TOAST_DEFAULT_CONFIG.gravity,
+                position: TOAST_DEFAULT_CONFIG.position,
+                stopOnFocus: TOAST_DEFAULT_CONFIG.stopOnFocus,
+                style: TOAST_THEMES[theme] || TOAST_THEMES.info
             }).showToast();
         } else {
-            console.log(text);
+            console.log('[TOAST]', text);
         }
     },
 
@@ -170,9 +226,14 @@ const recording = {
      */
     startRecording: function () {
         let self = this;
+        if(self.isReadyRecording) {
+            self.showToast('해당 방은 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다.', 3000, 'warning');
+            return;
+        }
 
         try {
             self.isRecording = true;
+            self.isReadyRecording = true;
 
             // 1. 서버에 녹화 시작 요청
             self.startServerRecording();
@@ -187,9 +248,14 @@ const recording = {
             dataChannel?.sendMessage?.('recordingStarted', 'recording');
 
             // 5. 자막 기능 비활성화
-            speechRecognitionUtils?.handlingSubtitleByRecording?.(true);
+            if (typeof speechRecognitionUtils !== 'undefined' && speechRecognitionUtils.handlingSubtitleByRecording) {
+                console.log('[RECORDING] Disabling subtitle function on recording start');
+                speechRecognitionUtils.handlingSubtitleByRecording(true);
+            } else {
+                console.warn('[RECORDING] speechRecognitionUtils not available');
+            }
 
-            console.log('녹화 시작 완료');
+            console.log('녹화 시작 완료, isReadyRecording:', self.isReadyRecording);
             self.showToast('녹화를 시작합니다.');
 
         } catch (error) {
@@ -221,6 +287,47 @@ const recording = {
     },
 
     /**
+     * 오디오 스트림 유효성 검사
+     * @private
+     * @param {MediaStream} stream - 검사할 스트림
+     * @returns {boolean}
+     */
+    _isValidAudioStream: function(stream) {
+        if (!stream || !stream.getAudioTracks || stream.getAudioTracks().length === 0) {
+            return false;
+        }
+        
+        let audioTracks = stream.getAudioTracks();
+        return audioTracks.some(function(track) {
+            return track.enabled && track.readyState === 'live';
+        });
+    },
+
+    /**
+     * 로컬 오디오 추가 가능 여부 확인
+     * @private
+     * @returns {boolean}
+     */
+    _shouldAddLocalAudio: function() {
+        let self = this;
+        
+        if (typeof localStream === 'undefined' || !localStream) {
+            return false;
+        }
+        
+        let localUserId = typeof ParticipantUtils !== 'undefined'
+            ? ParticipantUtils.getLocalUserId()
+            : null;
+        
+        if (localUserId && typeof ParticipantUtils !== 'undefined') {
+            let audioState = ParticipantUtils.getAudioState(localUserId);
+            return audioState.enabled && self._isValidAudioStream(localStream);
+        }
+        
+        return self._isValidAudioStream(localStream);
+    },
+
+    /**
      * 오디오 믹싱 시작
      */
     startAudioMixing: function () {
@@ -233,57 +340,22 @@ const recording = {
 
         try {
             // 모든 참가자의 오디오를 믹서에 추가
-            // participants는 전역 변수로 가정 (kurento-service.js에서 관리)
             if (typeof participants !== 'undefined') {
-                // participants는 객체이므로 Object.entries()로 변환
                 for (const [userId, participant] of Object.entries(participants)) {
                     const stream = participant.rtcPeer?.getRemoteStream?.();
-                    if (stream && stream.getAudioTracks().length > 0) {
-                        // 트랙 활성화 상태 확인
-                        const audioTracks = stream.getAudioTracks();
-                        const hasActiveTracks = audioTracks.some(track =>
-                            track.enabled && track.readyState === 'live'
-                        );
-
-                        if (hasActiveTracks) {
-                            self.audioMixer.addAudioStream(userId, stream);
-                            console.log(`AudioMixer에 추가: ${userId}`);
-                        } else {
-                            console.log(`AudioMixer 제외 (비활성화): ${userId}`);
-                        }
+                    if (self._isValidAudioStream(stream)) {
+                        self.audioMixer.addAudioStream(userId, stream);
+                        console.log('AudioMixer에 추가: ' + userId);
                     }
                 }
             }
 
-            // 로컬 오디오도 추가
-            if (typeof localStream !== 'undefined' && localStream) {
-                // 로컬 오디오 활성화 상태 확인
-                const audioTracks = localStream.getAudioTracks();
-                const localUserId = typeof ParticipantUtils !== 'undefined'
-                    ? ParticipantUtils.getLocalUserId()
-                    : null;
-
-                // ParticipantUtils가 있으면 상태를 확인, 없으면 트랙만 확인
-                let shouldAddLocal = false;
-
-                if (localUserId && typeof ParticipantUtils !== 'undefined') {
-                    const audioState = ParticipantUtils.getAudioState(localUserId);
-                    shouldAddLocal = audioState.enabled && audioTracks.some(track =>
-                        track.enabled && track.readyState === 'live'
-                    );
-                } else {
-                    // ParticipantUtils가 없으면 트랙 상태만 확인
-                    shouldAddLocal = audioTracks.some(track =>
-                        track.enabled && track.readyState === 'live'
-                    );
-                }
-
-                if (shouldAddLocal) {
-                    self.audioMixer.addAudioStream('local', localStream);
-                    console.log('로컬 오디오를 AudioMixer에 추가 (활성화됨)');
-                } else {
-                    console.warn('로컬 오디오가 비활성화되어 있어서 녹화에서 제외됨');
-                }
+            // 로컬 오디오 추가
+            if (self._shouldAddLocalAudio()) {
+                self.audioMixer.addAudioStream('local', localStream);
+                console.log('로컬 오디오를 AudioMixer에 추가 (활성화됨)');
+            } else {
+                console.warn('로컬 오디오가 비활성화되어 있어서 녹화에서 제외됨');
             }
 
             console.log('오디오 믹싱 시작 완료, 총 소스:', self.audioMixer.getSourceCount());
@@ -381,15 +453,21 @@ const recording = {
             self.stopAudioMixing();
 
             // 3. UI 업데이트
-            self.updateUI('idle');
+            // TODO: 추후 각 사용자별 1회 녹화 허용 시 로직 변경 필요
+            self.updateUI('permanentlyDisabled');
 
             // 4. DataChannel로 녹화 중지 알림
             dataChannel?.sendMessage?.('recordingStopped', 'recording');
 
             // 5. 자막 기능 재활성화
-            speechRecognitionUtils?.handlingSubtitleByRecording?.(false);
+            if (speechRecognitionUtils?.handlingSubtitleByRecording) {
+                console.log('[RECORDING] Disabling subtitle function on recording stop');
+                speechRecognitionUtils.handlingSubtitleByRecording(false);
+            } else {
+                console.warn('[RECORDING] speechRecognitionUtils not available');
+            }
 
-            console.log('녹화 중지 완료');
+            console.log('녹화 중지 완료, isReadyRecording:', self.isReadyRecording);
             self.showToast('녹화를 중지했습니다.');
 
         } catch (error) {
@@ -471,98 +549,52 @@ const recording = {
     },
 
     /**
+     * 버튼 상태 적용
+     * @private
+     * @param {jQuery} $button - 버튼 jQuery 객체
+     * @param {Object} config - 버튼 설정 객체
+     * @param {string} buttonType - 버튼 타입 ('start' 또는 'stop')
+     */
+    _applyButtonState: function($button, config, buttonType) {
+        $button.prop('disabled', config.disabled);
+
+        // 파일명 규칙: active 상태는 접미사 없음, disabled 상태만 '-disabled' 추가
+        // - active: record-start.svg, record-stop.svg
+        // - disabled: record-start-disabled.svg, record-stop-disabled.svg
+        const imageSuffix = config.image === 'disabled' ? '-disabled' : '';
+        $button.attr('src', 'images/webrtc/recording/record-' + buttonType + imageSuffix + '.svg');
+
+        let styles = {
+            'pointer-events': config.disabled ? 'none' : 'auto',
+            'cursor': config.cursor,
+            'opacity': config.opacity,
+            'user-select': 'none'
+        };
+
+        if (config.filter) {
+            styles.filter = config.filter;
+        }
+
+        $button.css(styles);
+    },
+
+    /**
      * UI 업데이트
      */
     updateUI: function (state) {
         let self = this;
-
-        switch (state) {
-            case 'recording':
-                // 녹화 시작 버튼 비활성화
-                self.$recordingStartBtn.prop('disabled', true);
-                self.$recordingStartBtn.attr('src', 'images/webrtc/recording/record-start-disabled.svg');
-                self.$recordingStartBtn.css({
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed',
-                    'opacity': '0.5',
-                    'user-select': 'none'
-                });
-
-                // 녹화 중지 버튼 활성화
-                self.$recordingStopBtn.prop('disabled', false);
-                self.$recordingStopBtn.attr('src', 'images/webrtc/recording/record-stop.svg');
-                self.$recordingStopBtn.css({
-                    'pointer-events': 'auto',
-                    'cursor': 'pointer',
-                    'opacity': '1',
-                    'user-select': 'none'
-                });
-                break;
-
-            case 'idle':
-                // 녹화 시작 버튼 활성화
-                self.$recordingStartBtn.prop('disabled', false);
-                self.$recordingStartBtn.attr('src', 'images/webrtc/recording/record-start.svg');
-                self.$recordingStartBtn.css({
-                    'pointer-events': 'auto',
-                    'cursor': 'pointer',
-                    'opacity': '1',
-                    'user-select': 'none'
-                });
-
-                // 녹화 중지 버튼 비활성화
-                self.$recordingStopBtn.prop('disabled', true);
-                self.$recordingStopBtn.attr('src', 'images/webrtc/recording/record-stop-disabled.svg');
-                self.$recordingStopBtn.css({
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed',
-                    'opacity': '0.5',
-                    'user-select': 'none'
-                });
-                break;
-
-            case 'disabled':
-                // 다른 사용자가 녹화 중일 때: 모든 버튼 완전 비활성화
-                self.$recordingStartBtn.prop('disabled', true);
-                self.$recordingStartBtn.attr('src', 'images/webrtc/recording/record-start-disabled.svg');
-                self.$recordingStartBtn.css({
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed',
-                    'opacity': '0.5',
-                    'user-select': 'none'
-                });
-
-                self.$recordingStopBtn.prop('disabled', true);
-                self.$recordingStopBtn.attr('src', 'images/webrtc/recording/record-stop-disabled.svg');
-                self.$recordingStopBtn.css({
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed',
-                    'opacity': '0.5',
-                    'user-select': 'none'
-                });
-                break;
-
-            case 'enabled':
-                // 녹화 시작 버튼 활성화
-                self.$recordingStartBtn.prop('disabled', false);
-                self.$recordingStartBtn.attr('src', 'images/webrtc/recording/record-start.svg');
-                self.$recordingStartBtn.css({
-                    'pointer-events': 'auto',
-                    'cursor': 'pointer',
-                    'opacity': '1',
-                    'user-select': 'none'
-                });
-
-                // 녹화 중지 버튼 비활성화
-                self.$recordingStopBtn.prop('disabled', true);
-                self.$recordingStopBtn.attr('src', 'images/webrtc/recording/record-stop-disabled.svg');
-                self.$recordingStopBtn.css({
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed',
-                    'opacity': '0.5',
-                    'user-select': 'none'
-                });
-                break;
+        
+        let stateConfig = RECORDING_UI_STATES[state];
+        if (!stateConfig) {
+            console.error('Unknown UI state:', state);
+            return;
+        }
+        
+        self._applyButtonState(self.$recordingStartBtn, stateConfig.startBtn, 'start');
+        self._applyButtonState(self.$recordingStopBtn, stateConfig.stopBtn, 'stop');
+        
+        if (state === 'permanentlyDisabled') {
+            console.log('[RECORDING] UI permanently disabled - room already has recording');
         }
     },
 
@@ -572,6 +604,13 @@ const recording = {
     handlingRecordingEvent: function (recordingUser, eventType) {
         let self = this;
         let recordingEvent = eventType === 'recordingStarted';
+
+        // [FIX] 녹화 시작 시에만 isReadyRecording을 true로 설정
+        // TODO: 추후 각 사용자별 1회 녹화 허용 시 사용자별 녹화 횟수 추적 필요
+        if (eventType === 'recordingStarted') {
+            self.isReadyRecording = true;
+            console.log('[RECORDING] Room recording started by:', recordingUser, '- isReadyRecording set to true');
+        }
 
         // 녹화 알림
         let recordingToast = recordingUser + '님이 녹화를 ' + (recordingEvent ? '시작' : '중지') + '했습니다';
@@ -584,14 +623,28 @@ const recording = {
                 self.updateUI('disabled');
 
                 // 자막 기능 비활성화
-                speechRecognitionUtils?.handlingSubtitleByRecording?.(true);
+                if (typeof speechRecognitionUtils !== 'undefined' && speechRecognitionUtils.handlingSubtitleByRecording) {
+                    console.log('[RECORDING] Disabling subtitle function (other user recording)');
+                    speechRecognitionUtils.handlingSubtitleByRecording(true);
+                } else {
+                    console.warn('[RECORDING] speechRecognitionUtils not available');
+                }
 
             } else if (eventType === 'recordingStopped') {
                 self.isOtherUserRecording = false;
-                self.updateUI('enabled');
+
+                // 현재 정책: 동일한 방에서 1번이라도 녹화하면 모든 사용자 녹화 불가
+                // TODO: 추후 각 사용자별 1회 녹화 허용으로 변경 시 조건문 수정 필요
+                console.log('[RECORDING] Recording stopped by:', recordingUser, '- Permanently disabling for all users in room');
+                self.updateUI('permanentlyDisabled');
 
                 // 자막 기능 재활성화
-                speechRecognitionUtils?.handlingSubtitleByRecording?.(false);
+                if (typeof speechRecognitionUtils !== 'undefined' && speechRecognitionUtils.handlingSubtitleByRecording) {
+                    console.log('[RECORDING] Re-enabling subtitle function');
+                    speechRecognitionUtils.handlingSubtitleByRecording(false);
+                } else {
+                    console.warn('[RECORDING] speechRecognitionUtils not available');
+                }
             }
         }
     },
@@ -649,5 +702,207 @@ const recording = {
         }
 
         console.log('===========================');
+    },
+
+    /**
+     * 녹화 자동 중지 이벤트 처리
+     * @param {Object} message - WebSocket 메시지 (recordingId, minutes, message)
+     */
+    handleAutoStopRecording: function(message) {
+        let self = this;
+        let minutes = message.minutes || 10;
+
+        console.log('Recording auto-stopped:', message);
+
+        // Toast 알림
+        self.showToast(
+            '녹화가 ' + minutes + '분 경과로 자동 종료되었습니다.\n업로드 중입니다...',
+            5000,
+            'warning'
+        );
+
+        // 녹화 상태 업데이트
+        self.isRecording = false;
+        // isOtherUserRecording는 다른 사용자의 녹화 상태이므로 여기서 변경하지 않음
+        // 자동 중지는 '내가' 녹화를 시작한 경우에만 발생함
+
+        // UI 업데이트
+        self.updateUI('idle');
+
+        // 자막 기능 처리
+        if (typeof speechRecognitionUtils !== 'undefined') {
+            speechRecognitionUtils.handlingSubtitleByRecording(false);
+        }
+    },
+
+    /**
+     * 녹화 업로드 완료 이벤트 처리
+     * @param {Object} message - WebSocket 메시지 (recordingId, downloadUrl, fileSize, fileSizeMB)
+     */
+    handleUploadCompleted: function(message) {
+        let self = this;
+        let fileSizeMB = message.fileSizeMB || 0;
+        let downloadUrl = message.downloadUrl;
+
+        console.log('Recording upload completed:', message);
+
+        // Toast 알림
+        self.showToast(
+            '녹화 파일 업로드가 완료되었습니다!\n파일 크기: ' + fileSizeMB + 'MB\n\n다운로드 링크를 확인하세요.',
+            5000,
+            'success'
+        );
+
+        // 다운로드 알림 UI 표시
+        self.showDownloadNotification(downloadUrl, fileSizeMB);
+    },
+
+    /**
+     * 녹화 업로드 실패 이벤트 처리
+     * @param {Object} message - WebSocket 메시지 (recordingId, error, message)
+     */
+    handleUploadFailed: function(message) {
+        let self = this;
+        let errorMessage = message.error || '알 수 없는 오류';
+
+        console.error('Recording upload failed:', message);
+
+        // Toast 알림
+        self.showToast(
+            '녹화 파일 업로드에 실패했습니다.\n오류: ' + errorMessage,
+            5000,
+            'error'
+        );
+    },
+
+    /**
+     * 녹화 에러 핸들러
+     * @param {Object} message - 에러 메시지 객체
+     * @param {string} message.id - 에러 타입 (alreadyRecording, notRecording, 등)
+     * @param {string} message.message - 에러 메시지
+     */
+    handleRecordingError: function(message) {
+        let self = this;
+        let errorType = message.id;
+        let errorMessage = message.message || '녹화 중 오류가 발생했습니다.';
+
+        console.error('[RECORDING ERROR]', errorType, errorMessage, message);
+
+        //12. 특정 에러에 대해서는 UI를 permanentlyDisabled 상태로 변경
+        const permanentlyDisabledErrors = [
+            'alreadyRecording',
+            'recordingEndpointNotFound', 
+            'recordingFileExists',
+            'recordingAutoStopFailed'
+        ];
+
+        if (permanentlyDisabledErrors.includes(errorType)) {
+            console.log(`[RECORDING ERROR] Permanently disabling UI for error type: ${errorType}`);
+            self.updateUI('permanentlyDisabled');
+            
+            // 녹화 상태 초기화
+            self.isRecording = false;
+            self.serverRecordingId = null;
+            self.isReadyRecording = true;
+        }
+    },
+
+    /**
+     * 다운로드 알림 UI 표시
+     * @param {string} downloadUrl - 다운로드 URL
+     * @param {number} fileSizeMB - 파일 크기 (MB)
+     */
+    showDownloadNotification: function(downloadUrl, fileSizeMB) {
+        let self = this;
+
+        // 기존 알림이 있으면 제거
+        $('.recording-download-notification').remove();
+
+        // 다운로드 알림 HTML
+        let notificationHTML = `
+            <div class="recording-download-notification" style="
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 350px;
+                animation: slideInRight 0.3s ease-out;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center;">
+                        <i class="fas fa-video" style="color: white; font-size: 24px; margin-right: 10px;"></i>
+                        <span style="color: white; font-weight: bold; font-size: 16px;">녹화 파일 준비 완료</span>
+                    </div>
+                    <button class="close-notification-btn" style="
+                        background: transparent;
+                        border: none;
+                        color: white;
+                        font-size: 20px;
+                        cursor: pointer;
+                        padding: 0;
+                        line-height: 1;
+                    ">×</button>
+                </div>
+                <div style="color: rgba(255,255,255,0.9); font-size: 14px; margin-bottom: 15px;">
+                    파일 크기: ${fileSizeMB} MB
+                </div>
+                <a href="${downloadUrl}"
+                   download
+                   target="_blank"
+                   class="download-recording-btn"
+                   style="
+                       display: block;
+                       background: white;
+                       color: #667eea;
+                       padding: 12px 20px;
+                       border-radius: 8px;
+                       text-decoration: none;
+                       font-weight: bold;
+                       text-align: center;
+                       transition: all 0.3s;
+                   ">
+                    <i class="fas fa-download" style="margin-right: 8px;"></i>
+                    녹화 파일 다운로드
+                </a>
+            </div>
+            <style>
+                @keyframes slideInRight {
+                    from {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                .download-recording-btn:hover {
+                    background: #f0f0f0 !important;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                }
+            </style>
+        `;
+
+        // body에 추가
+        $('body').append(notificationHTML);
+
+        // 닫기 버튼 이벤트
+        $('.close-notification-btn').on('click', function() {
+            $('.recording-download-notification').fadeOut(300, function() {
+                $(this).remove();
+            });
+        });
+
+        // 30초 후 자동 제거
+        setTimeout(function() {
+            $('.recording-download-notification').fadeOut(300, function() {
+                $(this).remove();
+            });
+        }, 30000);
     }
 };

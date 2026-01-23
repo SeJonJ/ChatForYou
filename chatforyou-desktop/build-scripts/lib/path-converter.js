@@ -238,15 +238,33 @@ class PathConverter {
         },
         {
           name: 'image-direct-webrtc-conversion',
-          description: '"/images/webrtc/" -> "static/images/webrtc/"',
-          pattern: /[`'"]\/?images\/webrtc\//g,
-          replacement: '"static/images/webrtc/'
+          description: '"/images/webrtc/" -> "static/images/webrtc/" (preserving quote type)',
+          pattern: /(['"])images\/webrtc\//g,
+          replacement: '$1static/images/webrtc/'
         },
         {
           name: 'quote-fix-webrtc-conversion',
           description: 'Fix mismatched quotes in webrtc image paths',
           pattern: /"static\/images\/webrtc\/([^'"]+)\.svg'/g,
           replacement: '"static/images/webrtc/$1.svg"'
+        },
+        {
+          name: 'attr-string-template-webrtc-conversion',
+          description: 'attr("src", \'images/webrtc/\' + ...) -> attr("src", \'static/images/webrtc/\' + ...)',
+          pattern: /attr\(\s*['"]src['"]\s*,\s*['"]images\/webrtc\//g,
+          replacement: 'attr("src", \'static/images/webrtc/'
+        },
+        {
+          name: 'template-literal-webrtc-conversion',
+          description: 'Template literal: `images/webrtc/...${...}...` -> `static/images/webrtc/...${...}...`',
+          pattern: /`([^`]*?)images\/webrtc\//g,
+          replacement: '`$1static/images/webrtc/'
+        },
+        {
+          name: 'template-literal-images-general',
+          description: 'Template literal general images: `...images/...` -> `...static/images/...` (non-webrtc)',
+          pattern: /`([^`]*?)images\/((?!webrtc)[^`\/]*)\//g,
+          replacement: '`$1static/images/$2/'
         }
       ]
     };
