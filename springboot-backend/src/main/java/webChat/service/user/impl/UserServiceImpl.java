@@ -10,7 +10,9 @@ import webChat.model.login.OauthRedis;
 import webChat.model.redis.DataType;
 import webChat.model.user.UserDto;
 import webChat.repository.SocialUserRepository;
+import webChat.service.redis.RedisService;
 import webChat.service.user.UserService;
+import webChat.utils.StringUtil;
 
 import java.util.Optional;
 
@@ -21,13 +23,13 @@ import static webChat.model.redis.RedisKeyPrefix.*;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
     private final SocialUserRepository socialUserRepository;
-    private final RedisTemplate<String, Object> slaveTemplate;
+    private final RedisService redisService;
 
     @Override
     public UserDto getUserInfo(OauthRedis oauthRedis) throws Exception {
         Optional<SocialUser> socialUser = Optional.ofNullable(socialUserRepository.findByEmail(oauthRedis.getEmail()));
 
-        if(socialUser == null || socialUser.isEmpty()){
+        if(socialUser.isEmpty()){
             throw new BadRequestException("Not exist user !!!");
         }
 
@@ -35,14 +37,19 @@ public class UserServiceImpl implements UserService {
 
     }
 
+    // TODO 전반적인 예외 처리 수정 필요
     @Override
-    public <T> T getFriendRedisInfo(String userId, Class<T> clazz) throws Exception {
+    public OauthRedis getValidatedOauthUser(String userId) throws BadRequestException {
         SocialUser user = socialUserRepository.findByEmail(userId);
         if (user == null) {
-            throw new RuntimeException("Not exist user !!!");
+            throw new BadRequestException("Not exist user !!!");
         }
 
-        String redisKey = OAUTH_PREFIX.getPrefix() + user.getIdx();
-        return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.SOCIAL_USER.getType()));
+        OauthRedis oauthRedis = redisService.getRedisDataByDataType(String.valueOf(user.getIdx()), DataType.SOCIAL_USER, OauthRedis.class);
+        if (oauthRedis == null) {
+            throw new BadRequestException("Not exist oauth redis !!!");
+        }
+
+        return oauthRedis;
     }
 }
