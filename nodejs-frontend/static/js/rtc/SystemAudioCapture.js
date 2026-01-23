@@ -18,12 +18,73 @@
  * SystemAudioCapture - 화면 공유 시 시스템 오디오를 캡처하는 모듈
  * getDisplayMedia API를 사용하여 화면과 시스템 오디오를 함께 캡처
  */
+
+/**
+ * 미디어 에러 메시지 맵
+ */
+const MEDIA_ERROR_MESSAGES = {
+    'NotAllowedError': '화면 공유 권한이 거부되었습니다.',
+    'NotFoundError': '공유할 화면을 찾을 수 없습니다.',
+    'NotReadableError': '화면을 캡처할 수 없습니다. 다른 애플리케이션에서 사용 중일 수 있습니다.'
+};
+
 const SystemAudioCapture = {
     // 상태 속성
     displayStream: null,
     systemAudioStream: null,
     isCapturing: false,
     onStopCallback: null,
+
+    /**
+     * 미디어 에러를 사용자 친화적 메시지로 변환 
+     * @private
+     * @param {Error} error - 원본 에러 객체
+     * @throws {Error} 변환된 에러 메시지
+     */
+    _translateMediaError: function(error) {
+        let message = MEDIA_ERROR_MESSAGES[error.name];
+        if (message) {
+            throw new Error(message);
+        }
+        throw error;
+    },
+
+    /**
+     * 스트림의 모든 트랙 중지 및 정리
+     * @private
+     * @param {MediaStream} stream - 중지할 스트림
+     */
+    _stopStreamTracks: function(stream) {
+        if (!stream) return;
+        
+        stream.getTracks().forEach(function(track) {
+            track.stop();
+        });
+    },
+
+    /**
+     * 특정 타입의 트랙만 추출 
+     * @private
+     * @param {string} trackType - 'audio' 또는 'video'
+     * @returns {MediaStream|null}
+     */
+    _extractTrackStream: function(trackType) {
+        let self = this;
+        
+        if (!self.displayStream) {
+            return null;
+        }
+        
+        let tracks = trackType === 'audio' 
+            ? self.displayStream.getAudioTracks()
+            : self.displayStream.getVideoTracks();
+        
+        if (tracks.length === 0) {
+            return null;
+        }
+        
+        return new MediaStream(tracks);
+    },
 
     /**
      * 시스템 오디오를 포함한 화면 공유 시작
@@ -99,17 +160,7 @@ const SystemAudioCapture = {
 
         } catch (error) {
             console.error('화면 공유 시작 실패:', error);
-
-            // 사용자 친화적 에러 메시지
-            if (error.name === 'NotAllowedError') {
-                throw new Error('화면 공유 권한이 거부되었습니다.');
-            } else if (error.name === 'NotFoundError') {
-                throw new Error('공유할 화면을 찾을 수 없습니다.');
-            } else if (error.name === 'NotReadableError') {
-                throw new Error('화면을 캡처할 수 없습니다. 다른 애플리케이션에서 사용 중일 수 있습니다.');
-            }
-
-            throw error;
+            self._translateMediaError(error);
         }
     },
 
@@ -125,24 +176,14 @@ const SystemAudioCapture = {
         }
 
         try {
-            // 모든 트랙 중지
-            if (self.displayStream) {
-                self.displayStream.getTracks().forEach(function(track) {
-                    track.stop();
-                });
-                self.displayStream = null;
-            }
-
-            if (self.systemAudioStream) {
-                self.systemAudioStream.getTracks().forEach(function(track) {
-                    track.stop();
-                });
-                self.systemAudioStream = null;
-            }
-
+            self._stopStreamTracks(self.displayStream);
+            self._stopStreamTracks(self.systemAudioStream);
+            
+            self.displayStream = null;
+            self.systemAudioStream = null;
             self.isCapturing = false;
+            
             console.log('화면 공유 중지됨');
-
         } catch (error) {
             console.error('화면 공유 중지 실패:', error);
         }
@@ -196,17 +237,7 @@ const SystemAudioCapture = {
      */
     getAudioOnlyStream: function () {
         let self = this;
-
-        if (!self.displayStream) {
-            return null;
-        }
-
-        const audioTracks = self.displayStream.getAudioTracks();
-        if (audioTracks.length === 0) {
-            return null;
-        }
-
-        return new MediaStream(audioTracks);
+        return self._extractTrackStream('audio');
     },
 
     /**
@@ -215,17 +246,7 @@ const SystemAudioCapture = {
      */
     getVideoOnlyStream: function () {
         let self = this;
-
-        if (!self.displayStream) {
-            return null;
-        }
-
-        const videoTracks = self.displayStream.getVideoTracks();
-        if (videoTracks.length === 0) {
-            return null;
-        }
-
-        return new MediaStream(videoTracks);
+        return self._extractTrackStream('video');
     },
 
     /**

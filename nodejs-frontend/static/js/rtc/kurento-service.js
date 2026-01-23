@@ -128,126 +128,193 @@ async function initializeMediaDevices() {
 // 함수 호출
 initializeMediaDevices();
 
-// navigator.mediaDevices와 그 하위의 getUserMedia 메서드가 존재하는지 확인합니다.
+// getUserMedia 지원 확인
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    // 원래의 getUserMedia 메서드를 저장합니다.
+    // 원본 getUserMedia 저장
     origGetUserMedia = navigator.mediaDevices.getUserMedia;
     let customGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-    // getUserMedia 메서드를 덮어씁니다.
+    // getUserMedia 오버라이드 (에러 타입별 처리 개선)
     navigator.mediaDevices.getUserMedia = function (cs) {
-        // 원래의 getUserMedia 메서드를 호출합니다.
         return customGetUserMedia(cs).catch(function (error) {
+            console.error('[getUserMedia Error]', error.name, ':', error.message);
 
-            // 비디오 요청이 실패한 경우에만 더미 비디오 사용
+            // 비디오 요청 실패 시 에러 타입별 처리
             if (cs.video) {
-                console.warn("Video error occurred, using dummy video instead.", error);
+                // 에러 타입별 분기 처리
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    // 권한 거부: 즉시 더미 비디오 사용
+                    console.warn('[권한 거부] 더미 비디오 사용');
+                    return createDummyVideoStream(cs.audio);
 
-                // 오디오 스트림만 요청
-                return customGetUserMedia({ audio: cs.audio })
-                    .then(function (audioStream) {
-                        // 오디오 스트림에 더미 비디오 트랙을 추가합니다.
-                        const dummyVideoTrack = getDummyVideoTrack();
-                        audioStream.addTrack(dummyVideoTrack);
-                        console.log(' Dummy video track added due to camera error');
-                        // 수정된 스트림을 반환합니다.
-                        return audioStream;
-                    })
-                    .catch(function (audioError) {
-                        // 오디오도 실패한 경우
-                        console.error('Audio also failed:', audioError);
-                        return Promise.reject(audioError);
-                    });
+                } else if (error.name === 'NotFoundError') {
+                    // 장치 없음 or 제약조건 불일치: 완화된 constraints로 재시도
+                    console.warn('[NotFoundError] 완화된 constraints로 재시도...');
+                    return retryWithRelaxedConstraints(cs)
+                        .catch(function(retryError) {
+                            console.warn('[재시도 실패] 더미 비디오 사용:', retryError.name);
+                            return createDummyVideoStream(cs.audio);
+                        });
+
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    // 장치 사용 중: 1초 대기 후 재시도 (1회만)
+                    console.warn('[장치 사용 중] 1초 후 재시도...');
+                    return delay(1000)
+                        .then(function() {
+                            return customGetUserMedia(cs);
+                        })
+                        .catch(function(retryError) {
+                            console.warn('[재시도 실패] 더미 비디오 사용:', retryError.name);
+                            return createDummyVideoStream(cs.audio);
+                        });
+
+                } else if (error.name === 'OverconstrainedError') {
+                    // 제약조건 불만족: 완화된 constraints로 재시도
+                    console.warn('[OverconstrainedError] 완화된 constraints로 재시도...');
+                    if (error.constraint) {
+                        console.log('실패한 제약조건:', error.constraint);
+                    }
+                    return retryWithRelaxedConstraints(cs)
+                        .catch(function(retryError) {
+                            console.warn('[재시도 실패] 더미 비디오 사용:', retryError.name);
+                            return createDummyVideoStream(cs.audio);
+                        });
+
+                } else {
+                    // 기타 에러: 즉시 더미 비디오 사용
+                    console.warn('[알 수 없는 에러] 더미 비디오 사용:', error.name);
+                    return createDummyVideoStream(cs.audio);
+                }
             }
 
-            // 그외의 에러를 그대로 반환합니다.
             return Promise.reject(error);
         });
     };
 
-    // 더미 비디오 트랙을 생성하는 함수입니다.
+    /**
+     * 헬퍼 함수 1: 더미 비디오 스트림 생성
+     * 비디오 획득 실패 시 오디오 + 더미 비디오 트랙으로 구성된 스트림 생성
+     * @param {Object} audioConstraints - 오디오 제약조건
+     * @returns {Promise<MediaStream>}
+     */
+    function createDummyVideoStream(audioConstraints) {
+        return customGetUserMedia({ audio: audioConstraints })
+            .then(function (audioStream) {
+                const dummyVideoTrack = getDummyVideoTrack();
+                audioStream.addTrack(dummyVideoTrack);
+                console.log('[더미 비디오] 트랙 추가 완료');
+                return audioStream;
+            })
+            .catch(function (audioError) {
+                console.error('[더미 비디오] 오디오 획득 실패:', audioError);
+                return Promise.reject(audioError);
+            });
+    }
+
+    /**
+     * 기본 constraints로 재시도
+     * @param {Object} originalConstraints - 원본 제약조건
+     * @returns {Promise<MediaStream>}
+     */
+    function retryWithRelaxedConstraints(originalConstraints) {
+        // 모든 비디오 제약 조건 제거, 브라우저가 최적값 선택
+        const relaxedConstraints = {
+            video: true,  // 단순히 true만 전달
+            audio: originalConstraints.audio
+        };
+
+        console.log('[완화된 재시도] 제약조건:', JSON.stringify(relaxedConstraints.video));
+        return customGetUserMedia(relaxedConstraints);
+    }
+
+    /**
+     * 딜레이 유틸리티
+     * Promise 기반 setTimeout 래퍼
+     * @param {number} ms - 밀리초
+     * @returns {Promise<void>}
+     */
+    function delay(ms) {
+        return new Promise(function(resolve) {
+            setTimeout(resolve, ms);
+        });
+    }
+
+    // 더미 비디오 트랙 생성
     function getDummyVideoTrack() {
-        // 캔버스를 생성하여 더미 이미지를 그립니다.
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
-
         const ctx = canvas.getContext('2d');
 
-        // [NEW] 랜덤 이미지 선택 (1~4)
+        // 랜덤 이미지 선택
         const randomImageNum = Math.floor(Math.random() * 4) + 1;
         const imagePath = `images/webrtc/non-video/non_video_${randomImageNum}.png`;
 
-        console.log(`Loading dummy video image: ${imagePath}`);
-
-        // 이미지 로드
         const img = new Image();
+        let imageLoaded = false;
+        let drawX = 0, drawY = 0, drawWidth = 640, drawHeight = 480;
 
+        // 이미지 로드 완료 핸들러
         img.onload = function() {
-            // 이미지를 Canvas 크기에 맞춰 그리기 (비율 유지)
             const imgRatio = img.width / img.height;
             const canvasRatio = canvas.width / canvas.height;
 
-            let drawWidth, drawHeight, x, y;
-
+            // 이미지 비율 계산
             if (imgRatio > canvasRatio) {
-                // 이미지가 더 넓음 - 너비에 맞춤
                 drawWidth = canvas.width;
                 drawHeight = img.height * (canvas.width / img.width);
-                x = 0;
-                y = (canvas.height - drawHeight) / 2;
+                drawX = 0;
+                drawY = (canvas.height - drawHeight) / 2;
             } else {
-                // 이미지가 더 좁음 - 높이에 맞춤
                 drawHeight = canvas.height;
                 drawWidth = img.width * (canvas.height / img.height);
-                x = (canvas.width - drawWidth) / 2;
-                y = 0;
+                drawX = (canvas.width - drawWidth) / 2;
+                drawY = 0;
             }
 
-            // 배경 검정색으로 채우기
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 이미지 그리기
-            ctx.drawImage(img, x, y, drawWidth, drawHeight);
-
-            console.log('Dummy video image loaded successfully');
+            imageLoaded = true;
+            console.log('더미 이미지 로드 완료:', imagePath);
         };
 
-        img.onerror = function(error) {
-            // [FALLBACK] 이미지 로딩 실패 시 기본 화면 표시
-            console.error('Failed to load dummy video image, using fallback:', error);
-
-            ctx.fillStyle = '#2c3e50';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 32px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 20);
-            ctx.font = '20px Arial';
-            ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
+        // 이미지 로드 실패 핸들러
+        img.onerror = function() {
+            console.error('더미 이미지 로드 실패');
+            imageLoaded = false;
         };
 
         img.src = imagePath;
 
-        // 캔버스의 내용을 기반으로 더미 비디오 스트림을 생성합니다.
-        // 1fps로 충분 (정적 이미지이므로)
-        const dummyStream = canvas.captureStream(1);
+        // Canvas 그리기 루프
+        function drawFrame() {
+            if (imageLoaded) {
+                // 더미 이미지 그리기
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+            } else {
+                // 로딩 중 폴백 화면
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = '20px Arial';
+                ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
+            }
+
+            requestAnimationFrame(drawFrame);
+        }
+
+        drawFrame();
+
+        // 비디오 스트림 생성
+        const dummyStream = canvas.captureStream(30);
         const videoTrack = dummyStream.getVideoTracks()[0];
 
-        console.log('더미 비디오 트랙 생성:', {
-            id: videoTrack.id,
-            enabled: videoTrack.enabled,
-            muted: videoTrack.muted,
-            readyState: videoTrack.readyState,
-            label: videoTrack.label,
-            settings: videoTrack.getSettings(),
-            imagePath: imagePath
-        });
+        console.log('더미 비디오 스트림 생성:', videoTrack.id);
 
-        // 더미 비디오 트랙을 반환합니다.
         return videoTrack;
     }
 }
@@ -300,16 +367,69 @@ ws.onmessage = function (message) {
         // case 'recordingUploadProgress':
         //     console.debug('recordingUploadProgress', parsedMessage);
         //     break;
+        case 'recordingAutoStopped':
+            // 녹화 자동 중지 이벤트 처리
+            if (recording?.handleAutoStopRecording) {
+                recording.handleAutoStopRecording(parsedMessage);
+            } else {
+                console.warn('recording.handleAutoStopRecording is not defined');
+            }
+            break;
         case 'recordingUploadCompleted':
             console.log('recordingUploadCompleted', parsedMessage);
-            alert('녹화 완료', parsedMessage.message);
+            // recording 객체의 핸들러 호출
+            if (recording?.handleUploadCompleted) {
+                recording.handleUploadCompleted(parsedMessage);
+            } else {
+                alert('녹화 완료', parsedMessage.message);
+            }
             break;
         case 'recordingUploadFailed':
             console.log('recordingUploadFailed', parsedMessage);
-            alert('녹화 실패', parsedMessage.message);
+            // recording 객체의 핸들러 호출
+            if (recording?.handleUploadFailed) {
+                recording.handleUploadFailed(parsedMessage);
+            } else {
+                alert('녹화 실패', parsedMessage.message);
+            }
+            break;
+        case 'alreadyRecording':
+        case 'notRecording':
+        case 'recordingEndpointNotFound':
+        case 'permissionDenied':
+        case 'recordingFileExists':
+        case 'recordingAutoStopFailed':
+            Toastify({
+                text: parsedMessage?.message,
+                duration: 4000,
+                newWindow: true,
+                close: true,
+                gravity: "top",
+                position: "center",
+                style: {
+                    background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
+                },
+            }).showToast();
+
+            // recording 객체의 에러 핸들러 호출
+            if (recording?.handleRecordingError) {
+                recording.handleRecordingError(parsedMessage);
+            }
             break;
         default:
+            Toastify({
+                text: parsedMessage?.message,
+                duration: 3000,
+                newWindow: true,
+                close: true,
+                gravity: "top",
+                position: "center",
+                style: {
+                    background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
+                },
+            }).showToast();
             console.error('Unrecognized message', parsedMessage);
+            break;
     }
 }
 

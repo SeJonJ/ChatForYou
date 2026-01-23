@@ -15,8 +15,6 @@ import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
 import webChat.model.login.QRSessionStatus;
-import webChat.model.redis.DataType;
-import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.response.common.QRLoginResponse;
 import webChat.repository.SocialUserRepository;
 import webChat.service.login.LoginService;
