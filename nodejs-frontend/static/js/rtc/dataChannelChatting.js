@@ -80,5 +80,98 @@ const dataChannelChatting = {
             .replace(/\<div\>|\<br.*?\>/ig, '\n').replace(/\<\/div\>/g, '')
             .trim()
             .replace(/\n/g, '<br>');
+    },
+
+    /**
+     * 녹화 링크 메시지를 채팅창에 표시
+     * @param {Object} file - 녹화 파일 정보 (userName, downloadUrl, fileSizeMB)
+     * @param {string} type - 메시지 타입 ('self' 또는 'other')
+     */
+    showNewRecordingLinkMessage: function(file, type) {
+        const self = this;
+
+        // 메시지 컨테이너
+        var contentElement = $('<li>').addClass(type).addClass('recording-link-message');
+
+        // 발신자 정보 (other인 경우에만)
+        if (type === 'other' && file.userName) {
+            var senderElement = $('<div>', {
+                class: 'recording-sender',
+                style: 'font-size: 12px; color: #666; margin-bottom: 4px;'
+            }).text(file.userName + ' 님이 녹화 파일을 공유했습니다');
+            contentElement.append(senderElement);
+        } else if (type === 'self') {
+            var senderElement = $('<div>', {
+                class: 'recording-sender',
+                style: 'font-size: 12px; color: #666; margin-bottom: 4px;'
+            }).text('녹화 파일이 준비되었습니다');
+            contentElement.append(senderElement);
+        }
+
+        // 녹화 정보 컨테이너
+        var infoContainer = $('<div>', {
+            class: 'recording-info-container',
+            style: 'display: flex; align-items: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ' +
+                   'padding: 12px; border-radius: 8px; color: white;'
+        });
+
+        // 비디오 아이콘
+        var iconElement = $('<i>', {
+            class: 'fas fa-video',
+            style: 'font-size: 24px; margin-right: 12px;'
+        });
+        infoContainer.append(iconElement);
+
+        // 파일 정보 텍스트
+        var textContainer = $('<div>', {
+            style: 'flex: 1;'
+        });
+        var titleElement = $('<div>', {
+            style: 'font-weight: bold; font-size: 14px; margin-bottom: 2px;'
+        }).text('녹화 파일');
+        var sizeElement = $('<div>', {
+            style: 'font-size: 12px; opacity: 0.9;'
+        }).text('크기: ' + (file.fileSizeMB || 0) + ' MB');
+        textContainer.append(titleElement, sizeElement);
+        infoContainer.append(textContainer);
+
+        // 다운로드 버튼
+        var downloadBtn = $('<button>', {
+            class: 'btn recording-download-chat-btn',
+            style: 'background: white; color: #667eea; border: none; padding: 8px 16px; ' +
+                   'border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;'
+        }).html('<i class="fas fa-download" style="margin-right: 4px;"></i>다운로드');
+
+        // 다운로드 버튼 클릭 이벤트
+        downloadBtn.on('click', function() {
+            if (!file.downloadUrl) {
+                console.error('[Chat] 다운로드 URL이 없습니다.');
+                return;
+            }
+
+            console.log('[Chat] 녹화 파일 다운로드 시작:', file.downloadUrl);
+
+            // JavaScript를 통한 강제 다운로드
+            var link = document.createElement('a');
+            link.href = file.downloadUrl;
+            link.download = 'recording_' + new Date().getTime() + '.webm';
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            console.log('[Chat] 다운로드 요청 완료');
+        });
+
+        infoContainer.append(downloadBtn);
+        contentElement.append(infoContainer);
+
+        // 채팅창에 추가
+        self.$messagesContainer.append(contentElement);
+
+        // 스크롤을 아래로
+        self.$messagesContainer.scrollTop(self.$messagesContainer.prop("scrollHeight"));
+
+        console.log('[Chat] 녹화 링크 메시지 표시 완료:', type);
     }
 }

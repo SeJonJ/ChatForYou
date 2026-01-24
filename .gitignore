@@ -156,6 +156,11 @@ springboot-backend/src/main/resources/data/
 springboot-backend/src/main/resources/geodata/
 
 # ========================================
+# figma-ai 설정
+# ========================================
+figma-plugin
+
+# ========================================
 # 개발 도구 및 기타
 # ========================================
 .claude
