@@ -124,7 +124,7 @@ public class ChatRoomController {
     }
 
     @GetMapping("/room/list")
-    public ResponseEntity<List<ChatRoomOutVo>> goChatRooms(
+    public ResponseEntity<List<ChatRoomOutVo>> getChatRoomList(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNum", required = false, defaultValue = "0") String pageNumStr,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr){

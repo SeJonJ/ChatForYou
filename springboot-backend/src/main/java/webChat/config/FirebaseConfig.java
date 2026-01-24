@@ -2,6 +2,7 @@ package webChat.config;
 
 import com.google.auth.oauth2.GoogleCredentials;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import com.google.firebase.FirebaseApp;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Component
+@Slf4j
 public class FirebaseConfig {
 
     @PostConstruct
@@ -27,11 +29,11 @@ public class FirebaseConfig {
             // 환경변수가 있으면 해당 경로의 파일 사용
             FileInputStream serviceAccount = new FileInputStream(credentialsPath);
             credentials = GoogleCredentials.fromStream(serviceAccount);
-            System.out.println("Firebase 초기화: GOOGLE_APPLICATION_CREDENTIALS 사용");
+            log.info("Firebase 초기화: GOOGLE_APPLICATION_CREDENTIALS 사용");
         } else {
             // 환경변수가 없으면 기본 경로에서 JSON 파일 찾기
             credentials = loadCredentialsFromDefaultPath();
-            System.out.println("Firebase 초기화: 기본 JSON 파일 사용");
+            log.info("Firebase 초기화: 기본 JSON 파일 사용");
         }
 
         FirebaseOptions options = FirebaseOptions.builder()
@@ -49,11 +51,10 @@ public class FirebaseConfig {
             GoogleCredentials credentials = GoogleCredentials.fromStream(inputStream);
             return credentials;
         } else {
-            //throw new RuntimeException("Firebase 설정 파일을 찾을 수 없습니다: firebase/google_account_key.json");
 
             // 여러 위치에서 JSON 파일 찾기
             String[] possiblePaths = {
-                    "/etc/firebase/google_account_key.json",  // K8s 마운트 경로
+                    "/etc/firebase/google_account_key.json",  // K8s 마운트 경로일
                     //"firebase-service-account.json"  // 현재 디렉토리
             };
 
@@ -61,17 +62,15 @@ public class FirebaseConfig {
                 try {
                     File file = new File(path);
                     if (file.exists()) {
-                        System.out.println("Firebase JSON 파일 발견: " + path);
+                        log.info("Firebase JSON 파일 발견: " + path);
                         return GoogleCredentials.fromStream(new FileInputStream(file));
                     }
                 } catch (IOException e) {
-                    System.out.println("파일 읽기 실패: " + path);
+                    log.info("파일 읽기 실패: " + path);
                 }
             }
 
             throw new RuntimeException("Firebase 설정 파일을 찾을 수 없습니다.");
         }
-
-
     }
 }

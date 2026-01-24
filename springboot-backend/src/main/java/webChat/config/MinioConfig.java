@@ -23,6 +23,9 @@ public class MinioConfig {
     @Value("${minio.bucket.name}")
     private String bucketName;
 
+    @Value("${minio.recording_bucket.name:chatforyou-recording-storage}")
+    private String recordingBucketName;
+
     @Value("${minio.url}")
     private String url;
 
