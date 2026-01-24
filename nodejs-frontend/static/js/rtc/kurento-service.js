@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// //console.log("location.host : "+location.host)
 let locationHost = window.__CONFIG__.API_BASE_URL.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
 let participants = {};
 
@@ -78,6 +77,11 @@ let constraints = {
         sampleRate: 48000,
         sampleSize: 16,
         volume: 0.5
+    },
+    video: {
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, min: 15, max: 30 }
     }
 };
 
@@ -104,20 +108,9 @@ async function initializeMediaDevices() {
         return;
     }
 
-    // 오디오 권한이 있으면 기존 로직 실행
+    // 오디오 전용 테스트 (비디오 장치와의 충돌 방지)
     try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        // Add your logic after successfully getting the media here.
-        constraints.video = {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
-            frameRate: {
-                ideal: 30,  // 권장 프레임률
-                min: 15,    // 최소 허용치
-                max: 30     // 최대 제한 (화면 공유 시 30fps 이상은 리소스 과부하 유발)
-            }
-        };
-        // 스트림 해제 (테스트용이므로)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints.audio });
         stream.getTracks().forEach(track => track.stop());
     } catch (error) {
         console.error('Media devices initialization failed:', error);
@@ -133,6 +126,10 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     // 원본 getUserMedia 저장
     origGetUserMedia = navigator.mediaDevices.getUserMedia;
     let customGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+
+    // 더미 비디오 중복 생성 방지
+    let hasDummyVideo = false;
+    let cachedDummyStream = null;
 
     // getUserMedia 오버라이드 (에러 타입별 처리 개선)
     navigator.mediaDevices.getUserMedia = function (cs) {
@@ -192,16 +189,24 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     };
 
     /**
-     * 헬퍼 함수 1: 더미 비디오 스트림 생성
-     * 비디오 획득 실패 시 오디오 + 더미 비디오 트랙으로 구성된 스트림 생성
-     * @param {Object} audioConstraints - 오디오 제약조건
-     * @returns {Promise<MediaStream>}
+     * 더미 비디오 스트림 생성 (중복 생성 방지)
      */
     function createDummyVideoStream(audioConstraints) {
+        // 이미 더미 비디오가 생성된 경우 캐시된 스트림 반환
+        if (hasDummyVideo && cachedDummyStream) {
+            console.log('[더미 비디오] 캐시된 스트림 재사용');
+            return Promise.resolve(cachedDummyStream);
+        }
+
         return customGetUserMedia({ audio: audioConstraints })
             .then(function (audioStream) {
                 const dummyVideoTrack = getDummyVideoTrack();
                 audioStream.addTrack(dummyVideoTrack);
+
+                // 캐시 저장
+                hasDummyVideo = true;
+                cachedDummyStream = audioStream;
+
                 console.log('[더미 비디오] 트랙 추가 완료');
                 return audioStream;
             })
@@ -246,20 +251,18 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         canvas.height = 480;
         const ctx = canvas.getContext('2d');
 
-        // 랜덤 이미지 선택
         const randomImageNum = Math.floor(Math.random() * 4) + 1;
         const imagePath = `images/webrtc/non-video/non_video_${randomImageNum}.png`;
 
         const img = new Image();
         let imageLoaded = false;
         let drawX = 0, drawY = 0, drawWidth = 640, drawHeight = 480;
+        let animationId = null;
 
-        // 이미지 로드 완료 핸들러
         img.onload = function() {
             const imgRatio = img.width / img.height;
             const canvasRatio = canvas.width / canvas.height;
 
-            // 이미지 비율 계산
             if (imgRatio > canvasRatio) {
                 drawWidth = canvas.width;
                 drawHeight = img.height * (canvas.width / img.width);
@@ -276,23 +279,19 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             console.log('더미 이미지 로드 완료:', imagePath);
         };
 
-        // 이미지 로드 실패 핸들러
         img.onerror = function() {
-            console.error('더미 이미지 로드 실패');
+            console.error('더미 이미지 로드 실패:', imagePath);
             imageLoaded = false;
         };
 
         img.src = imagePath;
 
-        // Canvas 그리기 루프
         function drawFrame() {
             if (imageLoaded) {
-                // 더미 이미지 그리기
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
             } else {
-                // 로딩 중 폴백 화면
                 ctx.fillStyle = '#2c3e50';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = 'white';
@@ -304,14 +303,22 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
             }
 
-            requestAnimationFrame(drawFrame);
+            animationId = requestAnimationFrame(drawFrame);
         }
 
         drawFrame();
 
-        // 비디오 스트림 생성
         const dummyStream = canvas.captureStream(30);
         const videoTrack = dummyStream.getVideoTracks()[0];
+
+        // 트랙 종료 시 애니메이션 정리
+        videoTrack.addEventListener('ended', function() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+                console.log('더미 비디오 애니메이션 정리됨');
+            }
+        });
 
         console.log('더미 비디오 스트림 생성:', videoTrack.id);
 
@@ -321,7 +328,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
 
 ws.onmessage = function (message) {
     var parsedMessage = JSON.parse(message.data);
-    // console.info('Received message: ' + message.data);
 
     switch (parsedMessage.id) {
         case 'existingParticipants':
@@ -675,10 +681,6 @@ function receiveVideo(sender) {
         }
 
         // 스트림 할당
-        // CRITICAL FIX: 동일한 MediaStream을 video와 audio에 모두 할당하면
-        // 브라우저가 하나만 재생함 (브라우저 제약)
-        // 해결: video는 전체 stream, audio는 오디오 트랙만 분리하여 새 stream 생성
-
         // Video 요소: 전체 스트림 (비디오+오디오) - 비디오 표시용
         video.srcObject = event.stream;
 

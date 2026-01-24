@@ -333,12 +333,20 @@ const recording = {
     startAudioMixing: function () {
         let self = this;
 
+        // 서버가 Composite으로 녹화 중이면 클라이언트 AudioMixer 비활성화
+        // 오디오 중복 방지
+        if (self.serverRecordingId) {
+            console.log('[Recording] 서버 Composite 녹화 중 - 클라이언트 AudioMixer 비활성화 (오디오 중복 방지)');
+            return;
+        }
+
         if (!self.audioMixer) {
             console.warn('AudioMixer가 초기화되지 않았습니다.');
             return;
         }
 
         try {
+            // 클라이언트 전용 녹화인 경우에만 AudioMixer 사용
             // 모든 참가자의 오디오를 믹서에 추가
             if (typeof participants !== 'undefined') {
                 for (const [userId, participant] of Object.entries(participants)) {
@@ -755,6 +763,53 @@ const recording = {
 
         // 다운로드 알림 UI 표시
         self.showDownloadNotification(downloadUrl, fileSizeMB);
+
+        // 채팅창에 녹화 링크 전송 (DataChannel)
+        self.sendRecordingLinkToChat(downloadUrl, fileSizeMB);
+    },
+
+    /**
+     * 채팅창에 녹화 링크 전송 (DataChannel)
+     * @param {string} downloadUrl - 다운로드 URL
+     * @param {number} fileSizeMB - 파일 크기 (MB)
+     */
+    sendRecordingLinkToChat: function(downloadUrl, fileSizeMB) {
+        try {
+            // DataChannel 사용 가능 여부 확인
+            if (typeof dataChannelChatting === 'undefined' || !dataChannelChatting.user) {
+                console.warn('[Recording] DataChannel이 초기화되지 않았습니다.');
+                return;
+            }
+
+            const nickName = dataChannelChatting.user.nickName || '시스템';
+
+            // DataChannel을 통해 녹화 링크 메시지 전송
+            const recordingLinkMessage = {
+                type: 'recordingLink',
+                userName: nickName,
+                downloadUrl: downloadUrl,
+                fileSizeMB: fileSizeMB,
+                timestamp: new Date().getTime()
+            };
+
+            // 다른 참가자들에게 전송
+            if (dataChannelChatting.user.rtcPeer && dataChannelChatting.user.rtcPeer.send) {
+                dataChannelChatting.user.rtcPeer.send(JSON.stringify(recordingLinkMessage));
+                console.log('[Recording] 채팅창에 녹화 링크 전송 완료');
+            }
+
+            // 로컬에서도 채팅창에 표시 (본인에게도 보이도록)
+            if (typeof dataChannelChatting.showNewRecordingLinkMessage === 'function') {
+                dataChannelChatting.showNewRecordingLinkMessage({
+                    userName: nickName,
+                    downloadUrl: downloadUrl,
+                    fileSizeMB: fileSizeMB
+                }, 'self');
+            }
+
+        } catch (error) {
+            console.error('[Recording] 채팅창에 녹화 링크 전송 실패:', error);
+        }
     },
 
     /**
@@ -816,11 +871,11 @@ const recording = {
         let self = this;
 
         // 기존 알림이 있으면 제거
-        $('.recording-download-notification').remove();
+        $('#recording-download-notification').remove();
 
         // 다운로드 알림 HTML
         let notificationHTML = `
-            <div class="recording-download-notification" style="
+            <div id="recording-download-notification" style="
                 position: fixed;
                 top: 80px;
                 right: 20px;
@@ -837,7 +892,7 @@ const recording = {
                         <i class="fas fa-video" style="color: white; font-size: 24px; margin-right: 10px;"></i>
                         <span style="color: white; font-weight: bold; font-size: 16px;">녹화 파일 준비 완료</span>
                     </div>
-                    <button class="close-notification-btn" style="
+                    <button id="close-notification-btn" style="
                         background: transparent;
                         border: none;
                         color: white;
@@ -850,24 +905,24 @@ const recording = {
                 <div style="color: rgba(255,255,255,0.9); font-size: 14px; margin-bottom: 15px;">
                     파일 크기: ${fileSizeMB} MB
                 </div>
-                <a href="${downloadUrl}"
-                   download
-                   target="_blank"
-                   class="download-recording-btn"
+                <button id="download-recording-btn"
+                   data-download-url="${downloadUrl}"
                    style="
                        display: block;
+                       width: 100%;
                        background: white;
                        color: #667eea;
                        padding: 12px 20px;
                        border-radius: 8px;
-                       text-decoration: none;
+                       border: none;
                        font-weight: bold;
                        text-align: center;
                        transition: all 0.3s;
+                       cursor: pointer;
                    ">
                     <i class="fas fa-download" style="margin-right: 8px;"></i>
                     녹화 파일 다운로드
-                </a>
+                </button>
             </div>
             <style>
                 @keyframes slideInRight {
@@ -880,7 +935,7 @@ const recording = {
                         opacity: 1;
                     }
                 }
-                .download-recording-btn:hover {
+                #download-recording-btn:hover {
                     background: #f0f0f0 !important;
                     transform: translateY(-2px);
                     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
@@ -892,15 +947,36 @@ const recording = {
         $('body').append(notificationHTML);
 
         // 닫기 버튼 이벤트
-        $('.close-notification-btn').on('click', function() {
-            $('.recording-download-notification').fadeOut(300, function() {
+        $('#close-notification-btn').on('click', function() {
+            $('#recording-download-notification').fadeOut(300, function() {
                 $(this).remove();
             });
         });
 
+        // 다운로드 버튼 클릭 이벤트
+        $('#download-recording-btn').on('click', function() {
+            const url = $(this).data('download-url');
+            if (!url) {
+                console.error('[Recording] 다운로드 URL이 없습니다.');
+                return;
+            }
+
+            console.log('[Recording] 녹화 파일 다운로드 시작:', url);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'recording_' + new Date().getTime() + '.webm';
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            console.log('[Recording] 다운로드 요청 완료');
+        });
+
         // 30초 후 자동 제거
         setTimeout(function() {
-            $('.recording-download-notification').fadeOut(300, function() {
+            $('#recording-download-notification').fadeOut(300, function() {
                 $(this).remove();
             });
         }, 30000);
