@@ -65,15 +65,17 @@ public class RecordingService {
             String filePath = "/recordings/" + roomId + "/" + recordingId + "/" + fileName;
             String fullPath = "file://" + filePath;
 
+            long currentTime = System.currentTimeMillis();
+
             // 4. 방 전체 녹화 시작
             RecordingInfo recordingInfo = RecordingInfo.builder()
                     .recordingId(recordingId)
                     .roomId(roomId)
                     .recordingUserId(requestUser.getUserId())
                     .recordingNickName(requestUser.getNickName())
-                    .startAt(System.currentTimeMillis())
+                    .startAt(currentTime)
                     .recordingFile(
-                            RecordingFile.ofCreate(filePath, fullPath, System.currentTimeMillis())
+                            RecordingFile.ofCreate(fileName, filePath, fullPath, currentTime)
                     )
                     .status(RecordingStatus.RECORDING)
                     .build();

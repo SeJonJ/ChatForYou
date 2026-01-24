@@ -72,18 +72,16 @@ public class RecordingUploadService {
                     log.info("Recording file size: {} bytes ({} MB)", fileSize, fileSize / 1024 / 1024);
 
                     // 3. MinIO 업로드
-                    String downloadUrl = recordingFileService.uploadRecording(
+                    String minioFilePath = recordingFileService.uploadRecording(
                             recordingInfo,
-                            localFilePath,
-                            recordingExpire
+                            localFilePath
                     );
 
                     // 4. RecordingFile 업데이트
                     RecordingFile updatedFile = RecordingFile.of(
-                            recordingInfo.getRecordingFile().getFilePath(),
-                            downloadUrl,
+                            recordingInfo.getRecordingFile(),
+                            minioFilePath,
                             fileSize,
-                            recordingInfo.getStartAt(),
                             System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(recordingExpire)
                     );
 
@@ -93,7 +91,7 @@ public class RecordingUploadService {
                     chatRoomService.updateRoom(room);
 
                     log.info("Recording upload completed: {} (size: {} MB, url: {})",
-                            recordingId, fileSize / 1024 / 1024, downloadUrl);
+                            recordingId, fileSize / 1024 / 1024, minioFilePath);
                     return true; // 성공
 
                 } catch (Exception e) {
@@ -114,7 +112,8 @@ public class RecordingUploadService {
                         eventPublisher.publishEvent(new RecordingUploadCompletedEvent(
                                 roomId,
                                 recordingId,
-                                file.getDownloadUrl(),
+                                file.getFileName(),
+                                file.getMinioFilePath(),
                                 file.getFileSize()
                         ));
 

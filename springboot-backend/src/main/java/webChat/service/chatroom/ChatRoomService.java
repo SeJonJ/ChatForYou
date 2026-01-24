@@ -19,7 +19,6 @@ import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.security.jwt.JwtRoomProvider;
-import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.analysis.AnalysisService;
 import webChat.service.file.impl.MinioFileService;
 import webChat.service.file.impl.RecordingFileService;

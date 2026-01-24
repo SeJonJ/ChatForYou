@@ -28,19 +28,21 @@ public class RecordingHandler {
 
     /**
      * 녹화 업로드 완료 알림
+     * @param fileName 녹화 파일명
      * @param roomId 방 ID
      * @param recordingId 녹화 ID
-     * @param downloadUrl 다운로드 URL
+     * @param minioFilePath 다운로드를 위한 minioFilePath
      * @param fileSize 파일 크기 (bytes)
      */
-    public void notifyRecordingUploadCompleted(String roomId, String recordingId,
-                                               String downloadUrl, long fileSize) {
+    public void notifyRecordingUploadCompleted(String fileName, String roomId, String recordingId,
+                                               String minioFilePath, long fileSize) {
         messageSender.broadcastSuccess(
-            roomId,
-            KurentoMessageBuilder.uploadCompleted()
-                .recordingId(recordingId)
-                .downloadUrl(downloadUrl)
-                .fileSize(fileSize)
+                roomId,
+                KurentoMessageBuilder.uploadCompleted()
+                        .fileName(fileName)
+                        .recordingId(recordingId)
+                        .minioFilePath(minioFilePath)
+                        .fileSize(fileSize)
         );
     }
 

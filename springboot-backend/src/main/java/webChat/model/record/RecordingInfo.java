@@ -25,15 +25,4 @@ public class RecordingInfo {
     @JsonIgnore
     private ScheduledFuture<?> autoStopTask;  // 10분 타이머
     private RecordingStatus status; // RECORDING, PAUSED, STOPPED
-
-    public RecordingInfo of(@NonNull KurentoRecordingMessage recordingMessage){
-        return RecordingInfo.builder()
-                .recordingId(recordingMessage.getRecordingId())
-                .startAt(recordingMessage.getStartAt())
-                .roomId(recordingMessage.getRoomId())
-                .recordingUserId(recordingMessage.getSenderId())
-                .recordingNickName(recordingMessage.getSenderNickName())
-                .status(RecordingStatus.READY)
-                .build();
-    }
 }

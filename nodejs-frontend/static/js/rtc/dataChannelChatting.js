@@ -93,7 +93,7 @@ const dataChannelChatting = {
         // 메시지 컨테이너
         var contentElement = $('<li>').addClass(type).addClass('recording-link-message');
 
-        // 발신자 정보 (other인 경우에만)
+        // 발신자 정보 (other 경우에만)
         if (type === 'other' && file.userName) {
             var senderElement = $('<div>', {
                 class: 'recording-sender',
@@ -144,23 +144,17 @@ const dataChannelChatting = {
 
         // 다운로드 버튼 클릭 이벤트
         downloadBtn.on('click', function() {
-            if (!file.downloadUrl) {
-                console.error('[Chat] 다운로드 URL이 없습니다.');
+            if (!file.name || !file.path) {
+                console.error('[Chat] 다운로드 정보가 없습니다.');
                 return;
             }
 
-            console.log('[Chat] 녹화 파일 다운로드 시작:', file.downloadUrl);
-
-            // JavaScript를 통한 강제 다운로드
-            var link = document.createElement('a');
-            link.href = file.downloadUrl;
-            link.download = 'recording_' + new Date().getTime() + '.webm';
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            console.log('[Chat] 다운로드 요청 완료');
+            console.log('[Chat] 녹화 파일 다운로드 시작:', file.name);
+            dataChannelFileUtil.downloadFile({
+                bucket: 'recording',
+                name: file.name,
+                path: file.path
+            });
         });
 
         infoContainer.append(downloadBtn);

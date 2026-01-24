@@ -745,12 +745,13 @@ const recording = {
 
     /**
      * 녹화 업로드 완료 이벤트 처리
-     * @param {Object} message - WebSocket 메시지 (recordingId, downloadUrl, fileSize, fileSizeMB)
+     * @param {Object} message - WebSocket 메시지 (recordingId, downloadUrl, fileName, filePath, fileSize, fileSizeMB)
      */
     handleUploadCompleted: function(message) {
         let self = this;
         let fileSizeMB = message.fileSizeMB || 0;
-        let downloadUrl = message.downloadUrl;
+        let fileName = message.fileName || '';
+        let filePath = message.minioFilePath || '';
 
         console.log('Recording upload completed:', message);
 
@@ -762,50 +763,42 @@ const recording = {
         );
 
         // 다운로드 알림 UI 표시
-        self.showDownloadNotification(downloadUrl, fileSizeMB);
+        self.showDownloadNotification(fileName, filePath, fileSizeMB);
 
         // 채팅창에 녹화 링크 전송 (DataChannel)
-        self.sendRecordingLinkToChat(downloadUrl, fileSizeMB);
+        self.sendRecordingLinkToChat(fileName, filePath, fileSizeMB);
     },
 
     /**
      * 채팅창에 녹화 링크 전송 (DataChannel)
-     * @param {string} downloadUrl - 다운로드 URL
+     * @param {string} fileName - 파일명
+     * @param {string} filePath - 파일 경로
      * @param {number} fileSizeMB - 파일 크기 (MB)
      */
-    sendRecordingLinkToChat: function(downloadUrl, fileSizeMB) {
+    sendRecordingLinkToChat: function(fileName, filePath, fileSizeMB) {
         try {
-            // DataChannel 사용 가능 여부 확인
-            if (typeof dataChannelChatting === 'undefined' || !dataChannelChatting.user) {
-                console.warn('[Recording] DataChannel이 초기화되지 않았습니다.');
-                return;
-            }
-
-            const nickName = dataChannelChatting.user.nickName || '시스템';
+            const nickName = dataChannelChatting.user.nickName || 'System';
 
             // DataChannel을 통해 녹화 링크 메시지 전송
             const recordingLinkMessage = {
                 type: 'recordingLink',
                 userName: nickName,
-                downloadUrl: downloadUrl,
+                name: fileName,
+                path: filePath,
                 fileSizeMB: fileSizeMB,
                 timestamp: new Date().getTime()
             };
 
-            // 다른 참가자들에게 전송
-            if (dataChannelChatting.user.rtcPeer && dataChannelChatting.user.rtcPeer.send) {
-                dataChannelChatting.user.rtcPeer.send(JSON.stringify(recordingLinkMessage));
-                console.log('[Recording] 채팅창에 녹화 링크 전송 완료');
-            }
+            // dataChannel 을 link 전송
+            dataChannel.sendMessage(recordingLinkMessage, recordingLinkMessage.type);
 
             // 로컬에서도 채팅창에 표시 (본인에게도 보이도록)
-            if (typeof dataChannelChatting.showNewRecordingLinkMessage === 'function') {
-                dataChannelChatting.showNewRecordingLinkMessage({
-                    userName: nickName,
-                    downloadUrl: downloadUrl,
-                    fileSizeMB: fileSizeMB
-                }, 'self');
-            }
+            dataChannelChatting.showNewRecordingLinkMessage({
+                userName: nickName,
+                name: fileName,
+                path: filePath,
+                fileSizeMB: fileSizeMB
+            }, 'self');
 
         } catch (error) {
             console.error('[Recording] 채팅창에 녹화 링크 전송 실패:', error);
@@ -864,10 +857,11 @@ const recording = {
 
     /**
      * 다운로드 알림 UI 표시
-     * @param {string} downloadUrl - 다운로드 URL
+     * @param {string} fileName - 파일명
+     * @param {string} filePath - 파일 경로
      * @param {number} fileSizeMB - 파일 크기 (MB)
      */
-    showDownloadNotification: function(downloadUrl, fileSizeMB) {
+    showDownloadNotification: function(fileName, filePath, fileSizeMB) {
         let self = this;
 
         // 기존 알림이 있으면 제거
@@ -906,7 +900,8 @@ const recording = {
                     파일 크기: ${fileSizeMB} MB
                 </div>
                 <button id="download-recording-btn"
-                   data-download-url="${downloadUrl}"
+                   data-file-name="${fileName}"
+                   data-file-path="${filePath}"
                    style="
                        display: block;
                        width: 100%;
@@ -955,23 +950,20 @@ const recording = {
 
         // 다운로드 버튼 클릭 이벤트
         $('#download-recording-btn').on('click', function() {
-            const url = $(this).data('download-url');
-            if (!url) {
-                console.error('[Recording] 다운로드 URL이 없습니다.');
+            var name = $(this).data('file-name');
+            var path = $(this).data('file-path');
+
+            if (!name || !path) {
+                console.error('[Recording] 다운로드 정보가 없습니다.');
                 return;
             }
 
-            console.log('[Recording] 녹화 파일 다운로드 시작:', url);
-
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'recording_' + new Date().getTime() + '.webm';
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            console.log('[Recording] 다운로드 요청 완료');
+            console.log('[Recording] 녹화 파일 다운로드 시작:', name);
+            dataChannelFileUtil.downloadFile({
+                bucket: 'recording',
+                name: name,
+                path: path
+            });
         });
 
         // 30초 후 자동 제거

@@ -1,21 +1,34 @@
 package webChat.service.file.impl;
 
 import io.minio.PutObjectArgs;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import webChat.config.MinioConfig;
+import webChat.controller.ExceptionController;
 import webChat.model.record.RecordingInfo;
+import webChat.model.redis.DataType;
+import webChat.model.room.ChatRoom;
+import webChat.model.room.KurentoRoom;
+import webChat.service.chatroom.ChatRoomService;
 import webChat.service.file.AbstractFileService;
+import webChat.service.redis.RedisService;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
 public class RecordingFileService extends AbstractFileService {
+
+    @Autowired
+    private RedisService redisService;
+
     public RecordingFileService(MinioConfig minioConfig) {
         super(minioConfig);
     }
@@ -29,10 +42,10 @@ public class RecordingFileService extends AbstractFileService {
      * 녹화 파일을 MinIO에 업로드
      * @param localFilePath KMS가 생성한 로컬 파일 경로 (file:// 포함)
      * @param recordingInfo 녹화 정보
-     * @return MinIO 다운로드 URL (24시간 유효)
+     * @return 파일 경로 (roomId/recordingId/filename)
      * @throws Exception 업로드 실패 시
      */
-    public String uploadRecording(RecordingInfo recordingInfo, String localFilePath, int expiredTime) throws Exception {
+    public String uploadRecording(RecordingInfo recordingInfo, String localFilePath) throws Exception {
         // file:// 프리픽스 제거
         String cleanPath = localFilePath.replace("file://", "");
         File localFile = new File(cleanPath);
@@ -71,11 +84,6 @@ public class RecordingFileService extends AbstractFileService {
                 log.info("Recording uploaded to MinIO successfully: {}", minioPath);
             }
 
-            // Presigned URL 생성(1시간 제한)
-            String downloadUrl = generatePresignedUrl(minioPath, expiredTime, TimeUnit.HOURS);
-
-            log.info("Download URL generated: {} (expires in {} hours)", downloadUrl, expiredTime);
-
             // 로컬 파일 삭제
             if (localFile.delete()) {
                 log.info("Local recording file deleted: {}", cleanPath);
@@ -83,11 +91,28 @@ public class RecordingFileService extends AbstractFileService {
                 log.warn("Failed to delete local recording file: {}", cleanPath);
             }
 
-            return downloadUrl;
+            return minioPath;
 
         } catch (Exception e) {
             log.error("Failed to upload recording to MinIO: {}", e.getMessage());
             throw new Exception("Recording upload failed: " + e.getMessage(), e);
         }
+    }
+
+    public ResponseEntity<byte[]> getObject(String roomId, String fileName, String fileDir) throws Exception {
+        KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+
+        // TODO 예외처리 수정 필요
+        if(room.getRecordingInfo() == null || room.getRecordingInfo().getRecordingFile() == null) {
+            throw new BadRequestException("there is no recording file in room: " + roomId);
+        }
+
+        // expiresAt 비교
+        // TODO 예외처리 수정 필요
+        if (System.currentTimeMillis() > room.getRecordingInfo().getRecordingFile().getExpiresAt()) {
+            throw new BadRequestException("Expired recording file");
+        }
+
+        return super.getObject(fileName, fileDir);
     }
 }

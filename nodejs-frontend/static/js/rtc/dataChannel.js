@@ -49,7 +49,8 @@ const dataChannel = {
             if (recvMessage.userName !== this.user.nickName) {
                 dataChannelChatting.showNewRecordingLinkMessage({
                     userName: recvMessage.userName,
-                    downloadUrl: recvMessage.downloadUrl,
+                    name: recvMessage.name,
+                    path: recvMessage.path,
                     fileSizeMB: recvMessage.fileSizeMB
                 }, 'other');
             }
@@ -142,7 +143,8 @@ const dataChannel = {
             id: 'downBtn',
             name: file.fileName
         }).on('click', function () {
-            dataChannelFileUtil.downloadFile(file.fileName, file.filePath);
+            dataChannelFileUtil.downloadFile(
+                {bucket: "file", name: file.fileName, path: file.filePath});
         });
 
         // contentElement 생성

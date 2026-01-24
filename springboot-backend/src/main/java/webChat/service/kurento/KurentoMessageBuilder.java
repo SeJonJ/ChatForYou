@@ -7,6 +7,10 @@ import webChat.model.kurento.KurentoMessageType;
 
 /**
  * Kurento WebRTC 메시지 빌더
+ * kurento 에서 사용하는 메시지 빌더
+ * 1. 정의된 messageType 사용
+ * 2. 추가해야하는 파라미터가 있는 경우 아래처럼 생성자 만들어서 사용
+ - public KurentoMessageBuilder minioFilePath(String minioFilePath)
  */
 @Slf4j
 public class KurentoMessageBuilder {
@@ -186,10 +190,21 @@ public class KurentoMessageBuilder {
     }
 
     /**
-     * 다운로드 URL 추가
+     * 녹화 파일 minioPath
+     * @param minioFilePath
      */
-    public KurentoMessageBuilder downloadUrl(String downloadUrl) {
-        message.addProperty("downloadUrl", downloadUrl);
+    public KurentoMessageBuilder minioFilePath(String minioFilePath) {
+        message.addProperty("minioFilePath", minioFilePath);
+        return this;
+    }
+
+    /**
+     * 녹화 파일명
+     * @param fileName
+     * @return
+     */
+    public KurentoMessageBuilder fileName(String fileName) {
+        message.addProperty("fileName", fileName);
         return this;
     }
 

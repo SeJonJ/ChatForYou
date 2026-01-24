@@ -12,18 +12,21 @@ import webChat.service.recording.RecordingHandler;
 public class RecordingUploadCompletedEvent implements RecordingEvent {
     private final String roomId;
     private final String recordingId;
-    private final String downloadUrl;
+    private final String fileName;
+    private final String minioFilePath;
     private final long fileSize;
 
     public RecordingUploadCompletedEvent(
             String roomId,
             String recordingId,
-            String downloadUrl,
+            String fileName,
+            String minioFilePath,
             long fileSize
     ) {
         this.roomId = roomId;
         this.recordingId = recordingId;
-        this.downloadUrl = downloadUrl;
+        this.fileName = fileName;
+        this.minioFilePath = minioFilePath;
         this.fileSize = fileSize;
     }
 
@@ -33,9 +36,10 @@ public class RecordingUploadCompletedEvent implements RecordingEvent {
     @Override
     public void handle(RecordingHandler handler) {
         handler.notifyRecordingUploadCompleted(
+                fileName,
                 roomId,
                 recordingId,
-                downloadUrl,
+                minioFilePath,
                 fileSize
         );
     }

@@ -32,9 +32,14 @@ public abstract class AbstractFileService {
 
     protected abstract String getBucketName();
 
+    // minio 접속 정보에 따라 minioClient init
     @PostConstruct
     private void initMinioClient() {
-        this.minioClient = minioConfig.getInternalMinioClient();
+        if (minioConfig.getInternalMinioClient() != null) {
+            this.minioClient = minioConfig.getInternalMinioClient();
+        } else {
+            this.minioClient = minioConfig.getExternalMinioClient();
+        }
     }
 
     /**

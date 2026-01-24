@@ -3,6 +3,7 @@
  */
 const dataChannelFileUtil = {
     isinit: false,
+    allowFileExt : ['jpg', 'png', 'jpeg', 'gif'],
     init : function(){
         let self = this;
         if (!self.isinit) {
@@ -21,7 +22,7 @@ const dataChannelFileUtil = {
     },
     uploadFile : function(){
 
-        // 1. 다른 사용자에게 파일 전송
+        // 파일 확인
         var file = $('#file')[0].files[0];
         if (!file) {
             console.log('No file chosen');
@@ -38,8 +39,8 @@ const dataChannelFileUtil = {
         var fileType = file.name.substring(fileDot + 1, file.name.length);
         // console.log('type : ' + fileType);
 
-        if (!(fileType == 'png' || fileType == 'jpg' || fileType == 'jpeg' || fileType == 'gif')) {
-            alert('파일 업로드는 png, jpg, gif, jpeg 만 가능합니다');
+        if(!this.allowFileExt.includes(fileType)){
+            this.showToast('파일 업로드는 png, jpg, gif, jpeg 만 가능합니다');
             return;
         }
 
@@ -76,14 +77,24 @@ const dataChannelFileUtil = {
         fileUploadAjax(window.__CONFIG__.API_BASE_URL + '/file/upload', 'POST', true, formData, successCallback, errorCallback);
 
     },
-    downloadFile : function (name, dir) {
+    downloadFile : function ({
+        bucket, 
+        name, 
+        path
+    } = {}) {
         // console.log("파일 이름 : "+name);
-        // console.log("파일 경로 : " + dir);
+        // console.log("파일 경로 : " + path);
+        if(!bucket || !name || !path){
+            this.showToast('다운로드 정보가 없습니다.');
+            return;
+        }
 
-        let url = window.__CONFIG__.API_BASE_URL + '/file/download/' + name;
+        let url = window.__CONFIG__.API_BASE_URL + '/file/download';
         let data = {
+            "roomId" : roomId,
+            "bucket" : bucket,
             "fileName": name,
-            "filePath": dir // 파일의 경로를 파라미터로 넣는다.
+            "filePath": path // 파일의 경로를 파라미터로 넣는다.
         };
 
         let successCallback = function (data) {
@@ -98,5 +109,18 @@ const dataChannelFileUtil = {
         };
 
         fileDownloadAjax(url, 'POST', '', data, successCallback, errorCallback);
+    },
+    showToast : function(message) {
+        Toastify({
+            text: message,
+            duration: 4000,
+            newWindow: true,
+            close: true,
+            gravity: "top",
+            position: "center",
+            style: {
+                background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
+            },
+        }).showToast();
     }
 }
