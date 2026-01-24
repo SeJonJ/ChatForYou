@@ -17,6 +17,7 @@ import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.analysis.AnalysisService;
@@ -30,7 +31,6 @@ import webChat.utils.StringUtil;
 
 import java.util.*;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -43,7 +43,6 @@ public class ChatRoomService {
     private final MinioFileService minioFileService;
     private final RecordingFileService recordingFileService;
     private final AnalysisService analysisService;
-
     private final JwtRoomProvider jwtRoomProvider;
 
     @Value("${chatforyou.room.max_user_count}")

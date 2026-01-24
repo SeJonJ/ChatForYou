@@ -182,7 +182,6 @@ public class ChatRoomController {
                 .result("success")
                 .data(chatRoomService.delChatRoom(roomId))
                 .build());
-
     }
 
     // 유저 카운트
