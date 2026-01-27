@@ -21,7 +21,9 @@ import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
 import webChat.model.chat.ChatType;
 import webChat.model.user.UserDto;
+import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.login.LoginService;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
@@ -41,8 +43,8 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final RoutingService routingService;
     private final RoutingInstanceProvider instanceProvider;
-    private final RedisService redisService;
     private final UserService userService;
+    private final JwtRoomProvider jwtRoomProvider;
 
     // 채팅방 생성
     @PostMapping("/room")
@@ -54,11 +56,8 @@ public class ChatRoomController {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
-        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
-
-        if (oauthRedis == null) {
-            throw new ExceptionController.NotExistUserException("");
-        }
+        // 유저 검증 및 로그인(레디스 저장) 정보 확인
+        userService.getValidatedOauthUser(token.getEmail());
 
         String roomId = routingService.getCookie(request, RoutingCookie.ROOM_ID_COOKIE);
         // 매개변수 : 방 이름, 패스워드, 방 잠금 여부, 방 인원수
@@ -82,18 +81,20 @@ public class ChatRoomController {
     public ResponseEntity<ChatForYouResponse> joinRoom(
             @PathVariable String roomId,
             @RequestHeader("Authorization") String authorization,
+            @RequestHeader(value = "X-Room-Token", required = false) String roomToken,
             HttpServletRequest request,
             HttpServletResponse response) throws Exception {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
-        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
-
-        if (oauthRedis == null) {
-            throw new ExceptionController.NotExistUserException("");
-        }
+        // 유저 검증 및 로그인(레디스 저장) 정보 확인
+        OauthRedis oauthRedis = userService.getValidatedOauthUser(token.getEmail());
 
         ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+        // JWT 토큰 검증
+        if (chatRoom.isSecretChk()) {
+            jwtRoomProvider.validate(roomToken, chatRoom.getRoomId());
+        }
 
         if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
             // TODO 서버가 죽었을때 예외처리 필요 :: 방 삭제 및 임시 조치로 메인 대시보드로 이동
@@ -128,16 +129,6 @@ public class ChatRoomController {
             @RequestParam(value = "pageNum", required = false, defaultValue = "0") String pageNumStr,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr){
         List<ChatRoomOutVo> responses = new ArrayList<>();
-
-        // TODO 로그인 기능 도입 시 필요
-//        // principalDetails 가 null 이 아니라면 로그인 된 상태!!
-//        if (principalDetails != null) {
-//            // 세션에서 로그인 유저 정보를 가져옴
-//            model.addAttribute("user", principalDetails.getUser());
-//            log.debug("user [{}] ",principalDetails);
-//        }
-
-//        model.addAttribute("user", "hey");
         chatRoomService.getRoomList(keyword, Integer.parseInt(pageNumStr), Integer.parseInt(pageSizeStr), false).forEach(room -> {
             responses.add(ChatRoomOutVo.of(room));
         });
@@ -152,18 +143,14 @@ public class ChatRoomController {
             @RequestHeader("Authorization") String authorization) throws Exception {
 
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
-        OauthRedis oauthRedis = redisService.getRedisDataByDataType(token.getEmail(), DataType.SOCIAL_USER, OauthRedis.class);
-
-        if (oauthRedis == null) {
-            throw new ExceptionController.NotExistUserException("");
-        }
+        OauthRedis oauthRedis = userService.getValidatedOauthUser(token.getEmail());
 
         // 넘어온 roomId 와 roomPwd 를 이용해서 비밀번호 찾기
         // 찾아서 입력받은 roomPwd 와 room pwd 와 비교해서 맞으면 true, 아니면  false
         // TODO 추후 401 권한 에러로 수정할 것
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
-                .data(chatRoomService.validatePwd(roomId, roomPwd))
+                .data(chatRoomService.validatePwd(oauthRedis.getEmail(), roomId, roomPwd))
                 .build());
     }
 
@@ -171,7 +158,11 @@ public class ChatRoomController {
     @PutMapping(value = "/room/{roomId}")
     public ResponseEntity<ChatForYouResponse> modifyChatRoom(
             @PathVariable String roomId,
-            @RequestBody ChatRoomInVo chatRoom) throws BadRequestException {
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody ChatRoomInVo chatRoom) throws Exception {
+
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        userService.getValidatedOauthUser(token.getEmail());
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
                 .data(chatRoomService.updateRoom(roomId, chatRoom.getRoomName(), chatRoom.getRoomPwd(), chatRoom.getMaxUserCnt()))
@@ -180,8 +171,12 @@ public class ChatRoomController {
 
     // 채팅방 삭제
     @DeleteMapping("/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> delChatRoom(@PathVariable String roomId) throws BadRequestException, ExceptionController.DelRoomException {
-
+    public ResponseEntity<ChatForYouResponse> delChatRoom(
+            @PathVariable String roomId,
+            @RequestHeader("Authorization") String authorization) throws Exception {
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        // 유저 검증 및 로그인(레디스 저장) 정보 확인
+        userService.getValidatedOauthUser(token.getEmail());
         // roomId 기준으로 chatRoomMap 에서 삭제, 해당 채팅룸 안에 있는 사진 삭제
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
