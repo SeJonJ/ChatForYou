@@ -184,9 +184,9 @@ public enum KurentoMessageType {
     ),
 
     /**
-     * 이미 녹화 파일 존재
+     * 이미 녹화가 진행중인 방(새로운 참여자에게 알림)
      */
-    RECORDING_ALREADY_PROCESSING(
+    RECORDING_INPROGRESS(
             "recordingAlreadyProcessing",
             null,
             ""

@@ -115,8 +115,8 @@ public class KurentoMessageBuilder {
     /**
      * 이미 녹화가 진행중인 방에 참여자 입장
      */
-    public static KurentoMessageBuilder recordingAlreadyProcessing(){
-        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_ALREADY_PROCESSING);
+    public static KurentoMessageBuilder recordingInProgress(){
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_INPROGRESS);
     }
 
     // 참가자 관련

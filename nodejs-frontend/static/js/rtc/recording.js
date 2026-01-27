@@ -79,7 +79,7 @@ const recording = {
     isOtherUserRecording: false,
 
     // 해당 방에서 녹화 사용 여부
-    isReadyRecording: false,
+    isAlreadyRecording: false,
 
     // 서버 측 녹화
     serverRecordingId: null,
@@ -222,14 +222,14 @@ const recording = {
      */
     startRecording: function () {
         let self = this;
-        if(self.isReadyRecording) {
+        if(self.isAlreadyRecording) {
             self.showToast('해당 방은 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다.', 3000, 'warning');
             return;
         }
 
         try {
             self.isRecording = true;
-            self.isReadyRecording = true;
+            self.isAlreadyRecording = true;
 
             // 1. 서버에 녹화 시작 요청
             self.startServerRecording();
@@ -251,7 +251,7 @@ const recording = {
                 console.warn('[RECORDING] speechRecognitionUtils not available');
             }
 
-            console.log('녹화 시작 완료, isReadyRecording:', self.isReadyRecording);
+            console.log('녹화 시작 완료, isAlreadyRecording:', self.isAlreadyRecording);
             self.showToast('녹화를 시작합니다.');
 
         } catch (error) {
@@ -471,7 +471,7 @@ const recording = {
                 console.warn('[RECORDING] speechRecognitionUtils not available');
             }
 
-            console.log('녹화 중지 완료, isReadyRecording:', self.isReadyRecording);
+            console.log('녹화 중지 완료, isAlreadyRecording:', self.isAlreadyRecording);
             self.showToast('녹화를 중지했습니다.');
 
         } catch (error) {
@@ -609,11 +609,11 @@ const recording = {
         let self = this;
         let recordingEvent = eventType === 'recordingStarted';
 
-        // [FIX] 녹화 시작 시에만 isReadyRecording을 true로 설정
+        // 녹화 시작 시에만 isAlreadyRecording을 true로 설정
         // TODO: 추후 각 사용자별 1회 녹화 허용 시 사용자별 녹화 횟수 추적 필요
         if (eventType === 'recordingStarted') {
-            self.isReadyRecording = true;
-            console.log('[RECORDING] Room recording started by:', recordingUser, '- isReadyRecording set to true');
+            self.isAlreadyRecording = true;
+            console.log('[RECORDING] Room recording started by:', recordingUser, '- isAlreadyRecording set to true');
         }
 
         // 녹화 알림
@@ -773,12 +773,11 @@ const recording = {
      */
     sendRecordingLinkToChat: function(fileName, filePath, fileSizeMB) {
         try {
-            const nickName = nickName || 'System';
 
             // DataChannel을 통해 녹화 링크 메시지 전송
             const recordingLinkMessage = {
                 type: 'recordingLink',
-                userName: nickName,
+                userName: nickName || 'SYSTEM',
                 name: fileName,
                 path: filePath,
                 fileSizeMB: fileSizeMB,
@@ -847,7 +846,7 @@ const recording = {
             // 녹화 상태 초기화
             self.isRecording = false;
             self.serverRecordingId = null;
-            self.isReadyRecording = true;
+            self.isAlreadyRecording = true;
         }
     },
 
@@ -969,36 +968,20 @@ const recording = {
             });
         }, 30000);
     },
-    recordingAlreadyProcessing : function(parseMessage = ''){
+    recordingInProgress : function(parseMessage = ''){
+        let self = this;
+        self.isAlreadyRecording = true;
+        self.isOtherUserRecording = true;
+        self.isAlreadyRecording = true;
         console.log('[RECORDING] 녹화 중인 방에 입장:', parseMessage);
 
-    // 녹화 및 자막 버튼 비활성화
-    const recordingStartBtn = $('#recordingStartBtn');
-    const recordingStopBtn = $('#recordingStopBtn');
-    const subtitleBtn = $('#subtitleBtn');
+        // 오디오 믹싱 시작
+        self.startAudioMixing();
 
-    if (recordingStartBtn.length) {
-        recordingStartBtn.prop('disabled', true);                                                                                                         
-        recordingStartBtn.css('opacity', '0.5'); 
-    }
-    if (recordingStopBtn.length) {
-        recordingStopBtn.prop('disabled', true);                                                                                                         
-        recordingStopBtn.css('opacity', '0.5');
-    }
-    if (subtitleBtn.length) {
-        subtitleBtn.prop('disabled', true);
-        subtitleBtn.css('opacity', '0.5');
-    }
+        // UI 업데이트(녹화 및 자막 버튼 비활성화)
+        self.updateUI('recording');
 
-    // 토스트 알림
-    Toastify({
-        text: parseMessage.message,
-        duration: 5000,
-        gravity: "top",
-        position: "center",
-        style: {
-            background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
-        },
-    }).showToast();
+        // 토스트 알림
+        self.showToast(parseMessage.message);
     }
 };

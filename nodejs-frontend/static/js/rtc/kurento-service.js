@@ -422,8 +422,8 @@ ws.onmessage = function (message) {
                 recording.handleRecordingError(parsedMessage);
             }
             break;
-        case 'recordingAlreadyProcessing':
-            recording.recordingAlreadyProcessing(parsedMessage);
+        case 'recordingInProgress':
+            recording.recordingInProgress(parsedMessage);
             break;
         default:
             Toastify({

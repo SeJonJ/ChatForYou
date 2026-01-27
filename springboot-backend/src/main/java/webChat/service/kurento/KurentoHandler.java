@@ -230,7 +230,7 @@ public class KurentoHandler extends TextWebSocketHandler {
             RecordingInfo recordingInfo = kurentoRoom.getRecordingInfo();
             KurentoUserSession user = participantService.getBySessionId(session);
             kurentoMessageSender.sendToUser(user,
-                    KurentoMessageBuilder.recordingAlreadyProcessing()
+                    KurentoMessageBuilder.recordingInProgress()
                             .recordingId(recordingInfo.getRecordingId())
                             .message(String.format("%s 님이 녹화 중입니다. 녹화 및 자막 기능이 비활성화됩니다.",
                                     recordingInfo.getRecordingNickName())));
