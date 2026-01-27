@@ -112,6 +112,13 @@ public class KurentoMessageBuilder {
         return new KurentoMessageBuilder(KurentoMessageType.RECORDING_FILE_EXISTS_ERROR);
     }
 
+    /**
+     * 이미 녹화가 진행중인 방에 참여자 입장
+     */
+    public static KurentoMessageBuilder recordingAlreadyProcessing(){
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_ALREADY_PROCESSING);
+    }
+
     // 참가자 관련
 
     /**

@@ -17,6 +17,7 @@ import webChat.model.kurento.KurentoMessage;
 import webChat.model.kurento.KurentoOverlayMessage;
 import webChat.model.kurento.KurentoRTCMessage;
 import webChat.model.kurento.KurentoRecordingMessage;
+import webChat.model.record.RecordingInfo;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
 import webChat.repository.KurentoPiplineMap;
@@ -195,7 +196,7 @@ public class KurentoHandler extends TextWebSocketHandler {
     // 유저가 Room 에 입장했을 때
     private void joinRoom(KurentoRTCMessage message, WebSocketSession session) throws IOException {
         // kurento RTC 객체에서 각 값을 가져온다
-        final String roomId = message.getRoomId() ;
+        final String roomId = message.getRoomId();
         final String userId = message.getSenderId();
         final String nickName = message.getSenderNickName();
 
@@ -209,7 +210,7 @@ public class KurentoHandler extends TextWebSocketHandler {
         }
 
         // room 을 active 상태로 전환
-        if(kurentoRoom.getKurento() == null){
+        if (kurentoRoom.getKurento() == null) {
             kurentoRoom.setKurento(kurentoClient);
         }
 
@@ -223,6 +224,17 @@ public class KurentoHandler extends TextWebSocketHandler {
         kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
         redisService.incrementUserCount(kurentoRoom);
         chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+
+        // 방 참가 시 녹화 중 확인
+        if (kurentoRoom.isRoomRecording()) {
+            RecordingInfo recordingInfo = kurentoRoom.getRecordingInfo();
+            KurentoUserSession user = participantService.getBySessionId(session);
+            kurentoMessageSender.sendToUser(user,
+                    KurentoMessageBuilder.recordingAlreadyProcessing()
+                            .recordingId(recordingInfo.getRecordingId())
+                            .message(String.format("%s 님이 녹화 중입니다. 녹화 및 자막 기능이 비활성화됩니다.",
+                                    recordingInfo.getRecordingNickName())));
+        }
     }
 
     private void leaveRoom(KurentoUserSession user) throws IOException {
@@ -244,7 +256,7 @@ public class KurentoHandler extends TextWebSocketHandler {
         chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
     }
 
-    private void processReceiveVideo(KurentoRTCMessage message, KurentoUserSession user) throws IOException {
+    private void processReceiveVideo(KurentoRTCMessage message, KurentoUserSession user) {
         try {
             // sender 명 - 사용자명 - 과
             final String senderUserId = message.getSenderId();

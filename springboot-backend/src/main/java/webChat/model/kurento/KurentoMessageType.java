@@ -183,6 +183,15 @@ public enum KurentoMessageType {
             "해당 방에는 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다."
     ),
 
+    /**
+     * 이미 녹화 파일 존재
+     */
+    RECORDING_ALREADY_PROCESSING(
+            "recordingAlreadyProcessing",
+            null,
+            ""
+    ),
+
 
     // ==========================================
     // TODO 서버 연결 관련(개발 예정)

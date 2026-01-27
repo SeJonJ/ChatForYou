@@ -205,20 +205,16 @@ const recording = {
         duration = duration || TOAST_DEFAULT_CONFIG.duration;
         theme = theme || 'info';
         
-        if (typeof Toastify !== 'undefined') {
-            Toastify({
-                text: text,
-                duration: duration,
-                newWindow: TOAST_DEFAULT_CONFIG.newWindow,
-                close: TOAST_DEFAULT_CONFIG.close,
-                gravity: TOAST_DEFAULT_CONFIG.gravity,
-                position: TOAST_DEFAULT_CONFIG.position,
-                stopOnFocus: TOAST_DEFAULT_CONFIG.stopOnFocus,
-                style: TOAST_THEMES[theme] || TOAST_THEMES.info
-            }).showToast();
-        } else {
-            console.log('[TOAST]', text);
-        }
+        Toastify({
+            text: text,
+            duration: duration,
+            newWindow: TOAST_DEFAULT_CONFIG.newWindow,
+            close: TOAST_DEFAULT_CONFIG.close,
+            gravity: TOAST_DEFAULT_CONFIG.gravity,
+            position: TOAST_DEFAULT_CONFIG.position,
+            stopOnFocus: TOAST_DEFAULT_CONFIG.stopOnFocus,
+            style: TOAST_THEMES[theme] || TOAST_THEMES.info
+        }).showToast();
     },
 
     /**
@@ -777,7 +773,7 @@ const recording = {
      */
     sendRecordingLinkToChat: function(fileName, filePath, fileSizeMB) {
         try {
-            const nickName = dataChannelChatting.user.nickName || 'System';
+            const nickName = nickName || 'System';
 
             // DataChannel을 통해 녹화 링크 메시지 전송
             const recordingLinkMessage = {
@@ -950,8 +946,8 @@ const recording = {
 
         // 다운로드 버튼 클릭 이벤트
         $('#download-recording-btn').on('click', function() {
-            var name = $(this).data('file-name');
-            var path = $(this).data('file-path');
+            let name = $(this).data('file-name');
+            let path = $(this).data('file-path');
 
             if (!name || !path) {
                 console.error('[Recording] 다운로드 정보가 없습니다.');
@@ -972,5 +968,37 @@ const recording = {
                 $(this).remove();
             });
         }, 30000);
+    },
+    recordingAlreadyProcessing : function(parseMessage = ''){
+        console.log('[RECORDING] 녹화 중인 방에 입장:', parseMessage);
+
+    // 녹화 및 자막 버튼 비활성화
+    const recordingStartBtn = $('#recordingStartBtn');
+    const recordingStopBtn = $('#recordingStopBtn');
+    const subtitleBtn = $('#subtitleBtn');
+
+    if (recordingStartBtn.length) {
+        recordingStartBtn.prop('disabled', true);                                                                                                         
+        recordingStartBtn.css('opacity', '0.5'); 
+    }
+    if (recordingStopBtn.length) {
+        recordingStopBtn.prop('disabled', true);                                                                                                         
+        recordingStopBtn.css('opacity', '0.5');
+    }
+    if (subtitleBtn.length) {
+        subtitleBtn.prop('disabled', true);
+        subtitleBtn.css('opacity', '0.5');
+    }
+
+    // 토스트 알림
+    Toastify({
+        text: parseMessage.message,
+        duration: 5000,
+        gravity: "top",
+        position: "center",
+        style: {
+            background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
+        },
+    }).showToast();
     }
 };

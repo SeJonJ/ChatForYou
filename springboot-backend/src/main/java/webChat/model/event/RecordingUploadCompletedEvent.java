@@ -1,8 +1,6 @@
 package webChat.model.event;
 
 import lombok.Getter;
-import org.springframework.context.ApplicationEvent;
-import webChat.service.kurento.KurentoHandler;
 import webChat.service.recording.RecordingHandler;
 
 /**

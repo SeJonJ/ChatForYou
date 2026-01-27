@@ -2,7 +2,6 @@ package webChat.model.record;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
-import webChat.model.kurento.KurentoRecordingMessage;
 
 import java.util.concurrent.ScheduledFuture;
 

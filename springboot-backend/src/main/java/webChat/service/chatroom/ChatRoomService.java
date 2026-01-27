@@ -98,11 +98,13 @@ public class ChatRoomService {
                 .pageNum(pageNum)
                 .pageSize(pageSize)
                 .build();
+
         List<Document> roomList = redisService.searchRoomListByOptions(searchCriteria);
         for (Document document : roomList) {
             if (document.getFields().get("roomId") == null) {
                 continue;
             }
+
             String roomId = document.getFields().get("roomId").toString().replace("\"", "");
             Map<Object, Object> allChatRoomData = redisService.getAllChatRoomData(roomId);
             if (allChatRoomData.isEmpty() || allChatRoomData.get(DataType.CHATROOM.getType()) == null) {
@@ -111,7 +113,6 @@ public class ChatRoomService {
 
             ChatRoom chatRoom = (ChatRoom) allChatRoomData.get("chatroom");
             chatRoomList.add(chatRoom);
-
         }
 
         return chatRoomList;

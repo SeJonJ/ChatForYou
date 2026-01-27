@@ -1,19 +1,15 @@
 package webChat.service.file.impl;
 
 import io.minio.PutObjectArgs;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import webChat.config.MinioConfig;
-import webChat.controller.ExceptionController;
 import webChat.model.record.RecordingInfo;
 import webChat.model.redis.DataType;
-import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
-import webChat.service.chatroom.ChatRoomService;
 import webChat.service.file.AbstractFileService;
 import webChat.service.redis.RedisService;
 

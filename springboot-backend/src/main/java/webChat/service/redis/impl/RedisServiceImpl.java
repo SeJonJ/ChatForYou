@@ -22,13 +22,13 @@ import org.springframework.util.CollectionUtils;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
 import webChat.model.redis.DataType;
-import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
+
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;

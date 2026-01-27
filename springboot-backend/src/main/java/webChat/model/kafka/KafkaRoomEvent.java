@@ -5,7 +5,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import webChat.model.chat.ChatType;
 
 @Getter
 @AllArgsConstructor
