@@ -29,7 +29,7 @@ import org.springframework.web.socket.WebSocketSession;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.in.ChatRoomInVo;
-import webChat.repository.KurentoPiplineMap;
+import webChat.repository.KurentoPipelineMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.redis.RedisService;
 
@@ -52,7 +52,7 @@ public class KurentoRoomManager {
 
   private final RedisService redisService;
   private final KurentoParticipantService kurentoParticipantService;
-  private Map<String, MediaPipeline> kurentoPipelineMap = KurentoPiplineMap.getInstance();
+  private Map<String, MediaPipeline> kurentoPipelineMap = KurentoPipelineMap.getInstance();
   private final KurentoMessageSender kurentoMessageSender;
 
   /**

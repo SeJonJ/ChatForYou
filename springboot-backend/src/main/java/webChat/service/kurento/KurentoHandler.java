@@ -20,7 +20,7 @@ import webChat.model.kurento.KurentoRecordingMessage;
 import webChat.model.record.RecordingInfo;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
-import webChat.repository.KurentoPiplineMap;
+import webChat.repository.KurentoPipelineMap;
 import webChat.repository.KurentoRecorderMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.kafka.ChatKafkaProducer;
@@ -48,7 +48,7 @@ public class KurentoHandler extends TextWebSocketHandler {
     private final RedisService redisService;
     private final KurentoParticipantService participantService;
     private final ChatKafkaProducer chatKafkaProducer;
-    private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPiplineMap.getInstance();
+    private final Map<String, MediaPipeline> kurentoPiplineMap = KurentoPipelineMap.getInstance();
 
     // 녹화 관련
     private final RecordingService recordingService;

@@ -7,14 +7,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
-public class KurentoPiplineMap {
+public class KurentoPipelineMap {
 
-    private static KurentoPiplineMap kurentoPiplineMap = new KurentoPiplineMap();
+    private static KurentoPipelineMap kurentoPipelineMap = new KurentoPipelineMap();
     private Map<String, MediaPipeline> pipeline = new ConcurrentHashMap<>();
-    private KurentoPiplineMap(){}
+    private KurentoPipelineMap(){}
 
     public static Map<String, MediaPipeline> getInstance(){
-        return kurentoPiplineMap.pipeline;
+        return kurentoPipelineMap.pipeline;
     }
 
     public Map<String, MediaPipeline> getPipeline() {

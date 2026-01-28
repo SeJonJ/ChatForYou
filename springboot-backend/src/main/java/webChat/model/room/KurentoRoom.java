@@ -29,7 +29,7 @@ import webChat.model.chat.ChatType;
 import webChat.model.game.GameSettingInfo;
 import webChat.model.record.RecordingInfo;
 import webChat.repository.KurentoCompositeMap;
-import webChat.repository.KurentoPiplineMap;
+import webChat.repository.KurentoPipelineMap;
 import webChat.repository.KurentoRecorderMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 
@@ -137,11 +137,11 @@ public class KurentoRoom extends ChatRoom implements Closeable {
     String roomId = this.getRoomId();
     
     // 기존에 생성된 파이프라인 사용 (사용자들과 동일한 파이프라인)
-    MediaPipeline pipeline = KurentoPiplineMap.getInstance().get(roomId);
+    MediaPipeline pipeline = KurentoPipelineMap.getInstance().get(roomId);
     if (pipeline == null) {
       // 파이프라인이 없으면 새로 생성
       pipeline = this.getKurento().createMediaPipeline();
-      KurentoPiplineMap.getInstance().put(roomId, pipeline);
+      KurentoPipelineMap.getInstance().put(roomId, pipeline);
     }
 
     // Composite 생성 - 사용자들과 동일한 파이프라인 사용
