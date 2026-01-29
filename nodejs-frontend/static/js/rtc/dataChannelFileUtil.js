@@ -23,20 +23,20 @@ const dataChannelFileUtil = {
     uploadFile : function(){
 
         // 파일 확인
-        var file = $('#file')[0].files[0];
+        let file = $('#file')[0].files[0];
         if (!file) {
             console.log('No file chosen');
         }
 
-        var formData = new FormData();
+        let formData = new FormData();
         formData.append('file', file);
         formData.append('roomId', roomId);
 
         // 확장자 추출
-        var fileDot = file.name.lastIndexOf('.');
+        let fileDot = file.name.lastIndexOf('.');
 
         // 확장자 검사
-        var fileType = file.name.substring(fileDot + 1, file.name.length);
+        let fileType = file.name.substring(fileDot + 1, file.name.length);
         // console.log('type : ' + fileType);
 
         if(!this.allowFileExt.includes(fileType)){
@@ -52,7 +52,7 @@ const dataChannelFileUtil = {
                 return;
             }
 
-            var fileData = {
+            let fileData = {
                 type: 'file',
                 'roomId': roomId,
                 fileMeta: data
@@ -78,37 +78,75 @@ const dataChannelFileUtil = {
 
     },
     downloadFile : function ({
-        bucket, 
-        name, 
+        bucket,
+        name,
         path
     } = {}) {
-        // console.log("파일 이름 : "+name);
-        // console.log("파일 경로 : " + path);
+        let self = this;
+
         if(!bucket || !name || !path){
-            this.showToast('다운로드 정보가 없습니다.');
+            self.showToast('다운로드 정보가 없습니다.');
             return;
         }
 
-        let url = window.__CONFIG__.API_BASE_URL + '/file/download';
+        let apiUrl = window.__CONFIG__.API_BASE_URL + '/file/download';
         let data = {
             "roomId" : roomId,
             "bucket" : bucket,
             "fileName": name,
-            "filePath": path // 파일의 경로를 파라미터로 넣는다.
+            "filePath": path
         };
 
-        let successCallback = function (data) {
-            var link = document.createElement('a');
-            link.href = URL.createObjectURL(data);
-            link.download = name;
-            link.click();
+        let successCallback = function (blobData) {
+            // Electron 환경 감지
+            if (window.electronAPI && window.electronAPI.downloadFile) {
+                console.log('[FileUtil] Electron 환경 감지 - IPC 다운로드 사용');
+
+                // Blob을 ArrayBuffer로 변환하여 IPC로 전송
+                blobData.arrayBuffer().then(function(buffer) {
+                    let uint8Array = new Uint8Array(buffer);
+
+                    window.electronAPI.downloadFile(Array.from(uint8Array), name)
+                        .then(function(result) {
+                            if (result.success) {
+                                console.log('[FileUtil] 파일 저장 완료:', result.path);
+                                self.showToast('파일이 다운로드되었습니다.\n저장 위치: Downloads 폴더');
+                            } else {
+                                console.error('[FileUtil] 파일 저장 실패:', result.error);
+                                self.showToast('파일 다운로드에 실패했습니다: ' + result.error);
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('[FileUtil] IPC 다운로드 오류:', error);
+                            self.showToast('파일 다운로드에 실패했습니다.');
+                        });
+                }).catch(function(error) {
+                    console.error('[FileUtil] ArrayBuffer 변환 실패:', error);
+                    self.showToast('파일 처리에 실패했습니다.');
+                });
+
+            } else {
+                // 웹 브라우저 환경 - 기존 방식 사용
+                console.log('[FileUtil] 웹 브라우저 환경 - blob URL 다운로드 사용');
+
+                let link = document.createElement('a');
+                link.href = URL.createObjectURL(blobData);
+                link.download = name;
+                link.click();
+
+                // 메모리 정리
+                setTimeout(function() {
+                    URL.revokeObjectURL(link.href);
+                }, 100);
+            }
         };
 
         let errorCallback = function (error) {
-
+            console.error('[FileUtil] 파일 다운로드 요청 실패:', error);
+            self.showToast('파일 다운로드에 실패했습니다.');
         };
 
-        fileDownloadAjax(url, 'POST', '', data, successCallback, errorCallback);
+        fileDownloadAjax(apiUrl, 'POST', '', data, successCallback, errorCallback);
     },
     showToast : function(message) {
         Toastify({

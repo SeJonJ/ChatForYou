@@ -43,18 +43,6 @@ const dataChannel = {
             this.showNewMessage(message, 'other');
             this.showNewFileMessage(file, 'other');
 
-        } else if (recvMessage.type === 'recordingLink') {
-            // 녹화 링크 메시지 처리
-            console.log('[DataChannel] 녹화 링크 수신:', recvMessage);
-            if (recvMessage.userName !== this.user.nickName) {
-                dataChannelChatting.showNewRecordingLinkMessage({
-                    userName: recvMessage.userName,
-                    name: recvMessage.name,
-                    path: recvMessage.path,
-                    fileSizeMB: recvMessage.fileSizeMB
-                }, 'other');
-            }
-
         } else if (recvMessage.type === 'recording') {
             recording.handlingRecordingEvent(recvMessage.userName, recvMessage.message);
         } else if (recvMessage.type === 'gameEvent' && recvMessage.userName !== this.user.nickName) {

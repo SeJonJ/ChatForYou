@@ -527,24 +527,58 @@ const recording = {
                 type: self.config.mimeType
             });
 
-            // 다운로드 링크 생성
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `recording_${new Date().getTime()}.webm`;
+            const fileName = 'recording_' + new Date().getTime() + '.webm';
 
-            document.body.appendChild(a);
-            a.click();
+            // Electron 환경 감지
+            if (window.electronAPI && window.electronAPI.downloadFile) {
+                console.log('[Recording] Electron 환경 감지 - IPC 다운로드 사용');
 
-            // 정리
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+                // Blob을 ArrayBuffer로 변환하여 IPC로 전송
+                blob.arrayBuffer().then(function(buffer) {
+                    // ArrayBuffer를 Uint8Array로 변환 (IPC 직렬화 호환성)
+                    let uint8Array = new Uint8Array(buffer);
 
-            console.log('녹화 파일 저장 완료:', a.download);
-            self.showToast('녹화 파일이 다운로드되었습니다.');
+                    window.electronAPI.downloadFile(Array.from(uint8Array), fileName)
+                        .then(function(result) {
+                            if (result.success) {
+                                console.log('[Recording] 녹화 파일 저장 완료:', result.path);
+                                self.showToast('녹화 파일이 다운로드되었습니다.\n저장 위치: Downloads 폴더');
+                            } else {
+                                console.error('[Recording] 파일 저장 실패:', result.error);
+                                self.showToast('녹화 파일 저장에 실패했습니다: ' + result.error);
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('[Recording] IPC 다운로드 오류:', error);
+                            self.showToast('녹화 파일 저장에 실패했습니다.');
+                        });
+                }).catch(function(error) {
+                    console.error('[Recording] ArrayBuffer 변환 실패:', error);
+                    self.showToast('녹화 파일 처리에 실패했습니다.');
+                });
+
+            } else {
+                // 웹 브라우저 환경 - 기존 방식 사용
+                console.log('[Recording] 웹 브라우저 환경 - blob URL 다운로드 사용');
+
+                let url = URL.createObjectURL(blob);
+                let a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = fileName;
+
+                document.body.appendChild(a);
+                a.click();
+
+                // 정리
+                setTimeout(function() {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+
+                console.log('녹화 파일 저장 완료:', fileName);
+                self.showToast('녹화 파일이 다운로드되었습니다.');
+            }
 
         } catch (error) {
             console.error('녹화 파일 저장 실패:', error);
@@ -773,21 +807,7 @@ const recording = {
      */
     sendRecordingLinkToChat: function(fileName, filePath, fileSizeMB) {
         try {
-
-            // DataChannel을 통해 녹화 링크 메시지 전송
-            const recordingLinkMessage = {
-                type: 'recordingLink',
-                userName: nickName || 'SYSTEM',
-                name: fileName,
-                path: filePath,
-                fileSizeMB: fileSizeMB,
-                timestamp: new Date().getTime()
-            };
-
-            // dataChannel 을 link 전송
-            dataChannel.sendMessage(recordingLinkMessage, recordingLinkMessage.type);
-
-            // 로컬에서도 채팅창에 표시 (본인에게도 보이도록)
+            // 로컬에서 채팅창에 표시 (본인에게도 보이도록)
             dataChannelChatting.showNewRecordingLinkMessage({
                 userName: nickName,
                 name: fileName,
@@ -970,9 +990,10 @@ const recording = {
     },
     recordingInProgress : function(parseMessage = ''){
         let self = this;
+        self.isRecording = true;
         self.isAlreadyRecording = true;
         self.isOtherUserRecording = true;
-        self.isAlreadyRecording = true;
+
         console.log('[RECORDING] 녹화 중인 방에 입장:', parseMessage);
 
         // 오디오 믹싱 시작
@@ -980,6 +1001,7 @@ const recording = {
 
         // UI 업데이트(녹화 및 자막 버튼 비활성화)
         self.updateUI('recording');
+        speechRecognitionUtils.handlingSubtitleByRecording(self.isRecording);
 
         // 토스트 알림
         self.showToast(parseMessage.message);

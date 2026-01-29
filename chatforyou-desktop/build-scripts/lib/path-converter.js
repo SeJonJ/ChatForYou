@@ -237,6 +237,12 @@ class PathConverter {
           replacement: 'attr("$1", "static/images/webrtc/'
         },
         {
+          name: 'absolute-path-webrtc-conversion',
+          description: '절대 경로 /images/webrtc/ -> static/images/webrtc/ (슬래시 제거)',
+          pattern: /(['"])\/images\/webrtc\//g,
+          replacement: '$1static/images/webrtc/'
+        },
+        {
           name: 'image-direct-webrtc-conversion',
           description: '"/images/webrtc/" -> "static/images/webrtc/" (preserving quote type)',
           pattern: /(['"])images\/webrtc\//g,
@@ -258,13 +264,31 @@ class PathConverter {
           name: 'template-literal-webrtc-conversion',
           description: 'Template literal: `images/webrtc/...${...}...` -> `static/images/webrtc/...${...}...`',
           pattern: /`([^`]*?)images\/webrtc\//g,
-          replacement: '`$1static/images/webrtc/'
+          replacement: (match, p1) => {
+            // 이미 static/으로 끝나면 변환하지 않음 (이중 변환 방지)
+            if (p1.endsWith('static/')) {
+              return match;
+            }
+            return '`' + p1 + 'static/images/webrtc/';
+          }
         },
         {
           name: 'template-literal-images-general',
           description: 'Template literal general images: `...images/...` -> `...static/images/...` (non-webrtc)',
           pattern: /`([^`]*?)images\/((?!webrtc)[^`\/]*)\//g,
-          replacement: '`$1static/images/$2/'
+          replacement: (match, p1, p2) => {
+            // 이미 static/으로 끝나면 변환하지 않음 (이중 변환 방지)
+            if (p1.endsWith('static/')) {
+              return match;
+            }
+            return '`' + p1 + 'static/images/' + p2 + '/';
+          }
+        },
+        {
+          name: 'ternary-operator-webrtc-conversion',
+          description: '삼항 연산자 내 /images/webrtc/ 경로 변환',
+          pattern: /([?:])\s*(['"])\/images\/webrtc\//g,
+          replacement: '$1 $2static/images/webrtc/'
         }
       ]
     };
