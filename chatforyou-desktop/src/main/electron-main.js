@@ -130,7 +130,9 @@ let pathMapping = {};
 try {
     const mappingPath = path.join(__dirname, '../../build-scripts/convert_path.json');
     if (fs.existsSync(mappingPath)) {
-        pathMapping = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+        const config = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+        // basePaths 구조 지원 (새 구조) 또는 기존 flat 구조
+        pathMapping = config.basePaths || config;
         log.info(`경로 매핑 설정 로드됨: ${Object.keys(pathMapping).length}개 경로`);
         if (isDev) {
             log.debug(`경로 매핑 내용: ${JSON.stringify(pathMapping, null, 2)}`);

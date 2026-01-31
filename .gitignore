@@ -92,8 +92,6 @@ desktop.ini
 *.swp
 *.swo
 *~
-.cursor/
-*CLAUDE*.md
 
 # ========================================
 # ChatForYou 프로젝트
@@ -121,6 +119,7 @@ scripts/.logs/
 # 임시 파일들
 *.tmp
 *.temp
+.test-temp
 
 # ========================================
 # Spring Boot Backend 설정
@@ -161,10 +160,12 @@ springboot-backend/src/main/resources/geodata/
 figma-plugin
 
 # ========================================
-# 개발 도구 및 기타
+# AI Tool 설정
 # ========================================
 .claude
-.cursor/rules/
+.cursor
+CLAUDE*.md
+.agent
 
 # 테스트 결과물
 test-results/
