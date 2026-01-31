@@ -61,6 +61,7 @@ ChatForYou_v2/
 - **텍스트 오버레이**: 문자 채팅 내용을 비디오에 표시하는 텍스트 오버레이 기능
 - **실시간 자막**: 음성을 통한 실시간 자막 기능
 - **SSE 기반 실시간 채팅 목록 확인**: SSE 기반 실시간 채팅 목록 확인 기능
+- **녹화 기능**: 실시간 영상 녹화 및 다운로드 기능
 
 ### 🎮 게임 기능
 - **CatchMind 게임**: N 라운드 그림 맞추기 게임
@@ -205,7 +206,7 @@ docker-compose up -d
 
 | 역할 | 이름 | 담당 업무 | 이메일 | 프로필 |
 |------|------|-----------|---------|---------|
-| 👑 **프로젝트 리더** | 장세존 | 프로젝트 총괄 · 풀스택 개발 · DevOps 담당 | wkdtpwhs@gmail.com | [GitHub](https://github.com/SeJonJ) [Tistory](https://terianp.tistory.com) |
+| 👑 **프로젝트 리더** | 장세존 | 프로젝트 총괄 · 백엔드 · 프론트엔드 기능 개발 · DevOps 담당 | wkdtpwhs@gmail.com | [GitHub](https://github.com/SeJonJ) [Tistory](https://terianp.tistory.com) |
 | ⚙️ **백엔드 개발** | 김동현 | 백엔드 · 프론트엔드 기능 개발 | `이메일 예정` | `GitHub 예정` |
 | 💻 **풀스택 개발** | 박태식 | 백엔드 · 프론트엔드 기능 개발 | `이메일 예정` | `GitHub 예정` |
 | 🎨 **디자인 및 웹 퍼블리싱 총괄** | 임가현 | 웹 퍼블리싱 · UI/UX 디자인 | `이메일 예정` | `GitHub 예정` |
