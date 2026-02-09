@@ -13,10 +13,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-import webChat.model.kurento.KurentoMessage;
-import webChat.model.kurento.KurentoOverlayMessage;
-import webChat.model.kurento.KurentoRTCMessage;
-import webChat.model.kurento.KurentoRecordingMessage;
+import webChat.model.kurento.*;
 import webChat.model.record.RecordingInfo;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
@@ -99,11 +96,11 @@ public class KurentoHandler extends TextWebSocketHandler {
 
         try {
             // 방에 이미 녹화 파일이 존재하는지 확인
-            if (room.isRoomRecording()) {
+            if (room.isHasRecordedOnce()) {
                 kurentoMessageSender.broadcastErrorAndThrow(
                         roomId,
                         KurentoMessageBuilder.recordingFileExistsError(),
-                        "Recording file already exists for room : " + roomId);
+                        KurentoMessageType.RECORDING_FILE_EXISTS_ERROR.getDefaultMessage());
             }
 
             // 방에서 이미 녹화중인지 확인
@@ -224,16 +221,19 @@ public class KurentoHandler extends TextWebSocketHandler {
         kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
         redisService.incrementUserCount(kurentoRoom);
         chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+        KurentoUserSession user = participantService.getBySessionId(session);
 
         // 방 참가 시 녹화 중 확인
-        if (kurentoRoom.isRoomRecording()) {
+        if (kurentoRoom.isRecordingInProgress()) {
             RecordingInfo recordingInfo = kurentoRoom.getRecordingInfo();
-            KurentoUserSession user = participantService.getBySessionId(session);
             kurentoMessageSender.sendToUser(user,
                     KurentoMessageBuilder.recordingInProgress()
                             .recordingId(recordingInfo.getRecordingId())
                             .message(String.format("%s 님이 녹화 중입니다. 녹화 및 자막 기능이 비활성화됩니다.",
                                     recordingInfo.getRecordingNickName())));
+        } else if (kurentoRoom.isHasRecordedOnce()) {  // 방 새로고침 시 이미 녹화 파일이 있는지 확인
+            kurentoMessageSender.sendToUser(user,
+                    KurentoMessageBuilder.recordingFileExistsError());
         }
     }
 

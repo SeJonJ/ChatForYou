@@ -75,11 +75,11 @@ const recording = {
     $recordingStopBtn: $('#recordingStopBtn'),
 
     // 녹화 상태
-    isRecording: false,
-    isOtherUserRecording: false,
+    isRecordingInProgress: false,
+    isOtherRecordingInProgress: false,
 
     // 해당 방에서 녹화 사용 여부
-    isAlreadyRecording: false,
+    hasRecordedOnce: false,
 
     // 서버 측 녹화
     serverRecordingId: null,
@@ -129,14 +129,14 @@ const recording = {
         // 녹화 시작 버튼
         self.$recordingStartBtn.click(function (e) {
             // 다른 사용자가 녹화 중이거나 이미 녹화 중이면 차단
-            if (self.isOtherUserRecording || self.isRecording) {
+            if (self.isOtherRecordingInProgress || self.isRecordingInProgress) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
 
-                if (self.isOtherUserRecording) {
+                if (self.isOtherRecordingInProgress) {
                     self.showToast('다른 사용자가 녹화 중입니다.');
-                } else if (self.isRecording) {
+                } else if (self.isRecordingInProgress) {
                     self.showToast('이미 녹화 중입니다.');
                 }
                 return false;
@@ -147,14 +147,14 @@ const recording = {
         // 녹화 중지 버튼
         self.$recordingStopBtn.click(function (e) {
             // 다른 사용자가 녹화 중이거나 녹화 중이 아니면 차단
-            if (self.isOtherUserRecording || !self.isRecording) {
+            if (self.isOtherRecordingInProgress || !self.isRecordingInProgress) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
 
-                if (self.isOtherUserRecording) {
+                if (self.isOtherRecordingInProgress) {
                     self.showToast('다른 사용자가 녹화 중입니다. 녹화를 시작한 사용자만 중지할 수 있습니다.');
-                } else if (!self.isRecording) {
+                } else if (!self.isRecordingInProgress) {
                     self.showToast('녹화 중이 아닙니다.');
                 }
                 return false;
@@ -222,14 +222,14 @@ const recording = {
      */
     startRecording: function () {
         let self = this;
-        if(self.isAlreadyRecording) {
+        if(self.hasRecordedOnce) {
             self.showToast('해당 방은 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다.', 3000, 'warning');
             return;
         }
 
         try {
-            self.isRecording = true;
-            self.isAlreadyRecording = true;
+            self.isRecordingInProgress = true;
+            self.hasRecordedOnce = true;
 
             // 1. 서버에 녹화 시작 요청
             self.startServerRecording();
@@ -251,13 +251,13 @@ const recording = {
                 console.warn('[RECORDING] speechRecognitionUtils not available');
             }
 
-            console.log('녹화 시작 완료, isAlreadyRecording:', self.isAlreadyRecording);
+            console.log('녹화 시작 완료, hasRecordedOnce:', self.hasRecordedOnce);
             self.showToast('녹화를 시작합니다.');
 
         } catch (error) {
             console.error('녹화 시작 실패:', error);
             self.showToast('녹화 시작에 실패했습니다: ' + error.message);
-            self.isRecording = false;
+            self.isRecordingInProgress = false;
             self.updateUI('idle');
         }
     },
@@ -448,7 +448,7 @@ const recording = {
         let self = this;
 
         try {
-            self.isRecording = false;
+            self.isRecordingInProgress = false;
 
             // 1. 서버에 녹화 중지 요청
             self.stopServerRecording();
@@ -471,7 +471,7 @@ const recording = {
                 console.warn('[RECORDING] speechRecognitionUtils not available');
             }
 
-            console.log('녹화 중지 완료, isAlreadyRecording:', self.isAlreadyRecording);
+            console.log('녹화 중지 완료, hasRecordedOnce:', self.hasRecordedOnce);
             self.showToast('녹화를 중지했습니다.');
 
         } catch (error) {
@@ -643,11 +643,11 @@ const recording = {
         let self = this;
         let recordingEvent = eventType === 'recordingStarted';
 
-        // 녹화 시작 시에만 isAlreadyRecording을 true로 설정
+        // 녹화 시작 시에만 hasRecordedOnce을 true로 설정
         // TODO: 추후 각 사용자별 1회 녹화 허용 시 사용자별 녹화 횟수 추적 필요
         if (eventType === 'recordingStarted') {
-            self.isAlreadyRecording = true;
-            console.log('[RECORDING] Room recording started by:', recordingUser, '- isAlreadyRecording set to true');
+            self.hasRecordedOnce = true;
+            console.log('[RECORDING] Room recording started by:', recordingUser, '- hasRecordedOnce set to true');
         }
 
         // 녹화 알림
@@ -657,7 +657,7 @@ const recording = {
         // 다른 사용자의 이벤트인 경우
         if (nickName !== recordingUser) {
             if (eventType === 'recordingStarted') {
-                self.isOtherUserRecording = true;
+                self.isOtherRecordingInProgress = true;
                 self.updateUI('disabled');
 
                 // 자막 기능 비활성화
@@ -669,7 +669,7 @@ const recording = {
                 }
 
             } else if (eventType === 'recordingStopped') {
-                self.isOtherUserRecording = false;
+                self.isOtherRecordingInProgress = false;
 
                 // 현재 정책: 동일한 방에서 1번이라도 녹화하면 모든 사용자 녹화 불가
                 // TODO: 추후 각 사용자별 1회 녹화 허용으로 변경 시 조건문 수정 필요
@@ -693,7 +693,7 @@ const recording = {
     addParticipantAudio: function (userId, stream) {
         let self = this;
 
-        if (self.isRecording && self.audioMixer && stream) {
+        if (self.isRecordingInProgress && self.audioMixer && stream) {
             self.audioMixer.addAudioStream(userId, stream);
             console.log(`녹화 중 새 참가자 오디오 추가: ${userId}`);
         }
@@ -718,8 +718,8 @@ const recording = {
         let self = this;
 
         return {
-            isRecording: self.isRecording,
-            isOtherUserRecording: self.isOtherUserRecording,
+            isRecordingInProgress: self.isRecordingInProgress,
+            isOtherRecordingInProgress: self.isOtherRecordingInProgress,
             serverRecordingId: self.serverRecordingId,
             clientRecordingEnabled: self.clientRecordingEnabled,
             audioMixerStatus: self.audioMixer ? self.audioMixer.getStatus() : null
@@ -760,8 +760,8 @@ const recording = {
         );
 
         // 녹화 상태 업데이트
-        self.isRecording = false;
-        // isOtherUserRecording는 다른 사용자의 녹화 상태이므로 여기서 변경하지 않음
+        self.isRecordingInProgress = false;
+        // isOtherRecordingInProgress는 다른 사용자의 녹화 상태이므로 여기서 변경하지 않음
         // 자동 중지는 '내가' 녹화를 시작한 경우에만 발생함
 
         // UI 업데이트
@@ -853,9 +853,9 @@ const recording = {
 
         //12. 특정 에러에 대해서는 UI를 permanentlyDisabled 상태로 변경
         const permanentlyDisabledErrors = [
-            'alreadyRecording',
-            'recordingEndpointNotFound', 
-            'recordingFileExists',
+            'alreadyRecordingError',
+            'recordingEndpointNotFoundError',
+            'recordingFileExistsError',
             'recordingAutoStopFailed'
         ];
 
@@ -864,9 +864,10 @@ const recording = {
             self.updateUI('permanentlyDisabled');
             
             // 녹화 상태 초기화
-            self.isRecording = false;
+            self.isRecordingInProgress = false;
+            self.isOtherRecordingInProgress = false;
             self.serverRecordingId = null;
-            self.isAlreadyRecording = true;
+            self.hasRecordedOnce = true;
         }
     },
 
@@ -988,22 +989,42 @@ const recording = {
             });
         }, 30000);
     },
-    recordingInProgress : function(parseMessage = ''){
+    recordingInProgress : function(parseMessage = '') {
         let self = this;
-        self.isRecording = true;
-        self.isAlreadyRecording = true;
-        self.isOtherUserRecording = true;
-
-        console.log('[RECORDING] 녹화 중인 방에 입장:', parseMessage);
+        self.isRecordingInProgress = true;
+        self.hasRecordedOnce = true;
+        self.isOtherRecordingInProgress = true;
 
         // 오디오 믹싱 시작
         self.startAudioMixing();
 
         // UI 업데이트(녹화 및 자막 버튼 비활성화)
-        self.updateUI('recording');
-        speechRecognitionUtils.handlingSubtitleByRecording(self.isRecording);
+        self.updateUI('disabled');
+        speechRecognitionUtils.handlingSubtitleByRecording(self.isRecordingInProgress);
 
         // 토스트 알림
         self.showToast(parseMessage.message);
+    },
+    participantRecordingError : function({
+        name = '',
+        message = ''
+    }) {
+        let self = this;
+        self.isRecordingInProgress = true;
+        self.hasRecordedOnce = true;
+        self.isOtherRecordingInProgress = true;
+
+        console.log('[RECORDING] 녹화 참여 에러 발생:', { name, message });
+
+        // UI 업데이트(녹화 및 자막 버튼 비활성화)
+        self.updateUI('recording');
+        speechRecognitionUtils.handlingSubtitleByRecording(self.isRecordingInProgress);
+
+        // 토스트 알림
+        if(name === nickName){
+            self.showToast("녹화 참여에 실패했습니다. 녹화 참여를 위해서는 새로고침 혹은 재참여를 해주세요.", 5000, 'warning');
+        }else{
+            self.showToast(message);
+        }
     }
 };

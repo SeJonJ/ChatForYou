@@ -51,7 +51,7 @@ public enum KurentoMessageType {
      * 연결 실패
      */
     CONNECTION_FAILED(
-        "ConnectionFail",
+        "connectionFailed",
         null,
         "connection error"
     ),
@@ -60,7 +60,7 @@ public enum KurentoMessageType {
      * 텍스트 오버레이 성공 응답
      */
     TEXT_OVERLAY_SUCCESS(
-        "textOverlayResponse",
+        "textOverlaySuccess",
         null,
         "Text overlay applied successfully"
     ),
@@ -75,7 +75,7 @@ public enum KurentoMessageType {
      * 녹화 파일 업로드 완료
      */
     UPLOAD_COMPLETED(
-            "recordingUploadCompleted",
+            "uploadCompleted",
             RecordingStatus.COMPLETED,
             "녹화 파일 업로드가 완료되었습니다."
     ),
@@ -83,7 +83,7 @@ public enum KurentoMessageType {
     /**
      * 녹화 자동 중지 (N분 경과)
      */
-    AUTO_STOPPED(
+    RECORDING_AUTO_STOPPED(
             "recordingAutoStopped",
             RecordingStatus.AUTO_STOPPED,
             null  // 동적 메시지 (minutes 포함)
@@ -93,7 +93,7 @@ public enum KurentoMessageType {
      * 녹화 파일 업로드 실패
      */
     UPLOAD_FAILED(
-            "recordingUploadFailed",
+            "uploadFailed",
             RecordingStatus.FAILED,
             "녹화 파일 업로드에 실패했습니다. 자세한 사항은 관리자에게 문의부탁드립니다."
     ),
@@ -101,7 +101,7 @@ public enum KurentoMessageType {
     /**
      * 녹화 자동 중지 실패
      */
-    AUTO_STOP_FAILED(
+    RECORDING_AUTO_STOP_FAILED(
             "recordingAutoStopFailed",
             RecordingStatus.FAILED,
             "녹화 자동 중지에 실패했습니다. 자세한 사항은 관리자에게 문의부탁드립니다."  // 동적 메시지
@@ -113,7 +113,7 @@ public enum KurentoMessageType {
      * 녹화 시작 성공 응답
      */
     RECORDING_STARTED(
-            "startRecording",
+            "recordingStarted",
             RecordingStatus.RECORDING,
             "녹화가 시작되었습니다."
     ),
@@ -122,7 +122,7 @@ public enum KurentoMessageType {
      * 녹화 중지 성공 응답
      */
     RECORDING_STOPPED(
-            "stopRecording",
+            "recordingStopped",
             RecordingStatus.STOPPED,
             "녹화가 완료되었습니다."
     ),
@@ -130,9 +130,9 @@ public enum KurentoMessageType {
     /**
      * 방 입장 시 녹화 중 여부 알림
      */
-    ROOM_RECORDING_STATUS(
-            "roomRecordingStatus",
-            null,
+    RECORDING_STATUS(
+            "recordingStatus",
+            RecordingStatus.RECORDING,
             null
     ),
 
@@ -142,7 +142,7 @@ public enum KurentoMessageType {
      * 이미 녹화 중인 방에서 녹화 시작 시도
      */
     ALREADY_RECORDING_ERROR(
-            "alreadyRecording",
+            "alreadyRecordingError",
             RecordingStatus.ERROR,
             "현재 방에서 이미 녹화가 진행중입니다."
     ),
@@ -151,7 +151,7 @@ public enum KurentoMessageType {
      * 녹화 중이 아닌 방에서 중지 시도
      */
     NOT_RECORDING_ERROR(
-            "notRecording",
+            "notRecordingError",
             RecordingStatus.ERROR,
             "녹화 중인 방이 아닙니다."
     ),
@@ -160,7 +160,7 @@ public enum KurentoMessageType {
      * 녹화 Endpoint를 찾을 수 없음
      */
     RECORDING_ENDPOINT_NOT_FOUND_ERROR(
-            "RecordingEndpointNotFound",
+            "recordingEndpointNotFoundError",
             RecordingStatus.ERROR,
             "녹화 정보를 확인할 수 없습니다. 관리자에게 문의해주세요."
     ),
@@ -169,7 +169,7 @@ public enum KurentoMessageType {
      * 녹화 중지 권한 없음
      */
     PERMISSION_DENIED_ERROR(
-            "permissionDenied",
+            "permissionDeniedError",
             RecordingStatus.ERROR,
             "녹화를 중지할 권한이 없습니다."
     ),
@@ -178,20 +178,25 @@ public enum KurentoMessageType {
      * 이미 녹화 파일 존재
      */
     RECORDING_FILE_EXISTS_ERROR(
-            "recordingFileExists",
-            null,
+            "recordingFileExistsError",
+            RecordingStatus.ERROR,
             "해당 방에는 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다."
     ),
 
     /**
-     * 이미 녹화가 진행중인 방(새로운 참여자에게 알림)
+     * 특정 유저의 녹화 에러
      */
-    RECORDING_INPROGRESS(
-            "recordingInProgress",
-            null,
+    PARTICIPANT_RECORDING_ERROR(
+            "participantRecordingError",
+            RecordingStatus.ERROR,
             ""
     ),
 
+    RECORDING_IN_PROGRESS(
+            "recordingInProgress",
+            RecordingStatus.RECORDING,
+        ""
+    ),
 
     // ==========================================
     // TODO 서버 연결 관련(개발 예정)

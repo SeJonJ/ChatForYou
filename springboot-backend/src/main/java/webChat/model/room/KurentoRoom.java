@@ -67,8 +67,8 @@ public class KurentoRoom extends ChatRoom implements Closeable {
   @JsonIgnore
   private transient HubPort roomRecorderHubPort;
 
-  private boolean isRoomRecording = false;
-  private boolean isRecordingInProgress = false;
+  private boolean hasRecordedOnce = false; // 방의 녹화 정보가 있는지 여부(한번이라도 녹화되었다면 true)
+  private boolean isRecordingInProgress = false; // 현재 녹화 중 여부
 
   @SerializedName("recording_info")
   @JsonProperty("recording_info")
@@ -123,8 +123,8 @@ public class KurentoRoom extends ChatRoom implements Closeable {
 
   @Override
   public void close() {
-    // 방 녹화가 진행 중이면 중지
-    if (this.isRoomRecording()) {
+    // 방에서 녹화한 적이 있으면 중지 시도
+    if (this.isRecordingInProgress) {
       this.stopRoomRecording(this.recordingInfo.getRecordingId());
     }
 
@@ -156,8 +156,8 @@ public class KurentoRoom extends ChatRoom implements Closeable {
    * @param recordingInfo 녹화 정보
    */
   public void startRoomRecording(String recordId, MediaProfileSpecType mediaProfileSpecType, RecordingInfo recordingInfo) {
-    if (this.isRoomRecording()) {
-      log.warn("Room recording already in progress for room: {}", this.getRoomId());
+    if (this.isHasRecordedOnce()) {
+      log.warn("Room already has recorded once for room: {}", this.getRoomId());
       return;
     }
 
@@ -187,7 +187,7 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       KurentoRecorderMap.setRecorderHubPort(roomId, roomRecorderHubPort);
       
       // Redis 상태 업데이트
-      this.isRoomRecording = true;
+      this.hasRecordedOnce = true;
       this.isRecordingInProgress = true;
 //      this.currentRecordId = recordId;
 
@@ -207,8 +207,8 @@ public class KurentoRoom extends ChatRoom implements Closeable {
   public void stopRoomRecording(String recordId) {
     String roomId = this.getRoomId();
     
-    if (!this.isRoomRecording) {
-      log.warn("No active room recording to stop for room: {}", roomId);
+    if (!this.hasRecordedOnce) {
+      log.warn("No recording has been started for room: {}", roomId);
       return;
     }
 
@@ -253,10 +253,6 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       
       // Map 에서 제거
       KurentoRecorderMap.removeRecorder(roomId);
-
-      // Redis 상태 초기화
-      this.isRoomRecording = false;
-//      this.currentRecordId = null;
 
     } catch (Exception e) {
       log.error("Error cleaning up room recording resources for room {}: {}", this.getRoomId(), e.getMessage());

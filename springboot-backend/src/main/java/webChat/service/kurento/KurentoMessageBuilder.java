@@ -53,14 +53,14 @@ public class KurentoMessageBuilder {
      * 녹화 자동 중지 메시지
      */
     public static KurentoMessageBuilder autoStopped() {
-        return new KurentoMessageBuilder(KurentoMessageType.AUTO_STOPPED);
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_AUTO_STOPPED);
     }
 
     /**
      * 녹화 자동 중지 실패 메시지
      */
     public static KurentoMessageBuilder autoStopFailed() {
-        return new KurentoMessageBuilder(KurentoMessageType.AUTO_STOP_FAILED);
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_AUTO_STOP_FAILED);
     }
 
     /**
@@ -79,9 +79,17 @@ public class KurentoMessageBuilder {
 
     /**
      * 이미 녹화 중 에러 메시지
+     * 방에서 다른 사람이 녹화 중 녹화버튼을 누른 경우
      */
     public static KurentoMessageBuilder alreadyRecordingError() {
         return new KurentoMessageBuilder(KurentoMessageType.ALREADY_RECORDING_ERROR);
+    }
+
+    /**
+     * 이미 녹화가 진행중인 방에 참여자 입장
+     */
+    public static KurentoMessageBuilder recordingInProgress(){
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_IN_PROGRESS);
     }
 
     /**
@@ -113,10 +121,10 @@ public class KurentoMessageBuilder {
     }
 
     /**
-     * 이미 녹화가 진행중인 방에 참여자 입장
+     * 특정 참여자 녹화 에러
      */
-    public static KurentoMessageBuilder recordingInProgress(){
-        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_INPROGRESS);
+    public static KurentoMessageBuilder participantRecordingError() {
+        return new KurentoMessageBuilder(KurentoMessageType.PARTICIPANT_RECORDING_ERROR);
     }
 
     // 참가자 관련
@@ -156,13 +164,6 @@ public class KurentoMessageBuilder {
      */
     public static KurentoMessageBuilder textOverlaySuccess() {
         return new KurentoMessageBuilder(KurentoMessageType.TEXT_OVERLAY_SUCCESS);
-    }
-
-    /**
-     * 방 녹화 상태
-     */
-    public static KurentoMessageBuilder roomRecordingStatus() {
-        return new KurentoMessageBuilder(KurentoMessageType.ROOM_RECORDING_STATUS);
     }
 
     /**

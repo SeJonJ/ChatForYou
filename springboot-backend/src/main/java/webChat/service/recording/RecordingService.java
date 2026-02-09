@@ -18,6 +18,9 @@ import webChat.model.record.RecordingStatus;
 import webChat.model.room.KurentoRoom;
 import webChat.repository.KurentoCompositeMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
+import webChat.service.kurento.KurentoHandler;
+import webChat.service.kurento.KurentoMessageBuilder;
+import webChat.service.kurento.KurentoMessageSender;
 import webChat.service.kurento.KurentoUserSession;
 
 import java.io.IOException;
@@ -39,6 +42,7 @@ public class RecordingService {
     @Qualifier("recording-autostop-executor")
     private final TaskScheduler autoStopExecutor;
     private final ApplicationEventPublisher eventPublisher;
+    private final KurentoMessageSender kurentoMessageSender;
 
     @Value("${recording.ext:}")
     private String RECORDING_EXT;
@@ -53,13 +57,14 @@ public class RecordingService {
 
             // 녹화 파일 확장자 결정
             MediaProfileSpecType mediaProfileSpecType = MediaProfileSpecType.WEBM;
-            if(RECORDING_EXT.equalsIgnoreCase("mp4")){
+            if (RECORDING_EXT.equalsIgnoreCase("mp4")) {
                 mediaProfileSpecType = MediaProfileSpecType.MP4;
             }
 
             // 3. 녹화 ID 및 파일 경로 생성
             String recordingId = UUID.randomUUID().toString().split("-")[0];
-            String fileName = "room_recording_" + roomId + "_" + requestUser.getUserId() + "." + Strings.toLowerCase(mediaProfileSpecType.name());
+            String fileName = "room_recording_" + roomId + "_" + requestUser.getUserId() + "."
+                    + Strings.toLowerCase(mediaProfileSpecType.name());
 
             // KMS 컨테이너 내부 마운트 경로 사용
             String filePath = "/recordings/" + roomId + "/" + recordingId + "/" + fileName;
@@ -75,8 +80,7 @@ public class RecordingService {
                     .recordingNickName(requestUser.getNickName())
                     .startAt(currentTime)
                     .recordingFile(
-                            RecordingFile.ofCreate(fileName, filePath, fullPath, currentTime)
-                    )
+                            RecordingFile.ofCreate(fileName, filePath, fullPath, currentTime))
                     .status(RecordingStatus.RECORDING)
                     .build();
 
@@ -85,20 +89,28 @@ public class RecordingService {
                 Composite composite = KurentoCompositeMap.getComposite(roomId);
                 if (composite != null) {
                     Collection<KurentoUserSession> participants = kurentoParticipantService.getParticipantList(roomId);
-                    log.info("Connecting {} existing participants to Composite for room {}", participants.size(), roomId);
+                    log.info("Connecting {} existing participants to Composite for room {}", participants.size(),
+                            roomId);
 
                     for (KurentoUserSession participant : participants) {
                         try {
                             if (!participant.isConnectedToComposite()) {
                                 participant.connectToComposite(composite);
-                                log.info("Participant {} connected to Composite for recording", participant.getUserId());
+                                log.info("Participant {} connected to Composite for recording",
+                                        participant.getUserId());
                             } else {
                                 log.debug("Participant {} already connected to Composite", participant.getUserId());
                             }
                         } catch (Exception e) {
+                            // TODO 예외처리 세분화
                             log.error("Failed to connect participant {} to Composite: {}",
-                                     participant.getUserId(), e.getMessage());
+                                    participant.getUserId(), e.getMessage());
                             // 개별 참여자 연결 실패는 전체 녹화를 중단하지 않음
+                            kurentoMessageSender.broadcastError(roomId,
+                                    KurentoMessageBuilder.participantRecordingError()
+                                            .name(participant.getNickName())
+                                            .message(participant.getNickName() + " 님의 녹화 연결에 실패했습니다."));
+
                         }
                     }
                     log.info("All existing participants connected to Composite for room {}", roomId);
@@ -155,7 +167,7 @@ public class RecordingService {
                         }
                     } catch (Exception e) {
                         log.error("Failed to disconnect participant {} from Composite: {}",
-                                 participant.getUserId(), e.getMessage());
+                                participant.getUserId(), e.getMessage());
                     }
                 }
                 log.info("All participants disconnected from Composite for room {}", roomId);
@@ -200,8 +212,7 @@ public class RecordingService {
                         "AUTO-STOP-SYSTEM",
                         room.getRoomId(),
                         null,
-                        null
-                );
+                        null);
 
                 stopRecording(room, systemUser);
 
@@ -209,8 +220,7 @@ public class RecordingService {
                 eventPublisher.publishEvent(new RecordingAutoStopEvent(
                         room.getRoomId(),
                         room.getRecordingInfo().getRecordingId(),
-                        autoStopMinutes
-                ));
+                        autoStopMinutes));
 
             } catch (Exception e) {
                 log.error("Failed to auto-stop recording: {}", e.getMessage());
@@ -220,8 +230,7 @@ public class RecordingService {
                         room.getRoomId(),
                         recordingInfo.getRecordingId(),
                         autoStopMinutes,
-                        e.getMessage()
-                ));
+                        e.getMessage()));
             }
         }, new Date(System.currentTimeMillis() + delayMillis));
     }

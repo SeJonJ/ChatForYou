@@ -45,7 +45,7 @@ public class ChatRoomController {
 
     // 채팅방 생성
     @PostMapping("/room")
-    public ResponseEntity<ChatForYouResponse> createRoom(
+    public ResponseEntity<ChatForYouResponse> createRoom (
             HttpServletRequest request,
             HttpServletResponse response,
             @RequestHeader("Authorization") String authorization,
@@ -121,7 +121,7 @@ public class ChatRoomController {
     }
 
     @GetMapping("/room/list")
-    public ResponseEntity<List<ChatRoomOutVo>> getChatRoomList(
+    public ResponseEntity<List<ChatRoomOutVo>> getChatRoomList (
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNum", required = false, defaultValue = "0") String pageNumStr,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") String pageSizeStr){
@@ -134,7 +134,7 @@ public class ChatRoomController {
 
     // 채팅방 비밀번호 확인
     @PostMapping(value = "/room/validatePwd/{roomId}")
-    public ResponseEntity<ChatForYouResponse> validatePwd(
+    public ResponseEntity<ChatForYouResponse> validatePwd (
             @PathVariable String roomId,
             @RequestParam("roomPwd") String roomPwd,
             @RequestHeader("Authorization") String authorization) throws Exception {
@@ -153,7 +153,7 @@ public class ChatRoomController {
 
     // 채팅방 수정
     @PutMapping(value = "/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> modifyChatRoom(
+    public ResponseEntity<ChatForYouResponse> modifyChatRoom (
             @PathVariable String roomId,
             @RequestHeader("Authorization") String authorization,
             @RequestBody ChatRoomInVo chatRoom) throws Exception {
@@ -168,7 +168,7 @@ public class ChatRoomController {
 
     // 채팅방 삭제
     @DeleteMapping("/room/{roomId}")
-    public ResponseEntity<ChatForYouResponse> delChatRoom(
+    public ResponseEntity<ChatForYouResponse> delChatRoom (
             @PathVariable String roomId,
             @RequestHeader("Authorization") String authorization) throws Exception {
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
@@ -183,7 +183,7 @@ public class ChatRoomController {
 
     // 유저 카운트
     @GetMapping("/room/chkUserCnt/{roomId}")
-    public ResponseEntity<ChatForYouResponse> chUserCnt(@PathVariable String roomId) throws BadRequestException {
+    public ResponseEntity<ChatForYouResponse> chUserCnt (@PathVariable String roomId) throws BadRequestException {
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
                 .data(chatRoomService.chkRoomUserCnt(roomId))
