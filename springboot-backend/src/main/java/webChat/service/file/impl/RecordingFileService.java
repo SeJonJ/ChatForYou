@@ -99,6 +99,11 @@ public class RecordingFileService extends AbstractFileService {
         KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         // TODO 예외처리 수정 필요
+        if(room == null) {
+            throw new BadRequestException("Room not found with ID: " + roomId);
+        }
+
+        // TODO 예외처리 수정 필요
         if(room.getRecordingInfo() == null || room.getRecordingInfo().getRecordingFile() == null) {
             throw new BadRequestException("there is no recording file in room: " + roomId);
         }

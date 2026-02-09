@@ -20,6 +20,7 @@ package webChat.service.kurento;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
+import org.kurento.client.Composite;
 import org.kurento.client.Continuation;
 import org.kurento.client.MediaPipeline;
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ import org.springframework.web.socket.WebSocketSession;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.in.ChatRoomInVo;
+import webChat.repository.KurentoCompositeMap;
 import webChat.repository.KurentoPipelineMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.redis.RedisService;
@@ -52,7 +54,7 @@ public class KurentoRoomManager {
 
   private final RedisService redisService;
   private final KurentoParticipantService kurentoParticipantService;
-  private Map<String, MediaPipeline> kurentoPipelineMap = KurentoPipelineMap.getInstance();
+  private final Map<String, MediaPipeline> kurentoPipelineMap = KurentoPipelineMap.getInstance();
   private final KurentoMessageSender kurentoMessageSender;
 
   /**
@@ -73,11 +75,11 @@ public class KurentoRoomManager {
     // 참여자 map 에 유저명과 유저에 관한 정보를 갖는 userSession 객체를 저장
     kurentoParticipantService.addParticipant(room.getRoomId(), participant);
 
-    // 방이 녹화 중이면 새 참여자를 Composite에 연결
-    if (room.isRoomRecording()) {
+    // 방에서 녹화한 적이 있으면 새 참여자를 Composite에 연결
+    if (room.isRecordingInProgress()) {
       log.info("ROOM {}: Recording in progress, connecting new participant {} to Composite", room.getRoomId(), userId);
       try {
-        org.kurento.client.Composite composite = webChat.repository.KurentoCompositeMap.getComposite(room.getRoomId());
+        Composite composite = KurentoCompositeMap.getComposite(room.getRoomId());
         if (composite != null) {
           participant.connectToComposite(composite);
           log.info("ROOM {}: New participant {} connected to Composite successfully", room.getRoomId(), userId);
@@ -104,6 +106,18 @@ public class KurentoRoomManager {
    */
   public void leave(KurentoRoom room, KurentoUserSession user) throws IOException {
     log.debug("PARTICIPANT {}: Leaving room {}", user.getUserId(), room.getRoomId());
+
+    // 녹화 중이면 Composite 연결 해제
+    if (room.isRecordingInProgress() && user.isConnectedToComposite()) {
+      try {
+        user.disconnectFromComposite();
+        log.info("PARTICIPANT {}: Disconnected from Composite before leaving", user.getUserId());
+      } catch (Exception e) {
+        log.error("PARTICIPANT {}: Failed to disconnect from Composite: {}",
+                user.getUserId(), e.getMessage());
+      }
+    }
+
     this.removeParticipant(room, user.getUserId());
   }
 
@@ -113,7 +127,7 @@ public class KurentoRoomManager {
    * @Return List<String 유저명>
    * */
   
-  private Collection<String> joinRoom(KurentoRoom room, KurentoUserSession newParticipant) throws IOException {
+  private Collection<String> joinRoom(KurentoRoom room, KurentoUserSession newParticipant) {
     // participants 를 list 형태로 변환 => 이때 list 는 한명의 유저가 새로 들어올 때마다
     // 즉 joinRoom 이 실행될 때마다 새로 생성 && return 됨
     Collection<KurentoUserSession> userSessions = kurentoParticipantService.getParticipantList(room.getRoomId());
@@ -244,19 +258,23 @@ public class KurentoRoomManager {
 
     if(mediaPipeline != null && mediaPipeline.isCommited()) {
       // 미디어 파이프 초기화
-      mediaPipeline.release(new Continuation<Void>() {
+      mediaPipeline.release(new Continuation<>() {
 
-        @Override
-        public void onSuccess(Void result) throws Exception {
-          log.trace("ROOM {}: Released Pipeline", kurentoRoom.getRoomId());
-        }
+          @Override
+          public void onSuccess(Void result) {
+              log.trace("ROOM {}: Released Pipeline", kurentoRoom.getRoomId());
+          }
 
-        @Override
-        public void onError(Throwable cause) throws Exception {
-          log.warn("PARTICIPANT {}: Could not release Pipeline", kurentoRoom.getRoomId(), cause);
-        }
+          @Override
+          public void onError(Throwable cause) {
+              log.warn("PARTICIPANT {}: Could not release Pipeline", kurentoRoom.getRoomId(), cause);
+          }
       });
     }
+
+    // composite 및 pipeline 모두 map 에서 제거
+    KurentoCompositeMap.removeComposite(kurentoRoom.getRoomId());
+    kurentoPipelineMap.remove(kurentoRoom.getRoomId());
 
     kurentoParticipantService.removeRoom(kurentoRoom.getRoomId());
     log.debug("Room {} closed", kurentoRoom.getRoomId());

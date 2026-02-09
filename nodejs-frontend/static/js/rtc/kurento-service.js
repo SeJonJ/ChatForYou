@@ -29,6 +29,127 @@ let turnPwd = null;
 
 let origGetUserMedia;
 
+// ==========================================
+// WebSocket 메시지 핸들러 맵
+// TODO 추후 별도의 js 로 분리 필요
+// ==========================================
+
+/**
+ * 경고 토스트 표시 유틸리티
+ * @param {string} text - 표시할 메시지
+ * @param {number} duration - 표시 시간 (ms)
+ */
+function showWarningToast(text, duration = 4000) {
+    Toastify({
+        text: text,
+        duration: duration,
+        newWindow: true,
+        close: true,
+        gravity: "top",
+        position: "center",
+        style: {
+            background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
+        },
+    }).showToast();
+}
+
+/**
+ * 녹화 에러 핸들러 일괄 생성
+ * @param {string[]} errorTypes - 에러 타입 배열
+ * @returns {Object} 에러 타입별 핸들러 객체
+ */
+function createRecordingErrorHandlers(errorTypes) {
+    return errorTypes.reduce((handlers, errorType) => {
+        handlers[errorType] = (msg) => {
+            showWarningToast(msg?.message);
+            recording?.handleRecordingError?.(msg);
+        };
+        return handlers;
+    }, {});
+}
+
+/**
+ * WebSocket 메시지 핸들러 정의
+ * - 각 메시지 타입별 처리 로직을 분리
+ * - 새로운 메시지 타입 추가 시 이 객체에 핸들러만 추가하면 됨
+ */
+const wsMessageHandlers = {
+    // ==========================================
+    // 1. 참가자 관련
+    // ==========================================
+    existingParticipants: (msg) => onExistingParticipants(msg),
+    newParticipantArrived: (msg) => onNewParticipant(msg),
+    participantLeft: (msg) => onParticipantLeft(msg),
+
+    // ==========================================
+    // 2. WebRTC 연결 관련
+    // ==========================================
+    receiveVideoAnswer: (msg) => receiveVideoResponse(msg),
+    iceCandidate: (msg) => {
+        const participant = participants[msg.name];
+        if (participant?.rtcPeer) {
+            participant.rtcPeer.addIceCandidate(msg.candidate, (error) => {
+                if (error) console.error("Error adding candidate:", error);
+            });
+        }
+    },
+    connectionFailed: (msg) => {
+        $('#connectionFailModal').modal('show');
+        $('#reconnectButton').click(() => {
+            leaveRoom('error');
+            window.location.reload();
+        });
+    },
+
+    // ==========================================
+    // 3. 기타
+    // ==========================================
+    textOverlaySuccess: (msg) => console.debug('textOverlaySuccess', msg),
+
+    // ==========================================
+    // 4. 녹화 관련
+    // ==========================================
+    recordingStarted: (msg) => console.debug('recordingStarted', msg),
+    recordingStopped: (msg) => console.debug('recordingStopped', msg),
+    recordingAutoStopped: (msg) => {
+        if (recording?.handleAutoStopRecording) {
+            recording.handleAutoStopRecording(msg);
+        } else {
+            console.warn('recording.handleAutoStopRecording is not defined');
+        }
+    },
+    uploadCompleted: (msg) => {
+        console.log('uploadCompleted', msg);
+        if (recording?.handleUploadCompleted) {
+            recording.handleUploadCompleted(msg);
+        } else {
+            alert('녹화 완료', msg.message);
+        }
+    },
+    uploadFailed: (msg) => {
+        console.log('uploadFailed', msg);
+        if (recording?.handleUploadFailed) {
+            recording.handleUploadFailed(msg);
+        } else {
+            alert('녹화 실패', msg.message);
+        }
+    },
+    recordingInProgress: (msg) => recording.recordingInProgress(msg),
+    participantRecordingError: (msg) => recording.participantRecordingError(msg),
+
+    // ==========================================
+    // 5. 녹화 에러 그룹 (공통 처리)
+    // ==========================================
+    ...createRecordingErrorHandlers([
+        'alreadyRecordingError',
+        'notRecordingError',
+        'recordingEndpointNotFoundError',
+        'permissionDeniedError',
+        'recordingFileExistsError',
+        'recordingAutoStopFailed'
+    ])
+};
+
 // websocket 연결 확인 후 register() 실행
 var ws = new WebSocket(window.__CONFIG__.API_BASE_URL.replace(/^http/, 'ws') + '/signal');
 ws.onopen = () => {
@@ -326,119 +447,20 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     }
 }
 
+/**
+ * WebSocket 메시지 수신 처리
+ * - Handler Map 패턴으로 리팩토링
+ * - 새로운 메시지 타입은 wsMessageHandlers에 추가
+ */
 ws.onmessage = function (message) {
-    var parsedMessage = JSON.parse(message.data);
+    const parsedMessage = JSON.parse(message.data);
+    const handler = wsMessageHandlers[parsedMessage.id];
 
-    switch (parsedMessage.id) {
-        case 'existingParticipants':
-            onExistingParticipants(parsedMessage);
-            break;
-        case 'newParticipantArrived':
-            onNewParticipant(parsedMessage);
-            break;
-        case 'participantLeft':
-            onParticipantLeft(parsedMessage);
-            break;
-        case 'receiveVideoAnswer':
-            receiveVideoResponse(parsedMessage);
-            break;
-        case 'iceCandidate':
-            participants[parsedMessage.name].rtcPeer.addIceCandidate(parsedMessage.candidate, function (error) {
-                if (error) {
-                    console.error("Error adding candidate: " + error);
-                    return;
-                }
-            });
-            break;
-        case 'ConnectionFail': // 연결 실패 메시지 처리
-
-            // 모달을 표시
-            $('#connectionFailModal').modal('show');
-
-            // 모달의 확인 버튼에 클릭 이벤트 핸들러를 연결
-            $('#reconnectButton').click(function() {
-                leaveRoom('error');
-                window.location.reload();  // 프로미스 완료 후 페이지 새로고침
-            });
-            break;
-        case 'textOverlayResponse':
-            console.debug('textOverlayResponse', parsedMessage);
-            break;
-        case 'startRecording':
-            console.debug('startRecording', parsedMessage);
-            break;
-        case 'stopRecording':
-            console.debug('stopRecording', parsedMessage);
-            break;
-        // case 'recordingUploadProgress':
-        //     console.debug('recordingUploadProgress', parsedMessage);
-        //     break;
-        case 'recordingAutoStopped':
-            // 녹화 자동 중지 이벤트 처리
-            if (recording?.handleAutoStopRecording) {
-                recording.handleAutoStopRecording(parsedMessage);
-            } else {
-                console.warn('recording.handleAutoStopRecording is not defined');
-            }
-            break;
-        case 'recordingUploadCompleted':
-            console.log('recordingUploadCompleted', parsedMessage);
-            // recording 객체의 핸들러 호출
-            if (recording?.handleUploadCompleted) {
-                recording.handleUploadCompleted(parsedMessage);
-            } else {
-                alert('녹화 완료', parsedMessage.message);
-            }
-            break;
-        case 'recordingUploadFailed':
-            console.log('recordingUploadFailed', parsedMessage);
-            // recording 객체의 핸들러 호출
-            if (recording?.handleUploadFailed) {
-                recording.handleUploadFailed(parsedMessage);
-            } else {
-                alert('녹화 실패', parsedMessage.message);
-            }
-            break;
-        case 'alreadyRecording':
-        case 'notRecording':
-        case 'recordingEndpointNotFound':
-        case 'permissionDenied':
-        case 'recordingFileExists':
-        case 'recordingAutoStopFailed':
-            Toastify({
-                text: parsedMessage?.message,
-                duration: 4000,
-                newWindow: true,
-                close: true,
-                gravity: "top",
-                position: "center",
-                style: {
-                    background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
-                },
-            }).showToast();
-
-            // recording 객체의 에러 핸들러 호출
-            if (recording?.handleRecordingError) {
-                recording.handleRecordingError(parsedMessage);
-            }
-            break;
-        case 'recordingInProgress':
-            recording.recordingInProgress(parsedMessage);
-            break;
-        default:
-            Toastify({
-                text: parsedMessage?.message,
-                duration: 3000,
-                newWindow: true,
-                close: true,
-                gravity: "top",
-                position: "center",
-                style: {
-                    background: "linear-gradient(to right, #FF6B6B, #FFE66D)",
-                },
-            }).showToast();
-            console.error('Unrecognized message', parsedMessage);
-            break;
+    if (handler) {
+        handler(parsedMessage);
+    } else {
+        console.warn('Unrecognized message:', parsedMessage.id, parsedMessage);
+        showWarningToast(parsedMessage?.message, 3000);
     }
 }
 
@@ -783,7 +805,7 @@ function receiveVideo(sender) {
         setTimeout(playAudio, 100);
 
         // 녹화 중이면 새 참가자의 오디오를 AudioMixer에 추가
-        if (typeof recording !== 'undefined' && recording.isRecording) {
+        if (typeof recording !== 'undefined' && recording.isRecordingInProgress) {
             recording.addParticipantAudio(sender.userId, event.stream);
         }
     };
@@ -1832,7 +1854,7 @@ async function startScreenShare() {
 
         // 녹화 중이라면 믹싱된 오디오가 자동으로 녹화에 포함됩니다
         // (WebRTC를 통해 전송되므로 별도 처리 불필요)
-        if (typeof recording !== 'undefined' && recording.isRecording) {
+        if (typeof recording !== 'undefined' && recording.isRecordingInProgress) {
             console.log('화면 공유 중 녹화: 시스템 오디오 + 마이크 오디오가 모두 녹화됩니다.');
         }
 
@@ -1941,7 +1963,7 @@ async function stopScreenShare() {
 
         // 녹화 중이라면 원래 마이크 오디오로 자동 전환됩니다
         // (WebRTC를 통해 전송되므로 별도 처리 불필요)
-        if (typeof recording !== 'undefined' && recording.isRecording) {
+        if (typeof recording !== 'undefined' && recording.isRecordingInProgress) {
             console.log('화면 공유 종료: 마이크 오디오로 전환되었습니다.');
         }
 

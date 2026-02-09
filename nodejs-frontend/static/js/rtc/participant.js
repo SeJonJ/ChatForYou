@@ -162,7 +162,7 @@ const ParticipantUtils = {
 			participants[targetUserId].setVolume(volumeLevel);
 
 			// 녹화 중이면 AudioMixer도 동기화
-			if (recording?.isRecording) {
+			if (recording?.isRecordingInProgress) {
 				if (recording?.audioMixer?.gainNodes?.has(targetUserId)) {
 					recording.audioMixer.setVolume(targetUserId, volumeLevel);
 					console.log(`AudioMixer 볼륨 조절: ${targetUserId} = ${volumeLevel}`);
@@ -542,7 +542,7 @@ $('#userSetting').on('click', function (e) {
 			participants[targetUserId].setVolume(volumeLevel);
 
 			// 녹화 중이면 AudioMixer도 동기화
-			if (recording?.isRecording) {
+			if (recording?.isRecordingInProgress) {
 				if (recording?.audioMixer?.gainNodes?.has(targetUserId)) {
 					recording.audioMixer.setVolume(targetUserId, volumeLevel);
 					console.log(`AudioMixer 볼륨 조절 (모달): ${targetUserId} = ${volumeLevel}`);
@@ -585,7 +585,7 @@ $('#userSetting').on('click', function (e) {
 					$(this).attr('src', '/images/webrtc/audio-speaker-off.svg');
 
 					// 녹화 중이면 AudioMixer도 뮤트
-					if (recording?.isRecording) {
+					if (recording?.isRecordingInProgress) {
 						recording?.audioMixer?.setMuted('local', true);
 						console.log('AudioMixer 로컬 오디오 뮤트');
 					}
@@ -596,7 +596,7 @@ $('#userSetting').on('click', function (e) {
 					$(this).attr('src', '/images/webrtc/audio-speaker-on.svg');
 
 					// 녹화 중이면 AudioMixer도 언뮤트
-					if (recording?.isRecording) {
+					if (recording?.isRecordingInProgress) {
 						recording?.audioMixer?.setMuted('local', false);
 						console.log('AudioMixer 로컬 오디오 언뮤트');
 					}
@@ -663,7 +663,7 @@ $('#userSetting').on('click', function (e) {
 					remoteAudioButton.attr('src', '/images/webrtc/audio-speaker-off.svg');
 
 					// Bug #3 수정: 녹화 중이면 AudioMixer도 뮤트
-					if (recording?.isRecording && recording?.audioMixer?.gainNodes?.has(userId)) {
+					if (recording?.isRecordingInProgress && recording?.audioMixer?.gainNodes?.has(userId)) {
 						recording.audioMixer.setMuted(userId, true);
 						console.log(`AudioMixer 원격 오디오 뮤트: ${userId}`);
 					}
@@ -678,7 +678,7 @@ $('#userSetting').on('click', function (e) {
 					remoteAudioButton.attr('src', '/images/webrtc/audio-speaker-on.svg');
 
 					// Bug #3 수정: 녹화 중이면 AudioMixer도 언뮤트
-					if (recording?.isRecording && recording?.audioMixer?.gainNodes?.has(userId)) {
+					if (recording?.isRecordingInProgress && recording?.audioMixer?.gainNodes?.has(userId)) {
 						recording.audioMixer.setMuted(userId, false);
 						console.log(`AudioMixer 원격 오디오 언뮤트: ${userId}`);
 					}
