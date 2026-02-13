@@ -8,6 +8,7 @@ WORKDIR /workspace/app
 COPY gradlew .
 COPY gradle/wrapper/ gradle/wrapper/
 COPY build.gradle settings.gradle ./
+COPY lombok.config .
 COPY src/ src/
 
 # Gradle Wrapper 실행 권한 부여

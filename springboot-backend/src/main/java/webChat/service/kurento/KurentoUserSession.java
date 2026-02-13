@@ -23,12 +23,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.*;
 import org.kurento.jsonrpc.JsonUtils;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import webChat.model.user.UserDto;
-
+import webChat.repository.KurentoHubPortMap;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
@@ -66,8 +64,15 @@ public class KurentoUserSession extends UserDto implements Closeable {
 
   /**
    * @desc 텍스트 오버레이를 위한 GStreamerFilter
+   * 실시간 비디오 스트림에 자막을 표시하기 위해 사용됨
    * */
   private GStreamerFilter textOverlayFilter;
+
+  /**
+   * @desc Composite 녹화를 위한 HubPort
+   * 사용자의 미디어 스트림을 Composite에 연결하기 위해 사용됨
+   * */
+  private HubPort compositeHubPort;
 
   /**
    * @Param String 유저명, String 방이름, WebSocketSession 세션객체, MediaPipline (kurento)mediaPipeline 객체
@@ -85,52 +90,59 @@ public class KurentoUserSession extends UserDto implements Closeable {
             .useDataChannels()
             .build();
 
+    // 비디오 대역폭 설정 (녹화 시 품질 저하 방지)
+    // 최소 대역폭을 설정하여 적응형 비트레이트가 과도하게 품질을 낮추는 것을 방지
+    try {
+      this.outgoingMedia.setMinVideoSendBandwidth(500);  // 최소 500 kbps
+      this.outgoingMedia.setMaxVideoSendBandwidth(2000); // 최대 2000 kbps
+      log.debug("Video bandwidth configured: min=500kbps, max=2000kbps for user: {}", userId);
+    } catch (Exception e) {
+      log.warn("Failed to set video bandwidth for user {}: {}", userId, e.getMessage());
+    }
+
     // 텍스트 오버레이 필터 생성 (한글 지원 폰트 fallback 체인)
-    this.textOverlayFilter = new GStreamerFilter.Builder(pipeline, 
-        "textoverlay text='' font-desc='Noto Sans CJK KR' halignment=center valignment=top deltay=50")
+    // 실시간 비디오 스트림에 자막을 표시하기 위해 outgoingMedia에서 직접 연결
+    this.textOverlayFilter = new GStreamerFilter.Builder(pipeline,
+            "textoverlay text='' font-desc='Noto Sans CJK KR Bold 24' halignment=center valignment=top deltay=50")
         .build();
 
     log.debug("TextOverlay filter created for user: {}", userId);
 
-    // 미디어 파이프라인에 textoverlay 필터를 연결
-    // outgoingMedia의 비디오를 textoverlay 필터를 거쳐서 다시 outgoingMedia로 연결
+    // 기본 미디어 파이프라인 설정: outgoingMedia → textOverlayFilter
+    // textOverlayFilter에서 직접 다른 참여자들과 연결
     try {
-      log.debug("Connecting textOverlay filter to media pipeline for user: {}", userId);
+      this.outgoingMedia.connect(this.textOverlayFilter);
+      log.debug("Connected outgoingMedia → TextOverlay for user: {}", userId);
     } catch (Exception e) {
-      log.error("Failed to connect textOverlay filter for user {}: {}", userId, e.getMessage());
+      log.error("Failed to setup media pipeline for user {}: {}", userId, e.getMessage());
     }
 
     // iceCandidateFounder 이벤트 리스너 등록
     // 이벤트가 발생했을 때 다른 유저들에게 새로운 iceCnadidate 후보를 알림
-    this.outgoingMedia.addIceCandidateFoundListener(new EventListener<IceCandidateFoundEvent>() {
+    this.outgoingMedia.addIceCandidateFoundListener(event -> {
+      // JsonObject 생성
+      JsonObject response = new JsonObject();
+      // id : iceCnadidate, id 는 ice후보자 선정
+      response.addProperty("id", "iceCandidate");
+      // name : 유저명
+      response.addProperty("name", userId);
+      response.addProperty("nickName", nickName);
 
+      // add 랑 addProperty 랑 차이점?
+      // candidate 를 key 로 하고, IceCandidateFoundEvent 객체를 JsonUtils 를 이용해
+      // json 형태로 변환시킨다 => toJsonObject 는 넘겨받은 Object 객체를 JsonObject 로 변환
+      response.add("candidate", JsonUtils.toJsonObject(event.getCandidate()));
 
-      @Override
-      public void onEvent(IceCandidateFoundEvent event) {
-        // JsonObject 생성
-        JsonObject response = new JsonObject();
-        // id : iceCnadidate, id 는 ice후보자 선정
-        response.addProperty("id", "iceCandidate");
-        // name : 유저명
-        response.addProperty("name", userId);
-        response.addProperty("nickName", nickName);
-
-        // add 랑 addProperty 랑 차이점?
-        // candidate 를 key 로 하고, IceCandidateFoundEvent 객체를 JsonUtils 를 이용해
-        // json 형태로 변환시킨다 => toJsonObject 는 넘겨받은 Object 객체를 JsonObject 로 변환
-        response.add("candidate", JsonUtils.toJsonObject(event.getCandidate()));
-
-        try {
-          /** synchronized 안에는 동기화 필요한 부분 지정*/
-          // 먼저 동기화는 프로세스(스레드)가 수행되는 시점을 조절하여 서로가 알고 있는 정보가 일치하는 것
-          // 여기서는 쉽게 말해 onEvent 를 통해서 넘어오는 모든 session 객체에게 앞에서 생성한 response json 을
-          // 넘겨주게되고 이를 통해서 iceCandidate 상태를 '일치' 시킨다? ==> 여긴 잘 모르겟어요...
-          synchronized (session) {
-            session.sendMessage(new TextMessage(response.toString()));
-          }
-        } catch (IOException e) {
-          log.debug(e.getMessage());
+      try {
+        /** synchronized 안에는 동기화 필요한 부분 지정*/
+        // 먼저 동기화는 프로세스(스레드)가 수행되는 시점을 조절하여 서로가 알고 있는 정보가 일치하는 것
+        // 여기서는 쉽게 말해 onEvent 를 통해서 넘어오는 모든 session 객체에게 앞에서 생성한 response json 을
+        // 넘겨주게되고 이를 통해서 iceCandidate 상태를 '일치' 시킨다? ==> 여긴 잘 모르겟어요...
+        synchronized (session) {
+          session.sendMessage(new TextMessage(response.toString()));
         }
+      } catch (IOException e) {
+        log.debug(e.getMessage());
       }
     });
   }
@@ -171,23 +183,10 @@ public class KurentoUserSession extends UserDto implements Closeable {
    * */
   private WebRtcEndpoint getEndpointForUser(final KurentoUserSession sender) {
     // 만약 sender 명이 현재 user명과 일치한다면, 즉 sdpOffer 제안을 보내는 쪽과 받는 쪽이 동일하다면?
-    // loopback 임을 찍고, textoverlay 필터를 연결한 후 outgoingMedia 를 return
+    // loopback 임을 찍고, outgoingMedia 를 return
     if (sender.getUserId().equals(this.getUserId())) {
-      log.debug("PARTICIPANT {}: configuring loopback with textoverlay", this.getUserId());
-
-      // textoverlay 필터를 outgoingMedia에 연결
-      if (this.textOverlayFilter != null) {
-        try {
-          // outgoingMedia → textOverlayFilter → outgoingMedia : 자신의 비디오에 text overlay 기능 활성화
-          // 이렇게 하면 자신의 비디오에 텍스트 오버레이가 적용
-          this.outgoingMedia.connect(this.textOverlayFilter);
-          this.textOverlayFilter.connect(this.outgoingMedia);
-          log.debug("Connecting textoverlay filter for loopback user: {}", this.getUserId());
-        } catch (Exception e) {
-          log.error("Failed to connect textoverlay for loopback user {}: {}", this.getUserId(), e.getMessage());
-        }
-      }
-
+      log.debug("PARTICIPANT {}: configuring loopback", this.getUserId());
+      // 루프백: 자신의 textOverlay를 통한 자신의 비디오를 받음
       return outgoingMedia;
     }
 
@@ -208,48 +207,42 @@ public class KurentoUserSession extends UserDto implements Closeable {
               .useDataChannels()
               .build();
 
-      // sender의 textoverlay 필터를 이 incomingMedia에 연결
-      if (sender.textOverlayFilter != null) {
+      // P2P 연결 구현: sender.textOverlayFilter → incomingMedia (화상채팅용)
+      // sender의 textOverlayFilter를 통해 자막이 적용된 비디오를 받음
+      try {
+        sender.textOverlayFilter.connect(incomingMedia);
+        log.debug("P2P connection via TextOverlay from {} to {}", sender.getUserId(), this.getUserId());
+      } catch (Exception e) {
+        log.error("Failed to connect TextOverlay from {} to {}: {}", sender.getUserId(), this.getUserId(), e.getMessage());
+        // 폴백: 직접 outgoingMedia 연결 시도
         try {
-          log.debug("Connecting sender's textoverlay filter from {} to {}", sender.getUserId(), this.getUserId());
-          // sender의 outgoingMedia → sender의 textOverlayFilter → 이 incomingMedia
-          sender.outgoingMedia.connect(sender.textOverlayFilter);
-          sender.textOverlayFilter.connect(incomingMedia);
-          log.debug("Successfully connected textoverlay filter from {} to {}", sender.getUserId(), this.getUserId());
-        } catch (Exception e) {
-          log.error("Failed to connect textoverlay filter from {} to {}: {}", sender.getUserId(), this.getUserId(), e.getMessage());
-          // 실패 시 직접 연결
           sender.outgoingMedia.connect(incomingMedia);
+          log.warn("Fallback: Direct connection from {} to {}", sender.getUserId(), this.getUserId());
+        } catch (Exception fallbackE) {
+          log.error("All connection methods failed from {} to {}", sender.getUserId(), this.getUserId());
         }
-      } else {
-        // textoverlay 필터가 없으면 직접 연결
-        sender.outgoingMedia.connect(incomingMedia);
       }
 
       // incomingMedia 객체의 addIceCandidateFoundListener 메서드 실행
-      incomingMedia.addIceCandidateFoundListener(new EventListener<IceCandidateFoundEvent>() {
+      incomingMedia.addIceCandidateFoundListener(event -> {
+        // json 오브젝트 생성
+        JsonObject response = new JsonObject();
 
-        @Override
-        public void onEvent(IceCandidateFoundEvent event) {
-          // json 오브젝트 생성
-          JsonObject response = new JsonObject();
-
-          // { id : "iceCandidate"}
-          response.addProperty("id", "iceCandidate");
-          // { name : sender 의 유저명}
-          response.addProperty("name", sender.getUserId());
-          // {candidate : { event.getCandidate 를 json 으로 만든 형태 }
-          response.add("candidate", JsonUtils.toJsonObject(event.getCandidate()));
-          try {
-            // 새로 webRtcEndpoint 가 만들어 졌기 때문에 모든 UserSession 이 이것을 동일하게 공유해야 할 필요가 있다.
-            // 즉 모든 UserSession 의 정보를 일치시키기 위해 동기화 - synchronized - 실행
-            // 이를 통해서 모든 user 의 incomingMedia 가 동일하게 일치 - 동기화 - 됨
-            synchronized (session) {
-              session.sendMessage(new TextMessage(response.toString()));
-            }
-          } catch (IOException e) {
-            log.debug(e.getMessage());
+        // { id : "iceCandidate"}
+        response.addProperty("id", "iceCandidate");
+        // { name : sender 의 유저명}
+        response.addProperty("name", sender.getUserId());
+        // {candidate : { event.getCandidate 를 json 으로 만든 형태 }
+        response.add("candidate", JsonUtils.toJsonObject(event.getCandidate()));
+        try {
+          // 새로 webRtcEndpoint 가 만들어 졌기 때문에 모든 UserSession 이 이것을 동일하게 공유해야 할 필요가 있다.
+          // 즉 모든 UserSession 의 정보를 일치시키기 위해 동기화 - synchronized - 실행
+          // 이를 통해서 모든 user 의 incomingMedia 가 동일하게 일치 - 동기화 - 됨
+          synchronized (session) {
+            session.sendMessage(new TextMessage(response.toString()));
           }
+        } catch (IOException e) {
+          log.debug(e.getMessage());
         }
       });
 
@@ -262,28 +255,24 @@ public class KurentoUserSession extends UserDto implements Closeable {
     return incomingMedia;
   }
 
-  public void cancelVideoFrom(final KurentoUserSession sender) {
-    this.cancelVideoFrom(sender.getUserId());
-  }
-
   public void cancelVideoFrom(final String senderName) {
     log.debug("PARTICIPANT {}: canceling video reception from {}", this.getUserId(), senderName);
     final WebRtcEndpoint incoming = incomingMedia.remove(senderName);
 
     log.debug("PARTICIPANT {}: removing endpoint for {}", this.getUserId(), senderName);
     if (Objects.nonNull(incoming)) {
-      incoming.release(new Continuation<Void>() {
-        @Override
-        public void onSuccess(Void result) throws Exception {
-          log.trace("PARTICIPANT {}: Released successfully incoming EP for {}",
-                  KurentoUserSession.this.getUserId(), senderName);
-        }
+      incoming.release(new Continuation<>() {
+          @Override
+          public void onSuccess(Void result) {
+              log.trace("PARTICIPANT {}: Released successfully incoming EP for {}",
+                      KurentoUserSession.this.getUserId(), senderName);
+          }
 
-        @Override
-        public void onError(Throwable cause) throws Exception {
-          log.warn("PARTICIPANT {}: Could not release incoming EP for {}", KurentoUserSession.this.getUserId(),
-                  senderName);
-        }
+          @Override
+          public void onError(Throwable cause) {
+              log.warn("PARTICIPANT {}: Could not release incoming EP for {}", KurentoUserSession.this.getUserId(),
+                      senderName);
+          }
       });
     }
   }
@@ -291,39 +280,61 @@ public class KurentoUserSession extends UserDto implements Closeable {
   @Override
   public void close() throws IOException {
     log.debug("PARTICIPANT {}: Releasing resources", this.getUserId());
+
+    // Composite 연결 해제 (녹화 중이면)
+    if (compositeHubPort != null) {
+      log.debug("PARTICIPANT {}: Disconnecting from Composite", this.getUserId());
+      disconnectFromComposite();
+    }
+
     for (final String remoteParticipantName : incomingMedia.keySet()) {
 
       log.trace("PARTICIPANT {}: Released incoming EP for {}", this.getUserId(), remoteParticipantName);
 
       final WebRtcEndpoint ep = this.incomingMedia.get(remoteParticipantName);
 
-      ep.release(new Continuation<Void>() {
+      ep.release(new Continuation<>() {
 
-        @Override
-        public void onSuccess(Void result) throws Exception {
-          log.trace("PARTICIPANT {}: Released successfully incoming EP for {}",
-                  KurentoUserSession.this.getUserId(), remoteParticipantName);
-        }
+          @Override
+          public void onSuccess(Void result) {
+              log.trace("PARTICIPANT {}: Released successfully incoming EP for {}",
+                      KurentoUserSession.this.getUserId(), remoteParticipantName);
+          }
 
-        @Override
-        public void onError(Throwable cause) throws Exception {
-          log.warn("PARTICIPANT {}: Could not release incoming EP for {}", KurentoUserSession.this.getUserId(),
-                  remoteParticipantName);
-        }
+          @Override
+          public void onError(Throwable cause) {
+              log.warn("PARTICIPANT {}: Could not release incoming EP for {}", KurentoUserSession.this.getUserId(),
+                      remoteParticipantName);
+          }
       });
     }
 
-    outgoingMedia.release(new Continuation<Void>() {
+    // TextOverlay 필터 해제
+    if (textOverlayFilter != null) {
+      textOverlayFilter.release(new Continuation<>() {
+          @Override
+          public void onSuccess(Void result) {
+              log.trace("PARTICIPANT {}: Released TextOverlay filter", KurentoUserSession.this.getUserId());
+          }
 
-      @Override
-      public void onSuccess(Void result) throws Exception {
-        log.trace("PARTICIPANT {}: Released outgoing EP", KurentoUserSession.this.getUserId());
-      }
+          @Override
+          public void onError(Throwable cause) {
+              log.warn("USER {}: Could not release TextOverlay filter", KurentoUserSession.this.getUserId());
+          }
+      });
+    }
 
-      @Override
-      public void onError(Throwable cause) throws Exception {
-        log.warn("USER {}: Could not release outgoing EP", KurentoUserSession.this.getUserId());
-      }
+    outgoingMedia.release(new Continuation<>() {
+
+        @Override
+        public void onSuccess(Void result) {
+            log.trace("PARTICIPANT {}: Released outgoing EP", KurentoUserSession.this.getUserId());
+        }
+
+        @Override
+        public void onError(Throwable cause) {
+            log.warn("USER {}: Could not release outgoing EP", KurentoUserSession.this.getUserId());
+        }
     });
   }
 
@@ -417,5 +428,98 @@ public class KurentoUserSession extends UserDto implements Closeable {
     } catch (Exception e) {
       log.error("Error showing text overlay for user {}: {}", this.getUserId(), e.getMessage());
     }
+  }
+
+  /**
+   * @desc Composite에 사용자 미디어 연결 (녹화용)
+   * textOverlayFilter를 통해 자막이 포함된 미디어를 Composite에 전달
+   * @param composite 연결할 Composite 객체
+   */
+  public void connectToComposite(Composite composite) {
+    if (composite == null) {
+      log.warn("Cannot connect to null Composite for user: {}", this.getUserId());
+      return;
+    }
+
+    // 이미 연결되어 있으면 무시
+    if (compositeHubPort != null) {
+      log.debug("User {} already connected to Composite", this.getUserId());
+      return;
+    }
+
+    try {
+      // Composite와 동일한 파이프라인인지 확인
+      MediaPipeline compositePipeline = composite.getMediaPipeline();
+      if (!compositePipeline.equals(this.pipeline)) {
+        log.error("Cannot connect to Composite - different pipeline for user: {}", this.getUserId());
+        return;
+      }
+
+      // Composite용 HubPort 생성
+      compositeHubPort = new HubPort.Builder(composite).build();
+
+      // textOverlayFilter → HubPort 연결
+      // 이를 통해 자막이 포함된 비디오가 녹화됨
+      textOverlayFilter.connect(compositeHubPort);
+
+      // HubPortMap에 저장 (추후 관리용)
+      KurentoHubPortMap.setUserHubPort(roomId, this.getUserId(), compositeHubPort);
+
+      log.info("User {} connected to Composite via TextOverlay for recording", this.getUserId());
+
+    } catch (Exception e) {
+      log.error("Failed to connect user {} to Composite: {}", this.getUserId(), e.getMessage());
+      // 실패 시 생성된 HubPort 정리
+      if (compositeHubPort != null) {
+        try {
+          compositeHubPort.release();
+        } catch (Exception releaseEx) {
+          log.error("Failed to release HubPort after connection failure: {}", releaseEx.getMessage());
+        }
+        compositeHubPort = null;
+      }
+    }
+  }
+
+  /**
+   * @desc Composite에서 사용자 미디어 연결 해제
+   */
+  public void disconnectFromComposite() {
+    if (compositeHubPort == null) {
+      log.debug("User {} not connected to Composite", this.getUserId());
+      return;
+    }
+
+    try {
+      // HubPort 해제
+      compositeHubPort.release(new Continuation<>() {
+        @Override
+        public void onSuccess(Void result) {
+          log.info("User {} disconnected from Composite successfully", KurentoUserSession.this.getUserId());
+        }
+
+        @Override
+        public void onError(Throwable cause) {
+          log.warn("Failed to release Composite HubPort for user {}: {}",
+                   KurentoUserSession.this.getUserId(), cause.getMessage());
+        }
+      });
+
+      // HubPortMap에서 제거
+      KurentoHubPortMap.removeUserHubPort(roomId, this.getUserId());
+
+      compositeHubPort = null;
+
+    } catch (Exception e) {
+      log.error("Error disconnecting user {} from Composite: {}", this.getUserId(), e.getMessage());
+    }
+  }
+
+  /**
+   * @desc Composite 연결 여부 확인
+   * @return Composite에 연결되어 있으면 true
+   */
+  public boolean isConnectedToComposite() {
+    return compositeHubPort != null;
   }
 }

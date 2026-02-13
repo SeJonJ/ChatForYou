@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-desktop",
-  "version": "1.0.41",
+  "version": "1.0.5",
   "description": "ChatForYou Desktop Application built with Electron",
   "main": "src/main/electron-main.js",
   "scripts": {
@@ -8,8 +8,12 @@
     "build:mac": "node build-scripts/build.js --platform mac --env prod",
     "build:win": "node build-scripts/build.js --platform win --env prod",
     "build:all": "node build-scripts/build.js --platform all --env prod",
+    "build:all:dev": "node build-scripts/build.js --platform all --env local",
+    "build:win:dev": "node build-scripts/build.js --platform win --env local",
+    "build:mac:dev": "node build-scripts/build.js --platform mac --env local",
     "pack": "node build-scripts/build.js --platform pack --env prod",
-    "start": "node build-scripts/build.js --mode start --env local",
+    "start": "node build-scripts/build.js --mode start --env prod",                                                                                       
+    "start:dev": "node build-scripts/build.js --mode start --env local",
     "dev": "node build-scripts/build.js --mode dev --env local --dev",
     "test:update": "node auto-update/test-update.js test",
     "test:update:force": "npm run start -- --force-dev-update",

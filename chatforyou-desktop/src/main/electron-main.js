@@ -5,8 +5,22 @@ const crypto = require('crypto');
 const fs = require('fs');
 const AutoUpdateManager = require('../../auto-update/auto-updater');
 
-// 개발 모드 감지
-const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+// 빌드 환경 정보 로드 (.build-info.json)
+let buildEnv = 'prod';
+try {
+    const buildInfoPath = path.join(__dirname, '../.build-info.json');
+    if (fs.existsSync(buildInfoPath)) {
+        const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, 'utf8'));
+        buildEnv = buildInfo.environment || 'prod';
+    }
+} catch (e) {
+    // 빌드 정보 파일 없으면 운영 모드로 처리
+}
+
+// 개발 모드 감지: NODE_ENV, --dev 플래그, 또는 빌드 환경이 local인 경우
+const isDev = process.env.NODE_ENV === 'development'
+    || process.argv.includes('--dev')
+    || buildEnv === 'local';
 const forceDevUpdate = process.argv.includes('--force-dev-update');
 
 let mainWindow;
@@ -116,7 +130,9 @@ let pathMapping = {};
 try {
     const mappingPath = path.join(__dirname, '../../build-scripts/convert_path.json');
     if (fs.existsSync(mappingPath)) {
-        pathMapping = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+        const config = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+        // basePaths 구조 지원 (새 구조) 또는 기존 flat 구조
+        pathMapping = config.basePaths || config;
         log.info(`경로 매핑 설정 로드됨: ${Object.keys(pathMapping).length}개 경로`);
         if (isDev) {
             log.debug(`경로 매핑 내용: ${JSON.stringify(pathMapping, null, 2)}`);
@@ -613,7 +629,51 @@ function setupIpcHandlers() {
         return { hasUpdate: false, isChecking: false, isManualCheck: false, updateVersion: null };
     });
 
-    log.debug('IPC 핸들러 설정 완료 (업데이트 관련 핸들러 포함)');
+    // === 파일 다운로드 관련 IPC 핸들러 ===
+
+    // 파일 다운로드 (Blob/ArrayBuffer를 직접 파일로 저장)
+    ipcMain.handle('download-file', async (event, data, filename) => {
+        try {
+            const downloadsPath = app.getPath('downloads');
+            const filePath = path.join(downloadsPath, filename);
+
+            // ArrayBuffer 또는 Uint8Array를 Buffer로 변환하여 저장
+            let buffer;
+            if (data instanceof ArrayBuffer) {
+                buffer = Buffer.from(data);
+            } else if (data instanceof Uint8Array) {
+                buffer = Buffer.from(data);
+            } else if (Array.isArray(data)) {
+                buffer = Buffer.from(data);
+            } else {
+                buffer = Buffer.from(data);
+            }
+
+            fs.writeFileSync(filePath, buffer);
+
+            log.info(`파일 저장 완료: ${filePath} (${buffer.length} bytes)`);
+
+            return {
+                success: true,
+                path: filePath,
+                fileName: filename,
+                size: buffer.length
+            };
+        } catch (error) {
+            log.error(`파일 저장 실패: ${error.message}`);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    });
+
+    // 다운로드 폴더 경로 조회
+    ipcMain.handle('get-downloads-path', () => {
+        return app.getPath('downloads');
+    });
+
+    log.debug('IPC 핸들러 설정 완료 (업데이트, 파일 다운로드 핸들러 포함)');
 }
 
 app.whenReady().then(() => {
@@ -741,6 +801,49 @@ app.on('web-contents-created', (event, contents) => {
             shell.openExternal(url);
             log.warn(`외부 네비게이션 차단 후 브라우저에서 열기: ${url}`);
         }
+    });
+
+    // 파일 다운로드 핸들러 (Electron에서 blob URL 다운로드 지원)
+    contents.session.on('will-download', (event, item, webContents) => {
+        const fileName = item.getFilename();
+        const filePath = path.join(app.getPath('downloads'), fileName);
+
+        log.info(`파일 다운로드 시작: ${fileName}`);
+        item.setSavePath(filePath);
+
+        item.on('updated', (event, state) => {
+            if (state === 'progressing') {
+                const received = item.getReceivedBytes();
+                const total = item.getTotalBytes();
+                if (total > 0) {
+                    const percent = ((received / total) * 100).toFixed(1);
+                    log.debug(`다운로드 진행률: ${percent}% (${fileName})`);
+                }
+            }
+        });
+
+        item.once('done', (event, state) => {
+            if (state === 'completed') {
+                log.info(`다운로드 완료: ${filePath}`);
+                // 다운로드 완료 알림을 renderer에 전송
+                if (webContents && !webContents.isDestroyed()) {
+                    webContents.send('download:completed', {
+                        fileName: fileName,
+                        filePath: filePath,
+                        success: true
+                    });
+                }
+            } else {
+                log.error(`다운로드 실패: ${fileName} (상태: ${state})`);
+                if (webContents && !webContents.isDestroyed()) {
+                    webContents.send('download:failed', {
+                        fileName: fileName,
+                        state: state,
+                        success: false
+                    });
+                }
+            }
+        });
     });
 });
 

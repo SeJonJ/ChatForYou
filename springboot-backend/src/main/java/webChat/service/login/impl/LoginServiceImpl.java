@@ -15,8 +15,6 @@ import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
 import webChat.model.login.QRSessionStatus;
-import webChat.model.redis.DataType;
-import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.response.common.QRLoginResponse;
 import webChat.repository.SocialUserRepository;
 import webChat.service.login.LoginService;
@@ -152,7 +150,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         // 소셜 유저 체크
-        GoogleOAuth auth = checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
+        GoogleOAuth auth = this.checkSocialUser(accessToken, refreshToken, name, email, emailVerified, photo);
 
         // QR session 에 저장
         // TODO 굳이 저장해야하나? 삭제하면 안됨?

@@ -43,6 +43,8 @@ const dataChannel = {
             this.showNewMessage(message, 'other');
             this.showNewFileMessage(file, 'other');
 
+        } else if (recvMessage.type === 'recording') {
+            recording.handlingRecordingEvent(recvMessage.userName, recvMessage.message);
         } else if (recvMessage.type === 'gameEvent' && recvMessage.userName !== this.user.nickName) {
             this.gameEvent(recvMessage.message);
         } else if(recvMessage.userName !== this.user.nickName) {
@@ -91,7 +93,9 @@ const dataChannel = {
             this.sendMessage(recvMessage);
 
             // 텍스트 오버레이 기능 추가 - 자신이 보낸 메시지를 비디오에 오버레이
-            this.sendTextOverlay(recvMessage);
+            if(isSpeechRecognitionEnabled()){
+                this.sendTextOverlay(recvMessage);
+            }
 
             // clean out old message
             dataChannelChatting.$userTextInput.html('');
@@ -127,7 +131,8 @@ const dataChannel = {
             id: 'downBtn',
             name: file.fileName
         }).on('click', function () {
-            dataChannelFileUtil.downloadFile(file.fileName, file.filePath);
+            dataChannelFileUtil.downloadFile(
+                {bucket: "file", name: file.fileName, path: file.filePath});
         });
 
         // contentElement 생성
@@ -142,9 +147,10 @@ const dataChannel = {
         
         // WebSocket을 통해 서버로 텍스트 오버레이 요청 전송
         let overlayMessage = {
-            id: "textOverlay",
+            event: "TEXT_OVERLAY",
             text: text,
-            userId: this.user.nickName,
+            senderId: this.user.userId,
+            senderNickName: this.user.nickName,
             roomId: this.user.roomId
         };
         

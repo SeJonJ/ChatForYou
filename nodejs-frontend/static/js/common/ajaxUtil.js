@@ -157,6 +157,9 @@ function fileUploadAjax(url, method, async, data, successCallback, errorCallback
         xhrFields: {
             withCredentials: true
         },
+        headers: {
+            'Authorization': localStorage.getItem('access_token') || ''
+        },
         success: function (data) {
             if (successCallback && typeof successCallback === 'function') {
                 successCallback(data);
@@ -179,6 +182,9 @@ function fileDownloadAjax(url, method, async, data, successCallback, errorCallba
         xhrFields: {
             withCredentials: true
         },
+        headers: {
+            'Authorization': localStorage.getItem('access_token') || ''
+        },
         dataType: 'binary', // 파일 다운로드를 위해서는 binary 타입으로 받아야한다.
         xhrFields: {
             'responseType': 'blob' // 여기도 마찬가지
@@ -193,5 +199,5 @@ function fileDownloadAjax(url, method, async, data, successCallback, errorCallba
                 errorCallback(error);
             }
         }
-    })
+    });
 }

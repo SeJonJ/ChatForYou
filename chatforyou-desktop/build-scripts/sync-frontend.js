@@ -10,7 +10,7 @@ const fs = require('fs');
 
 // 사용자 정의 모듈들
 const SyncEngine = require('./lib/sync-engine');
-const PathConverter = require('./lib/path-converter');
+const PathConverter = require('./lib/convert_path');
 const ConfigProcessor = require('./lib/config-processor');
 
 /**

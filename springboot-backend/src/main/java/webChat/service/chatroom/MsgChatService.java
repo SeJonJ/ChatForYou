@@ -3,7 +3,7 @@ package webChat.service.chatroom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import webChat.service.file.FileService;
+import webChat.service.file.impl.MinioFileService;
 
 
 @Slf4j
@@ -12,9 +12,8 @@ import webChat.service.file.FileService;
 @Deprecated
 public class MsgChatService {
 
-
     // 채팅방 삭제에 따른 채팅방의 사진 삭제를 위한 fileService 선언
-    private final FileService fileService;
+    private final MinioFileService minioFileService;
 
 //    public ChatRoomDto createChatRoom(String roomName, String roomPwd, boolean secretChk, int maxUserCnt) {
 //        // roomName 와 roomPwd 로 chatRoom 빌드 후 return

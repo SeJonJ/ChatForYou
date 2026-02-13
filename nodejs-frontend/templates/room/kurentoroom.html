@@ -58,6 +58,10 @@
                         <img src="images/webrtc/audio-speaker-on.svg" class="col-md-1 localAudioToggle" width="24px" height="24px" alt="" id="audioBtn" data-flag="true">
                         <img src="images/webrtc/subtitle-off.svg" class="col-md-1" width="24px" height="24px" alt=""
                             id="subtitleBtn" data-flag="false" title="실시간 자막">
+                        <img src="images/webrtc/recording/record-start.svg" class="col-md-1" width="24px" height="24px" alt=""
+                            id="recordingStartBtn" data-flag="false" title="녹화 시작">
+                        <img src="images/webrtc/recording/record-stop-disabled.svg" class="col-md-1" width="24px" height="24px" alt=""
+                            id="recordingStopBtn" data-flag="false" title="녹화 중지">
                         <img src="images/webrtc/setting.svg" class="col-md-1" width="24px" height="24px" id="userSetting"
                             alt="userSetting"
                             data-toggle="modal" data-target="#userSettingsModal">
@@ -174,12 +178,15 @@
     <script src="js/popup/popup-loader.js"></script>
     <script src="js/popup/audio_error_popup.js"></script>
     <script src="js/rtc/speechSubtitleManager.js"></script>
+    <script src="js/rtc/AudioMixer.js"></script>
+    <script src="js/rtc/SystemAudioCapture.js"></script>
     <script src="js/rtc/kurento-service.js"></script>
     <script src="js/rtc/dataChannel.js"></script>
     <script src="js/rtc/dataChannelChatting.js"></script>
     <script src="js/rtc/dataChannelFileUtil.js"></script>
     <script src="js/rtc/mediaDevice.js"></script>
     <script src="js/rtc/catchMind.js"></script>
+    <script src="js/rtc/recording.js"></script>
 </body>
 </html>
 

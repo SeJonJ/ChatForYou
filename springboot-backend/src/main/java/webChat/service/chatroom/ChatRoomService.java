@@ -7,50 +7,41 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import webChat.model.redis.RedisKeyPrefix;
-import webChat.model.routing.RoomRoutingInfo;
 import webChat.controller.ExceptionController;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisIndex;
+import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
+import webChat.model.routing.RoomRoutingInfo;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.analysis.AnalysisService;
-import webChat.service.file.FileService;
+import webChat.service.file.impl.MinioFileService;
+import webChat.service.file.impl.RecordingFileService;
 import webChat.service.kafka.ChatKafkaProducer;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
-import webChat.service.routing.RoutingService;
 import webChat.utils.StringUtil;
 
 import java.util.*;
-
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ChatRoomService {
-
-    // 채팅방 삭제에 따른 채팅방의 사진 삭제를 위한 fileService 선언
-    private final FileService fileService;
-
-    private final RedisService redisService;
-
     private final KurentoRoomManager kurentoRoomManager;
-
-    private final AnalysisService analysisService;
-
-    private final SseService sseService;
+    private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
-    private final RoutingService routingService;
-
     private final ChatKafkaProducer chatKafkaProducer;
-
+    private final SseService sseService;
+    private final MinioFileService minioFileService;
+    private final RecordingFileService recordingFileService;
+    private final AnalysisService analysisService;
     private final JwtRoomProvider jwtRoomProvider;
 
     @Value("${chatforyou.room.max_user_count}")
@@ -107,11 +98,13 @@ public class ChatRoomService {
                 .pageNum(pageNum)
                 .pageSize(pageSize)
                 .build();
+
         List<Document> roomList = redisService.searchRoomListByOptions(searchCriteria);
         for (Document document : roomList) {
             if (document.getFields().get("roomId") == null) {
                 continue;
             }
+
             String roomId = document.getFields().get("roomId").toString().replace("\"", "");
             Map<Object, Object> allChatRoomData = redisService.getAllChatRoomData(roomId);
             if (allChatRoomData.isEmpty() || allChatRoomData.get(DataType.CHATROOM.getType()) == null) {
@@ -120,7 +113,6 @@ public class ChatRoomService {
 
             ChatRoom chatRoom = (ChatRoom) allChatRoomData.get("chatroom");
             chatRoomList.add(chatRoom);
-
         }
 
         return chatRoomList;
@@ -180,7 +172,10 @@ public class ChatRoomService {
             redisService.deleteAllChatRoomData(kurentoRoom.getRoomId());
 
             // 채팅방 안에 있는 파일 삭제
-            fileService.deleteFileDir(kurentoRoom.getRoomId());
+            minioFileService.deleteFileDir(kurentoRoom.getRoomId());
+
+            // 채팅방 녹화 파일 삭제
+            recordingFileService.deleteFileDir(kurentoRoom.getRoomId());
 
             log.info("Room {} deleted permanently", kurentoRoom.getRoomId());
         } catch (Exception e) {
@@ -227,6 +222,16 @@ public class ChatRoomService {
         redisService.updateChatRoom(chatRoom);
 
         return chatRoom;
+    }
+
+    /**
+     * kurento Room 정보 업데이트
+     * @param room
+     * @return
+     */
+    public KurentoRoom updateRoom(KurentoRoom room) {
+        redisService.updateChatRoom(room);
+        return room;
     }
 
     public void validateRoomInfo(String roomName, int maxUserCnt) throws BadRequestException {

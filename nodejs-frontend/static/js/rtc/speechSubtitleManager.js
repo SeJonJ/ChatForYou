@@ -328,8 +328,10 @@ class SpeechRecognitionManager {
         
         try {
             const message = {
-                id: 'textOverlay',
+                event: 'TEXT_OVERLAY',
                 roomId: roomId,
+                senderId: userId,
+                senderNickName: nickName,
                 text: text
             };
             
@@ -826,6 +828,105 @@ function applySpeechRecognitionPreset(preset) {
     return false;
 }
 
+/**
+ * 자막 활성화 여부 확인
+ */
+function isSpeechRecognitionEnabled() {
+    if (speechRecognitionManager) {
+        return speechRecognitionManager.isEnabled;
+    }
+    return false;
+}
+
+/**
+ * 녹화 기능에 따른 자막 기능 처리
+ */
+function handleRecordingStart() {
+    if (speechRecognitionManager) {
+        speechRecognitionManager.stop();
+    }
+}
+
+function handleRecordingStop() {
+    if (speechRecognitionManager) {
+        speechRecognitionManager.start();
+    }
+}
+
+/**
+ * 녹화 여부에 따른 자막 기능 처리
+ * @param {boolean} isRecording
+ */
+function handlingSubtitleByRecording(isRecording) {
+    console.log('[SUBTITLE] handlingSubtitleByRecording called - isRecording:', isRecording);
+
+    if(isRecording) {
+        // 녹화 시작 → 자막 비활성화
+        console.log('[SUBTITLE] Disabling subtitle due to recording start');
+
+        _showSubtitleToast('녹화 시작으로 인해 자막 기능을 비활성화합니다');
+
+        console.log('[SUBTITLE] Calling stopSpeechRecognition()');
+        if (typeof stopSpeechRecognition === 'function') {
+            stopSpeechRecognition();
+            console.log('[SUBTITLE] stopSpeechRecognition() completed');
+        } else {
+            console.error('[SUBTITLE] stopSpeechRecognition function not found!');
+        }
+
+        // 자막 버튼 disabled 처리
+        _updateSubtitleButton(true);
+    } else {
+        // 녹화 중지 → 자막 활성화
+        console.log('[SUBTITLE] Enabling subtitle due to recording stop');
+
+        _showSubtitleToast('녹화 중지로 인해 자막 기능을 다시 사용할 수 있습니다');
+
+        // 자막 버튼 enabled 처리
+        _updateSubtitleButton(false);
+    }
+}
+
+/**
+ * 자막 Toast 메시지 표시 
+ * @private
+ * @param {string} message - 표시할 메시지
+ */
+function _showSubtitleToast(message) {
+    if (typeof Toastify !== 'undefined') {
+        Toastify({
+            text: message,
+            duration: 3000,
+            newWindow: true,
+            close: true,
+            gravity: 'top',
+            position: 'center',
+        }).showToast();
+    }
+}
+
+/**
+ * 자막 버튼 상태 업데이트
+ * @private
+ * @param {boolean} disabled - 비활성화 여부
+ */
+function _updateSubtitleButton(disabled) {
+    const $subtitleBtn = $('#subtitleBtn');
+    console.log('[SUBTITLE] Subtitle button found:', $subtitleBtn.length);
+    
+    if ($subtitleBtn.length > 0) {
+        $subtitleBtn.prop('disabled', disabled);
+        $subtitleBtn.css({
+            'opacity': disabled ? '0.5' : '1',
+            'cursor': disabled ? 'not-allowed' : 'pointer',
+            'pointer-events': disabled ? 'none' : 'auto'
+        });
+        console.log('[SUBTITLE] Subtitle button ' + (disabled ? 'disabled' : 'enabled') + ' successfully');
+    } else {
+        console.error('[SUBTITLE] Subtitle button element not found!');
+    }
+}
+
 // 전역 스코프에 유틸리티 함수들 노출
 window.speechRecognitionUtils = {
     updateConfig: updateSpeechRecognitionConfig,
@@ -834,5 +935,6 @@ window.speechRecognitionUtils = {
     cleanup: cleanupSpeechRecognition,
     restart: restartSpeechRecognition,
     debug: debugSpeechRecognition,
-    applyPreset: applySpeechRecognitionPreset
+    applyPreset: applySpeechRecognitionPreset,
+    handlingSubtitleByRecording: handlingSubtitleByRecording
 }; 

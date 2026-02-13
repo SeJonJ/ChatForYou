@@ -165,9 +165,52 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return Promise.resolve();
     },
 
-    // 파일 시스템 API (필요시 확장 가능)
-    // saveFile: (data, filename) => ipcRenderer.invoke('save-file', data, filename),
-    // loadFile: (filename) => ipcRenderer.invoke('load-file', filename),
+    // 파일 다운로드 API (Electron에서 blob URL 다운로드 지원)
+    downloadFile: async (data, filename) => {
+        try {
+            // ArrayBuffer, Uint8Array, 또는 Array를 그대로 전달
+            const result = await ipcRenderer.invoke('download-file', data, filename);
+            if (result.success) {
+                console.log(`파일 저장 완료: ${result.path}`);
+            } else {
+                console.error(`파일 저장 실패: ${result.error}`);
+            }
+            return result;
+        } catch (error) {
+            console.error('파일 다운로드 중 오류:', error);
+            return { success: false, error: String(error) };
+        }
+    },
+
+    // 다운로드 폴더 경로 조회
+    getDownloadsPath: async () => {
+        try {
+            return await ipcRenderer.invoke('get-downloads-path');
+        } catch (error) {
+            console.error('다운로드 경로 조회 실패:', error);
+            return null;
+        }
+    },
+
+    // 다운로드 완료 이벤트 리스너
+    onDownloadCompleted: (callback) => {
+        const wrappedCallback = (event, data) => {
+            console.log('다운로드 완료:', data.fileName);
+            callback(data);
+        };
+        ipcRenderer.on('download:completed', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:completed', wrappedCallback);
+    },
+
+    // 다운로드 실패 이벤트 리스너
+    onDownloadFailed: (callback) => {
+        const wrappedCallback = (event, data) => {
+            console.error('다운로드 실패:', data.fileName, data.state);
+            callback(data);
+        };
+        ipcRenderer.on('download:failed', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:failed', wrappedCallback);
+    },
 
     // 알림 API (필요시 확장 가능)
     // showNotification: (title, body) => ipcRenderer.invoke('show-notification', title, body),

@@ -1,18 +1,36 @@
 {
-  "/templates/login/qr" : [
-    "qrlogin.html",
-    "qrscan.html",
-    "qrlogin.js",
-    "qrscan.js"
-  ],
-  "/templates/login" : [
-    "chatlogin.html",
-    "main.js"
-  ],
-  "/templates/room" : [
-    "kurentoroom.html"
-  ],
-  "/templates" : [
-    "roomlist.html"
-  ]
+  "basePaths": {
+    "/templates/login/qr": [
+      "qrlogin.html",
+      "qrscan.html",
+      "qrlogin.js",
+      "qrscan.js"
+    ],
+    "/templates/login": [
+      "chatlogin.html",
+      "main.js"
+    ],
+    "/templates/room": [
+      "kurentoroom.html"
+    ],
+    "/templates": [
+      "roomlist.html"
+    ]
+  },
+  "pathMappings": {
+    "js": {
+      "images/webrtc/": "static/images/webrtc/",
+      "images/": "static/images/",
+      "js/popup/": "static/js/popup/",
+      "js/": "static/js/"
+    },
+    "html": {
+      "images/": "static/images/",
+      "css/": "static/css/",
+      "js/": "static/js/"
+    },
+    "css": {
+      "/static/": "../static/"
+    }
+  }
 }

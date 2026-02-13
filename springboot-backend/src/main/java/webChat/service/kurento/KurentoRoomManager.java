@@ -20,6 +20,7 @@ package webChat.service.kurento;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
+import org.kurento.client.Composite;
 import org.kurento.client.Continuation;
 import org.kurento.client.MediaPipeline;
 import org.slf4j.Logger;
@@ -29,11 +30,16 @@ import org.springframework.web.socket.WebSocketSession;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.in.ChatRoomInVo;
-import webChat.repository.KurentoPiplineMap;
+import webChat.repository.KurentoCompositeMap;
+import webChat.repository.KurentoPipelineMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.redis.RedisService;
+
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @modifyBy SeJon Jang (wkdtpwhs@gmail.com)
@@ -48,7 +54,8 @@ public class KurentoRoomManager {
 
   private final RedisService redisService;
   private final KurentoParticipantService kurentoParticipantService;
-  private Map<String, MediaPipeline> kurentoPipelineMap = KurentoPiplineMap.getInstance();
+  private final Map<String, MediaPipeline> kurentoPipelineMap = KurentoPipelineMap.getInstance();
+  private final KurentoMessageSender kurentoMessageSender;
 
   /**
    * @desc 유저가 room 에 join 할때 사용
@@ -68,6 +75,22 @@ public class KurentoRoomManager {
     // 참여자 map 에 유저명과 유저에 관한 정보를 갖는 userSession 객체를 저장
     kurentoParticipantService.addParticipant(room.getRoomId(), participant);
 
+    // 방에서 녹화한 적이 있으면 새 참여자를 Composite에 연결
+    if (room.isRecordingInProgress()) {
+      log.info("ROOM {}: Recording in progress, connecting new participant {} to Composite", room.getRoomId(), userId);
+      try {
+        Composite composite = KurentoCompositeMap.getComposite(room.getRoomId());
+        if (composite != null) {
+          participant.connectToComposite(composite);
+          log.info("ROOM {}: New participant {} connected to Composite successfully", room.getRoomId(), userId);
+        } else {
+          log.warn("ROOM {}: Composite not found for recording room", room.getRoomId());
+        }
+      } catch (Exception e) {
+        log.error("ROOM {}: Failed to connect new participant {} to Composite: {}", room.getRoomId(), userId, e.getMessage());
+      }
+    }
+
     // 참여자 정보를 기존 참여자들에게 알림
     this.sendParticipantNames(room, participant);
 
@@ -83,6 +106,18 @@ public class KurentoRoomManager {
    */
   public void leave(KurentoRoom room, KurentoUserSession user) throws IOException {
     log.debug("PARTICIPANT {}: Leaving room {}", user.getUserId(), room.getRoomId());
+
+    // 녹화 중이면 Composite 연결 해제
+    if (room.isRecordingInProgress() && user.isConnectedToComposite()) {
+      try {
+        user.disconnectFromComposite();
+        log.info("PARTICIPANT {}: Disconnected from Composite before leaving", user.getUserId());
+      } catch (Exception e) {
+        log.error("PARTICIPANT {}: Failed to disconnect from Composite: {}",
+                user.getUserId(), e.getMessage());
+      }
+    }
+
     this.removeParticipant(room, user.getUserId());
   }
 
@@ -92,34 +127,24 @@ public class KurentoRoomManager {
    * @Return List<String 유저명>
    * */
   
-  private Collection<String> joinRoom(KurentoRoom room, KurentoUserSession newParticipant) throws IOException {
-    // JsonObject 를 생성
-    final JsonObject newParticipantMsg = new JsonObject();
-
-    // 유저가 참여했음을 알리는 jsonObject
-    // newParticipantMsg : { "id" : "newParticipantArrived", "name" : "참여자 유저명"}
-    newParticipantMsg.addProperty("id", "newParticipantArrived");
-    JsonObject joNewParticipant = new JsonObject();
-    joNewParticipant.addProperty("userId", newParticipant.getUserId());
-    joNewParticipant.addProperty("nickName", newParticipant.getNickName());
-    newParticipantMsg.add("data", joNewParticipant);
-
+  private Collection<String> joinRoom(KurentoRoom room, KurentoUserSession newParticipant) {
     // participants 를 list 형태로 변환 => 이때 list 는 한명의 유저가 새로 들어올 때마다
     // 즉 joinRoom 이 실행될 때마다 새로 생성 && return 됨
     Collection<KurentoUserSession> userSessions = kurentoParticipantService.getParticipantList(room.getRoomId());
 
-//    log.debug("ROOM {}: notifying other participants of new participant {}", name,
-//        newParticipant.getName());
     log.debug("ROOM {}: 다른 참여자들에게 새로운 참여자가 들어왔음을 알림 {} :: {}", room.getRoomId(),
             newParticipant.getUserId(), newParticipant.getNickName());
 
     // participants 의 value 로 for 문 돌림
     for (final KurentoUserSession participant : userSessions) {
       try {
-        // 현재 방의 모든 참여자들에게 새로운 참여자가 입장해서 만들어지는 json 객체
-        // 즉, newParticipantMsg 를 send함
-        participant.sendMessage(newParticipantMsg);
-      } catch (final IOException e) {
+        // 현재 방의 모든 참여자들에게 새로운 참여자가 입장했음을 알림
+        kurentoMessageSender.sendToUser(
+            participant,
+            KurentoMessageBuilder.newParticipantArrived()
+                .participantData(newParticipant.getUserId(), newParticipant.getNickName())
+        );
+      } catch (final Exception e) {
         log.error("ROOM {}: participant {} could not be notified", room.getRoomId(), participant.getUserId(), e);
       }
     }
@@ -145,24 +170,20 @@ public class KurentoRoomManager {
     // String list 생성
     final List<String> unNotifiedParticipants = new ArrayList<>();
 
-    // json 객체 생성
-    final JsonObject participantLeftJson = new JsonObject();
-
-    // json 객체에 유저가 떠났음을 알리는 jsonObject
-    // newParticipantMsg : { "id" : "participantLeft", "name" : "참여자 유저명"}
-    participantLeftJson.addProperty("id", "participantLeft");
-    participantLeftJson.addProperty("name", name);
-
     // participants 의 value 로 for 문 돌림
     for (final KurentoUserSession participant : userSessions) {
       try {
         // 나간 유저의 video 를 cancel 하기 위한 메서드
         participant.cancelVideoFrom(name);
 
-        // 다른 유저들에게 현재 유저가 나갔음을 알리는 jsonMsg 를 전달
-        participant.sendMessage(participantLeftJson);
+        // 다른 유저들에게 현재 유저가 나갔음을 알림
+        kurentoMessageSender.sendToUser(
+            participant,
+            KurentoMessageBuilder.participantLeft()
+                .name(name)
+        );
 
-      } catch (final IOException e) {
+      } catch (final Exception e) {
         unNotifiedParticipants.add(participant.getUserId());
       }
     }
@@ -183,9 +204,6 @@ public class KurentoRoomManager {
   
   public void sendParticipantNames(KurentoRoom room, KurentoUserSession user) throws IOException {
 
-    // json 오브젝트 생성
-    final JsonObject existingParticipantsMsg = new JsonObject();
-
     // jsonArray 객체 생성
     // TODO 추후 DTO 객체로 변경 필요
     final JsonArray participantsArray = new JsonArray();
@@ -202,15 +220,14 @@ public class KurentoRoomManager {
       }
     }
 
-    // 현재 존재하는 참여자들에 대한 정보를 담는 json Msg 생성
-    // id : existingParticipants
-    // data : 현재 방 안에 존재하는 유저만을 담은 array
-    existingParticipantsMsg.addProperty("id", "existingParticipants");
-    existingParticipantsMsg.add("data", participantsArray);
     log.debug("PARTICIPANT {}: sending a list of {} participants", user.getUserId(), participantsArray.size());
 
-    // user 에게 existingParticipantsMsg 전달
-    user.sendMessage(existingParticipantsMsg);
+    // user 에게 기존 참여자 목록 전달
+    kurentoMessageSender.sendToUser(
+        user,
+        KurentoMessageBuilder.existingParticipants()
+            .participantsArray(participantsArray)
+    );
   }
 
   public ChatRoom createKurentoRoom(String roomId, String instanceId, ChatRoomInVo chatRoomInVo) {
@@ -241,19 +258,23 @@ public class KurentoRoomManager {
 
     if(mediaPipeline != null && mediaPipeline.isCommited()) {
       // 미디어 파이프 초기화
-      mediaPipeline.release(new Continuation<Void>() {
+      mediaPipeline.release(new Continuation<>() {
 
-        @Override
-        public void onSuccess(Void result) throws Exception {
-          log.trace("ROOM {}: Released Pipeline", kurentoRoom.getRoomId());
-        }
+          @Override
+          public void onSuccess(Void result) {
+              log.trace("ROOM {}: Released Pipeline", kurentoRoom.getRoomId());
+          }
 
-        @Override
-        public void onError(Throwable cause) throws Exception {
-          log.warn("PARTICIPANT {}: Could not release Pipeline", kurentoRoom.getRoomId(), cause);
-        }
+          @Override
+          public void onError(Throwable cause) {
+              log.warn("PARTICIPANT {}: Could not release Pipeline", kurentoRoom.getRoomId(), cause);
+          }
       });
     }
+
+    // composite 및 pipeline 모두 map 에서 제거
+    KurentoCompositeMap.removeComposite(kurentoRoom.getRoomId());
+    kurentoPipelineMap.remove(kurentoRoom.getRoomId());
 
     kurentoParticipantService.removeRoom(kurentoRoom.getRoomId());
     log.debug("Room {} closed", kurentoRoom.getRoomId());
