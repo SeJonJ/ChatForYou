@@ -1,4 +1,4 @@
-package webChat.repository.participant;
+package webChat.repository.kurento.participant;
 
 import java.util.Map;
 

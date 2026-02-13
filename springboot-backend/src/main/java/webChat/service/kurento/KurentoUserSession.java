@@ -26,7 +26,7 @@ import org.kurento.jsonrpc.JsonUtils;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import webChat.model.user.UserDto;
-import webChat.repository.KurentoHubPortMap;
+import webChat.repository.kurento.KurentoHubPortMap;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
