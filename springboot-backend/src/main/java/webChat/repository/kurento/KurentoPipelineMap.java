@@ -1,4 +1,4 @@
-package webChat.repository;
+package webChat.repository.kurento;
 
 import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.MediaPipeline;

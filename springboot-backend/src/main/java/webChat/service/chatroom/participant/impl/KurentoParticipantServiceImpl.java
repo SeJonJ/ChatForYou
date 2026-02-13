@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
-import webChat.repository.participant.KurentoParticipantRepository;
+import webChat.repository.kurento.participant.KurentoParticipantRepository;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.kurento.KurentoUserSession;
 
