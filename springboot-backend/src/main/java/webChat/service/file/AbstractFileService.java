@@ -7,10 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.IOUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.multipart.MultipartFile;
 import webChat.config.MinioConfig;
 import webChat.controller.ExceptionController;
@@ -18,6 +15,7 @@ import webChat.utils.StringUtil;
 
 import javax.annotation.PostConstruct;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -87,8 +85,11 @@ public abstract class AbstractFileService {
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
 
-        // 지정된 fileName 으로 파일이 다운로드 된다.
-        httpHeaders.setContentDispositionFormData("attachment", fileName);
+        // 지정된 fileName 으로 파일이 다운로드
+        ContentDisposition contentDisposition = ContentDisposition.attachment()
+                .filename(fileName, StandardCharsets.UTF_8)
+                .build();
+        httpHeaders.setContentDisposition(contentDisposition);
 
         log.info("HttpHeader : [{}]", httpHeaders);
 

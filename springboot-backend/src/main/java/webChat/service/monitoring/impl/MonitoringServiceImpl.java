@@ -14,6 +14,8 @@ import webChat.model.log.ClientInfo;
 import webChat.service.monitoring.ClientCheckService;
 import webChat.service.monitoring.MonitoringService;
 import webChat.service.monitoring.PrometheusService;
+import webChat.utils.ClientUtils;
+
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.util.Enumeration;
@@ -32,8 +34,8 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
     // 웹 접속 시 HandlerInterceptor 가 먼저 해당 정보를 인터셉트해와서 정보를 저장
     // prometheus 에 전달한다
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String ipAddress = request.getRemoteAddr();
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        String ipAddress = ClientUtils.getRemoteAddr(request);
 
         this.printRequestInfo(request);
 
@@ -91,55 +93,54 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
             return null;
 
         } catch (Exception e) {
-//            return ClientInfo.builder().build();
             throw new ExceptionController.AccessForbiddenException("can not find ipAddrs");
         }
     }
 
     private void printRequestInfo(HttpServletRequest request) {
         log.info("##########################################");
-        log.info("📍 기본 정보");
-        log.info("Remote ipAddrs ::: " + request.getRemoteAddr());
+        log.info("========= 접속자 기본 정보");
+        log.info("Remote ipAddrs ::: " + ClientUtils.getRemoteAddr(request));
         log.info("Remote Host ipAddrs ::: " + request.getRemoteHost());
 
         // 🌟 nginx에서 추가한 새로운 디버깅용 헤더들
-        log.info("========== 🔍 nginx 디버깅 헤더들 ==========");
-        log.info("X-Original-IP: {}", request.getHeader("X-Original-IP"));           // nginx에서 보는 원본 IP
-        log.info("X-Generated-Forwarded: {}", request.getHeader("X-Generated-Forwarded")); // nginx에서 생성한 X-Forwarded-For
-        log.info("X-Client-IP: {}", request.getHeader("X-Client-IP"));               // 계산된 클라이언트 IP
+        log.debug("========== nginx 디버깅 헤더들 ==========");
+        log.debug("X-Original-IP: {}", request.getHeader("X-Original-IP"));           // nginx에서 보는 원본 IP
+        log.debug("X-Generated-Forwarded: {}", request.getHeader("X-Generated-Forwarded")); // nginx에서 생성한 X-Forwarded-For
+        log.debug("X-Client-IP: {}", request.getHeader("X-Client-IP"));               // 계산된 클라이언트 IP
 
         // 기존 nginx 헤더들
-        log.info("========== 🌐 기존 nginx 헤더들 ==========");
-        log.info("X-Real-IP: {}", request.getHeader("X-Real-IP"));
-        log.info("X-Forwarded-For: {}", request.getHeader("X-Forwarded-For"));
-        log.info("X-Forwarded-Proto: {}", request.getHeader("X-Forwarded-Proto"));
-        log.info("Host: {}", request.getHeader("Host"));
+        log.debug("========== 기존 nginx 헤더들 ==========");
+        log.debug("X-Real-IP: {}", request.getHeader("X-Real-IP"));
+        log.debug("X-Forwarded-For: {}", request.getHeader("X-Forwarded-For"));
+        log.debug("X-Forwarded-Proto: {}", request.getHeader("X-Forwarded-Proto"));
+        log.debug("Host: {}", request.getHeader("Host"));
 
         // 🎯 문제 해결 상태 체크
-        log.info("========== 🎯 문제 해결 상태 체크 ==========");
+        log.debug("========== 문제 해결 상태 체크 ==========");
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         String xRealIp = request.getHeader("X-Real-IP");
-        String remoteAddr = request.getRemoteAddr();
+        String remoteAddr = ClientUtils.getRemoteAddr(request);
 
         if (xForwardedFor != null && !xForwardedFor.equals("null") && !xForwardedFor.startsWith("10.244.")) {
-            log.info("✅ 성공: X-Forwarded-For에 실제 외부 IP가 전달됨!");
+            log.debug("✅ 성공: X-Forwarded-For에 실제 외부 IP가 전달됨!");
         } else {
-            log.info("❌ 실패: X-Forwarded-For가 여전히 문제 있음");
+            log.debug("❌ 실패: X-Forwarded-For가 여전히 문제 있음");
         }
 
-        if (!xRealIp.startsWith("10.244.")) {
-            log.info("✅ 성공: X-Real-IP에 실제 외부 IP가 전달됨!");
+        if (xRealIp != null && !xRealIp.startsWith("10.244.")) {
+            log.debug("✅ 성공: X-Real-IP에 실제 외부 IP가 전달됨!");
         } else {
-            log.info("❌ 실패: X-Real-IP가 여전히 클러스터 내부 IP");
+            log.debug("❌ 실패: X-Real-IP가 여전히 클러스터 내부 IP");
         }
 
         // 🔍 IP 변화 감지
-        log.info("========== 📊 IP 변화 감지 ==========");
-        log.info("Remote Address: {} | X-Real-IP: {} | X-Forwarded-For: {}",
+        log.debug("========== 📊 IP 변화 감지 ==========");
+        log.debug("Remote Address: {} | X-Real-IP: {} | X-Forwarded-For: {}",
                 remoteAddr, xRealIp, xForwardedFor);
 
         // 모든 HTTP 헤더 출력 (기존 유지)
-        log.info("========== 📋 모든 HTTP Headers ==========");
+        log.debug("========== 📋 모든 HTTP Headers ==========");
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
