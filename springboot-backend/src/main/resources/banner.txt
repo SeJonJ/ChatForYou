@@ -4,4 +4,4 @@
 '  '--'\ |  | |  | \ '-'  |   |  |   |  |`    ' '-' ' |  |        |  |    ' '-' ' '  ''  '
  `-----' `--' `--'  `--`--'   `--'   `--'      `---'  `--'        `--'     `---'   `----'
 
-Powered by Spring Boot ${spring-boot.version} created by SeJonJ
+ ChatForYou v@project.version@ | Spring Boot ${spring-boot.version} | created by SeJonJ

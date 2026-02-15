@@ -250,7 +250,8 @@ function createMainWindow() {
             enableRemoteModule: false,
             preload: path.join(__dirname, 'preload.js'),
             webSecurity: true,
-            allowRunningInsecureContent: false
+            allowRunningInsecureContent: false,
+            autoplayPolicy: 'no-user-gesture-required'
         },
         show: false,
         titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default'

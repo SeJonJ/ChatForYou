@@ -1,10 +1,12 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
 plugins {
 	id 'org.springframework.boot' version '3.4.2'
 	id 'io.spring.dependency-management' version '1.0.13.RELEASE'
 	id 'java'
 }
 
-version = '6.11'
+version = '1.0.51'
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -135,6 +137,13 @@ dependencies {
 
 	// firebase 라이브러리
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
+}
+
+// banner.txt 의 @project.version@ 토큰을 프로젝트 버전으로 치환
+processResources {
+	filesMatching('banner.txt') {
+		filter(ReplaceTokens, tokens: ['project.version': project.version.toString()])
+	}
 }
 
 tasks.named('test') {
