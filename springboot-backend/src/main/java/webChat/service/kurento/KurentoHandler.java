@@ -213,8 +213,6 @@ public class KurentoHandler extends TextWebSocketHandler {
 
         if (!kurentoPiplineMap.containsKey(roomId)) {
             kurentoPiplineMap.put(roomId, kurentoRoom.getKurento().createMediaPipeline());
-            // userHub 초기화
-            kurentoRoom.initUserHubPort();
         }
 
         kurentoRoom.activate();

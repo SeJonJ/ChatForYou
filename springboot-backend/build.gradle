@@ -6,7 +6,7 @@ plugins {
 	id 'java'
 }
 
-version = '1.0.51'
+version = '1.0.52'
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -72,6 +72,9 @@ dependencies {
 	// springBoot JPA
 	// https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-data-jpa
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.4.1'
+
+	// Spring Framework 6 이상 또는 Spring Boot 3 이상인 경우
+	implementation 'net.javacrumbs.shedlock:shedlock-spring:5.15.1'
 
 	// mapstruct
 	// https://mvnrepository.com/artifact/org.mapstruct/mapstruct

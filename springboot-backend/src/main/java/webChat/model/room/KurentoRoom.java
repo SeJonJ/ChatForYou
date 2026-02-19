@@ -134,6 +134,11 @@ public class KurentoRoom extends ChatRoom implements Closeable {
   }
 
   public void initUserHubPort(){
+    if (KurentoCompositeMap.getComposite(this.getRoomId()) != null) {
+      log.debug("Composite already exists for room: {}", this.getRoomId());
+      return;
+    }
+
     String roomId = this.getRoomId();
     
     // 기존에 생성된 파이프라인 사용 (사용자들과 동일한 파이프라인)
@@ -249,6 +254,13 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       HubPort roomRecorderHubPort = KurentoRecorderMap.getRecorderHubPort(roomId);
       if (roomRecorderHubPort != null) {
         roomRecorderHubPort.release();
+      }
+
+      // Map 에서 Composite 조회 및 해제
+      Composite composite = KurentoCompositeMap.getComposite(roomId);
+      if (composite != null) {
+        composite.release();
+        KurentoCompositeMap.removeComposite(roomId);
       }
       
       // Map 에서 제거

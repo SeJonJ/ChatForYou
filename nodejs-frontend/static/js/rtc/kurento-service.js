@@ -576,7 +576,7 @@ function onExistingParticipants(msg) {
         var options = {
             localVideo: hasVideo ? video : null,
             localAudio: audio,
-            mediaStream: stream,
+            videoStream: stream,
             mediaConstraints: constraints,
             onicecandidate: participant.onIceCandidate.bind(participant),
             dataChannels : true, // dataChannel 사용 여부

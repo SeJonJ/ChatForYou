@@ -354,14 +354,6 @@ const recording = {
                 }
             }
 
-            // 로컬 오디오 추가
-            if (self._shouldAddLocalAudio()) {
-                self.audioMixer.addAudioStream('local', localStream);
-                console.log('로컬 오디오를 AudioMixer에 추가 (활성화됨)');
-            } else {
-                console.warn('로컬 오디오가 비활성화되어 있어서 녹화에서 제외됨');
-            }
-
             console.log('오디오 믹싱 시작 완료, 총 소스:', self.audioMixer.getSourceCount());
 
         } catch (error) {
@@ -761,11 +753,11 @@ const recording = {
 
         // 녹화 상태 업데이트
         self.isRecordingInProgress = false;
-        // isOtherRecordingInProgress는 다른 사용자의 녹화 상태이므로 여기서 변경하지 않음
-        // 자동 중지는 '내가' 녹화를 시작한 경우에만 발생함
+        self.hasRecordedOnce = true;
+        self.isOtherRecordingInProgress = false;
 
         // UI 업데이트
-        self.updateUI('idle');
+        self.updateUI('permanentlyDisabled');
 
         // 자막 기능 처리
         if (typeof speechRecognitionUtils !== 'undefined') {

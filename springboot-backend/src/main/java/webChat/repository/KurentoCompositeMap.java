@@ -19,6 +19,13 @@ public class KurentoCompositeMap {
     }
 
     public static void removeComposite(String roomId){
-        kurentoCompositeMap.compositeMap.remove(roomId);
+        Composite composite = kurentoCompositeMap.compositeMap.remove(roomId);
+        if (composite != null) {
+            try {
+                composite.release();
+            } catch (Exception e) {
+                // 이미 해제되었거나 파이프라인이 닫힌 경우 무시
+            }
+        }
     }
 }
