@@ -1,6 +1,7 @@
 package webChat.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -13,6 +14,12 @@ import webChat.service.kurento.KurentoHandler;
 @EnableWebSocket // 웹 소켓에 대해 자동 설정
 @RequiredArgsConstructor
 public class WebRtcConfig implements WebSocketConfigurer {
+
+    @Value("${server.rtc.async-timeout:0}")
+    private long rtcAsyncTimeOut;
+
+    @Value("${server.rtc.session-idle-timeout:0}")
+    private long rtcSessionIdleTimeout;
 
     // kurento 를 다루기 위한 핸들러
     private final KurentoHandler kurentoHandler;
@@ -29,9 +36,10 @@ public class WebRtcConfig implements WebSocketConfigurer {
     @Bean
     public ServletServerContainerFactoryBean createWebSocketContainer() {
         ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
-        container.setMaxTextMessageBufferSize(65536); // 32KB→64KB로 버퍼 확장
+        container.setMaxTextMessageBufferSize(65536);
         container.setMaxBinaryMessageBufferSize(65536);
-        container.setAsyncSendTimeout(3600000L); // 비동기 전송 타임아웃 1시간 설정
+        container.setAsyncSendTimeout(rtcAsyncTimeOut); // 비동기 전송 타임아웃 설정
+        container.setMaxSessionIdleTimeout(rtcSessionIdleTimeout); // 유휴 세션 타임아웃 설정
         return container;
     }
 

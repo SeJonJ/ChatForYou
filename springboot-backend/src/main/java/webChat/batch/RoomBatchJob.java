@@ -2,6 +2,7 @@ package webChat.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.coyote.BadRequestException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,11 @@ public class RoomBatchJob {
 
     @Scheduled(cron = "0 0,30 * * * *", zone = "Asia/Seoul") // 매 시간 30분에 실행 , 타임존 seoul 기준
 //    @Scheduled(cron = "0/10 * * * * *", zone = "Asia/Seoul")
+    @SchedulerLock(
+            name = "checkDeleteRoomLock",
+            lockAtLeastFor = "30s", // 최소 30초 동안은 Lock 유지 (빨리 끝나도 다른 서버가 못 들어오게 방어)
+            lockAtMostFor = "3m"   // 최대 10분 후에는 Lock 해제 (서버가 중간에 죽었을 때를 대비한 안전장치)
+    )
     public void checkDeleteRoom() throws ExceptionController.DelRoomException {
 
         AtomicInteger totalDelRoomCnt = new AtomicInteger();
@@ -63,6 +69,12 @@ public class RoomBatchJob {
     }
 
     @Scheduled(cron = "0 0 */6 * * *", zone = "Asia/Seoul") // 6시간 마다 , 타임존 seoul 기준
+//    @Scheduled(cron = "0/10 * * * * *", zone = "Asia/Seoul")
+    @SchedulerLock(
+            name = "dailyInfoInsertLock",
+            lockAtLeastFor = "30s",
+            lockAtMostFor = "3m"
+    )
     public void dailyInfoInsert() {
         LocalDate nowDate = LocalDate.now();
         DailyInfo findDailyInfo = dailyInfoRepository.findByDate(nowDate);

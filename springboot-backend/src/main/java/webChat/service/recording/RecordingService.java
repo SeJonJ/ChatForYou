@@ -53,6 +53,8 @@ public class RecordingService {
         String roomId = room.getRoomId();
         log.info("Starting room recording for room {} requested by user {}", roomId, requestUser.getUserId());
         try {
+            // userHub 초기화
+            room.initUserHubPort();
 
             // 녹화 파일 확장자 결정
             MediaProfileSpecType mediaProfileSpecType = MediaProfileSpecType.WEBM;
@@ -202,16 +204,14 @@ public class RecordingService {
 
         return autoStopExecutor.schedule(() -> {
             try {
-                log.warn("Auto-stopping recording after {} minutes: recordingId={}",
+                log.info("Auto-stopping recording after {} minutes: recordingId={}",
                         autoStopMinutes, recordingInfo.getRecordingId());
 
                 // 녹화 중지 (시스템 사용자로)
                 KurentoUserSession systemUser = new KurentoUserSession(
                         "SYSTEM",
                         "AUTO-STOP-SYSTEM",
-                        room.getRoomId(),
-                        null,
-                        null);
+                        room.getRoomId());
 
                 stopRecording(room, systemUser);
 
