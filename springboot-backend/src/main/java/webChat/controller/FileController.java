@@ -68,28 +68,38 @@ public class FileController {
         String ipAddress = ClientUtils.getRemoteAddr(request);
         String userAgent = ClientUtils.getUserAgent(request);
 
+        DownloadLog.DownloadType downloadType = null;
+        try{
+            downloadType = DownloadLog.DownloadType.valueOf(bucket.toUpperCase());
+        } catch (IllegalArgumentException e){
+            // TODO #104 에서 수정 예정
+            throw new ExceptionController.UnauthorizedException("Invalid bucket name");
+        }
+
+
         // 변환된 byte, httpHeader 와 HttpStatus 가 포함된 ResponseEntity 객체를 return 한다.
         ResponseEntity<byte[]> fileData = null;
         try {
-            if("file".equals(bucket)){
+            if(DownloadLog.DownloadType.FILE.equals(downloadType)){
                 fileData = minioFileService.getObject(fileName, filePath);
-            } else if("recording".equals(bucket)) {
+            } else if(DownloadLog.DownloadType.RECORDING.equals(downloadType)) {
                 fileData = recordingFileService.getObject(roomId, fileName, filePath);
             }
 
             downloadLogService.saveDownloadLog(
                     DownloadLog.of(
                             oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
-                            DownloadLog.DownloadType.valueOf(bucket.toUpperCase()),
+                            downloadType,
                             filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.SUCCESS
                     )
             );
 
         } catch (Exception e) {
+            // TODO #104 에서 수정 예정
             downloadLogService.saveDownloadLog(
                     DownloadLog.of(
                             oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
-                            DownloadLog.DownloadType.valueOf(bucket.toUpperCase()),
+                            downloadType,
                             filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.FAIL
                     )
             );
