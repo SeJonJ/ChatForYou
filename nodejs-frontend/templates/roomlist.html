@@ -17,38 +17,66 @@
 </head>
 <body class="body-roomlist d-flex">
   <!-- 왼쪽 사이드바 -->
-  <aside class="sidebar bg-dark text-white p-3">
-    <div class="logo mb-4 text-center">
-      <img src="static/images/logo/chatforyou_logo.png" alt="ChatForYou Logo"/>
+  <aside class="sidebar text-white">
+    <div class="logo text-center d-flex justify-content-between">
+      <img src="static/images/logo/chatforyou_logo_v2.svg" alt="ChatForYou Logo"/>
+      <span class="noti_wrap">
+        <i class="ic_bell"></i>
+        <em class="new"></em>
+      </span>
     </div>
-    <nav class="nav flex-column gap-2">
-      <a href="#" class="nav-link text-white"><i class="fas fa-comments"></i>채팅방 리스트</a>
-      <a href="#" class="nav-link text-white"><i class="fas fa-cogs"></i>설정</a>
-      <!-- 추후 로그인 기능 추가 시 사용
-      <a href="#" class="nav-link text-white"><i class="fas fa-user hidden"></i>마이페이지</a>
-      -->
+
+    <div class="user-card">
+      <span class="user-card__thumb"></span>
+
+      <div class="user-card__info">
+        <p class="user-card__name">닉네임입니다.</p>
+        <span class="user-card__email">user@email.com</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <nav class="nav flex-column">
+      <a href="#" class="nav_link"><i class="ic_home"></i>홈</a>
+      <a href="#" class="nav_link on"><i class="ic_list"></i>채팅방 리스트</a>
+      <a href="#" class="nav_link"><i class="ic_friend"></i>친구</a>
+      <a href="#" class="nav_link"><i class="ic_setting"></i>설정</a>
     </nav>
-    <div class="sidebar-footer mt-auto pt-3 border-top border-secondary text-center">
-    <button id="logoutBtn" class="btn btn-logout text-white display-none">
-      <i class="fas fa-sign-out-alt me-2"></i> 로그아웃
-    </button>
-    <button id="loginBtn" class="btn btn-logout text-white display-none">
-      <i class="fas fa-sign-out-alt me-2"></i> 로그인
-    </button>
-  </div>
+
+    <div class="sidebar-footer mt-auto pt-3 border-secondary text-center">
+      <button id="logoutBtn" class="btn btn-logout display-none">
+        <i></i> 로그아웃
+      </button>
+      <button id="loginBtn" class="btn btn-logout display-none">
+        <i></i> 로그인
+      </button>
+    </div>
   </aside>
 
   <!-- 메인 콘텐츠 -->
   <main class="flex-grow-1 p-4">
     <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="main_title">채팅방 리스트</h2>
+      <div class="d-flex align-items-center mb-3">
         <div class="visitor-count" id="visitorCount"></div>
       </div>
 
-      <div class="button-group mb-3">
-        <button class="btn btn-custom-primary" id="showUpdatesButton">업데이트 내역 확인하기</button>
-        <button class="btn btn-custom-info" data-bs-toggle="modal" data-bs-target="#roomModal">방 생성</button>
+      <div class="search_wrap d-flex justify-content-between">
+        <div class="input_search">
+          <input type="search" placeholder="채팅방 찾기">
+          <i></i>
+        </div>
+
+        <div class="button-group">
+          <button class="btn btn-custom-primary display-none" id="showUpdatesButton">업데이트 내역 확인하기</button>
+          <button class="btn btn-custom-info" data-bs-toggle="modal" data-bs-target="#roomModal">방 만들기</button>
+        </div>
+      </div>
+
+      <div class="card_wrap d-flex">
+        <div class="card_info justify-content-between on">전체 <span>24</span></div>
+        <div class="card_info justify-content-between">실시간 채팅방 <span>24</span></div>
+        <div class="card_info justify-content-between">친구가 만든 방 <span>24</span></div>
       </div>
 
       <div class="table_wrap">

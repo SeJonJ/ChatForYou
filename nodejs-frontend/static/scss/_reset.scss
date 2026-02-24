@@ -43,7 +43,7 @@ button,
 input,
 textarea,
 select {
-    font: inherit;
+    font-family: $font-base;
     background: none;
     border: none;
     outline: none;
@@ -55,5 +55,5 @@ table {
 }
 
 .display-none {
-    display: none;
+    display: none !important;
 }

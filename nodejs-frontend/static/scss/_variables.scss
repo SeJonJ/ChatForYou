@@ -3,7 +3,7 @@ $color-white: #ffffff;
 $color-black: #000000;
 
 // Primary / Accent (ChatForYou 로고 기반)
-$color-primary: #9a4dff;
+$color-primary: #8a3cff;
 $color-accent: #d15fff;
 
 // Gradient (ChatForYou 시그니처)
@@ -28,7 +28,7 @@ $color-text: #2a213c;
 
 // BACKGROUND GRADIENTS
 $background-light: linear-gradient(135deg, $gradient-start, $gradient-end);
-$background-dark: linear-gradient(135deg, #1f1a2e, #2c2f36);
+$background-dark: linear-gradient(135deg, #12091c 0%, #1d0f2f 70.71%);
 
 // FONT
 $font-base:
@@ -41,7 +41,7 @@ $font-size-base: 1rem;
 $line-height-base: 1.58;
 
 // BUTTON
-$btn-radius: 6px;
+$btn-radius: 10px;
 $btn-shadow: 0 4px 10px rgba($color-primary, 0.25);
 
 // Z-INDEX
