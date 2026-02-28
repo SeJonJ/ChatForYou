@@ -258,7 +258,7 @@ function Participant(userId, nickName, roomId) {
 	video.style.width = '100%';
 	video.style.height = '100%';
 	video.style.objectFit = 'cover';
-	video.style.backgroundColor = '#000'; // 디버깅용
+	video.style.backgroundColor = '#000';
 
 	// controls는 제거 - 자동 일시정지 방지
 	audio.autoplay = true;
