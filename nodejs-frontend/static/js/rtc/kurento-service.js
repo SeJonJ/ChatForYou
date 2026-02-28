@@ -95,7 +95,8 @@ const wsMessageHandlers = {
     },
     connectionFailed: (msg) => {
         $('#connectionFailModal').modal('show');
-        $('#reconnectButton').click(() => {
+        $('#reconnectButton').off('click').on('click', () => {
+            sessionStorage.removeItem('chatforyou_connected');
             leaveRoom('error');
             window.location.reload();
         });
@@ -150,13 +151,46 @@ const wsMessageHandlers = {
     ])
 };
 
-// websocket 연결 확인 후 register() 실행
-var ws = new WebSocket(window.__CONFIG__.API_BASE_URL.replace(/^http/, 'ws') + '/signal');
-ws.onopen = () => {
-    register();
-    initScript();
-    initEvent();
+// WebSocket 지연 생성: 새로고침 시 autoplay 정책 우회
+var ws = null;
+
+function connectWebSocket() {
+    ws = new WebSocket(window.__CONFIG__.API_BASE_URL.replace(/^http/, 'ws') + '/signal');
+
+    ws.onopen = function () {
+        console.log('[WebSocket] 연결 성공');
+        sessionStorage.setItem('chatforyou_connected', 'true');
+        register();
+        initScript();
+        initEvent();
+    };
+
+    ws.onmessage = function (message) {
+        var parsedMessage = JSON.parse(message.data);
+        var handler = wsMessageHandlers[parsedMessage.id];
+        if (handler) {
+            handler(parsedMessage);
+        } else {
+            console.warn('Unrecognized message:', parsedMessage.id, parsedMessage);
+            showWarningToast(parsedMessage?.message, 3000);
+        }
+    };
 }
+
+// 새로고침 감지 및 연결 분기
+$(function () {
+    if (sessionStorage.getItem('chatforyou_connected') === 'true') {
+        // 새로고침 감지: 모달 표시 → 클릭 시 연결 (유저 인터랙션 확보)
+        $('#reconnectModal').modal('show');
+        $('#reconnectModalBtn').off('click').on('click', function () {
+            $('#reconnectModal').modal('hide');
+            connectWebSocket();
+        });
+    } else {
+        // 첫 입장: 즉시 연결
+        connectWebSocket();
+    }
+});
 
 var initTurnServer = function(){
     fetch(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
@@ -313,29 +347,49 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
      * 더미 비디오 스트림 생성 (중복 생성 방지)
      */
     function createDummyVideoStream(audioConstraints) {
-        // 이미 더미 비디오가 생성된 경우 캐시된 스트림 반환
+        // 이미 더미 비디오가 생성된 경우 트랙을 clone하여 반환
+        // (rtcPeer.dispose() 시 공유 트랙이 stop되는 것을 방지)
         if (hasDummyVideo && cachedDummyStream) {
-            console.log('[WebRTC:Media] 더미 비디오 캐시 재사용');
-            return Promise.resolve(cachedDummyStream);
+            console.log('[WebRTC:Media] 더미 비디오 캐시 재사용 (clone)');
+            var clonedStream = new MediaStream();
+            cachedDummyStream.getTracks().forEach(function(track) {
+                clonedStream.addTrack(track.clone());
+            });
+            return Promise.resolve(clonedStream);
         }
 
         return customGetUserMedia({ audio: audioConstraints })
             .then(function (audioStream) {
-                const dummyVideoTrack = getDummyVideoTrack();
-                audioStream.addTrack(dummyVideoTrack);
+                return getDummyVideoTrack().then(function (dummyVideoTrack) {
+                    audioStream.addTrack(dummyVideoTrack);
 
-                // 캐시 저장
-                hasDummyVideo = true;
-                cachedDummyStream = audioStream;
+                    // 캐시 저장
+                    hasDummyVideo = true;
+                    cachedDummyStream = audioStream;
 
-                console.log('[WebRTC:Media] 더미 비디오 트랙 추가 완료');
-                return audioStream;
+                    console.log('[WebRTC:Media] 더미 비디오 트랙 추가 완료');
+                    return audioStream;
+                });
             })
             .catch(function (audioError) {
                 console.error('[WebRTC:Media] 더미 비디오 오디오 획득 실패:', audioError);
                 return Promise.reject(audioError);
             });
     }
+
+    // 더미 비디오 캐시 정리 (세션 종료 시 호출)
+    window._cleanupDummyVideo = function() {
+        if (cachedDummyStream) {
+            cachedDummyStream.getTracks().forEach(function(track) {
+                if (track.readyState !== 'ended') {
+                    track.stop();
+                }
+            });
+            cachedDummyStream = null;
+            hasDummyVideo = false;
+            console.log('[WebRTC:Media] 더미 비디오 캐시 정리 완료');
+        }
+    };
 
     /**
      * 기본 constraints로 재시도
@@ -365,104 +419,109 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         });
     }
 
-    // 더미 비디오 트랙 생성
+    // 더미 비디오 트랙 생성 (Promise 기반: 이미지 로드 완료 후 resolve)
     function getDummyVideoTrack() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 640;
-        canvas.height = 480;
-        const ctx = canvas.getContext('2d');
+        return new Promise(function (resolve) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 1280;
+            canvas.height = 720;
+            var ctx = canvas.getContext('2d');
 
-        const randomImageNum = Math.floor(Math.random() * 4) + 1;
-        const imagePath = `images/webrtc/non-video/non_video_${randomImageNum}.png`;
+            var randomImageNum = Math.floor(Math.random() * 4) + 1;
+            var imagePath = 'images/webrtc/non-video/non_video_' + randomImageNum + '.png';
 
-        const img = new Image();
-        let imageLoaded = false;
-        let drawX = 0, drawY = 0, drawWidth = 640, drawHeight = 480;
-        let animationId = null;
+            var img = new Image();
+            var imageLoaded = false;
+            var drawX = 0, drawY = 0, drawWidth = 1280, drawHeight = 720;
+            var intervalId = null;
+            var resolved = false;
 
-        img.onload = function() {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = canvas.width / canvas.height;
-
-            if (imgRatio > canvasRatio) {
-                drawWidth = canvas.width;
-                drawHeight = img.height * (canvas.width / img.width);
-                drawX = 0;
-                drawY = (canvas.height - drawHeight) / 2;
-            } else {
-                drawHeight = canvas.height;
-                drawWidth = img.width * (canvas.height / img.height);
-                drawX = (canvas.width - drawWidth) / 2;
-                drawY = 0;
+            // 캔버스에 프레임 그리기
+            function drawFrame() {
+                if (imageLoaded) {
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+                } else {
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 32px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 20);
+                    ctx.font = '20px Arial';
+                    ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
+                }
             }
 
-            imageLoaded = true;
-            console.log('더미 이미지 로드 완료:', imagePath);
-        };
+            // 캔버스 스트림 생성 및 resolve 처리
+            function resolveTrack() {
+                if (resolved) return;
+                resolved = true;
 
-        img.onerror = function() {
-            console.error('더미 이미지 로드 실패:', imagePath);
-            imageLoaded = false;
-        };
+                // 첫 프레임 그리기
+                drawFrame();
 
-        img.src = imagePath;
+                // 키프레임 갱신을 위한 주기적 그리기
+                intervalId = setInterval(drawFrame, 500);
 
-        function drawFrame() {
-            if (imageLoaded) {
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-            } else {
-                ctx.fillStyle = '#2c3e50';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 32px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('카메라 없음', canvas.width / 2, canvas.height / 2 - 20);
-                ctx.font = '20px Arial';
-                ctx.fillText('Camera Not Available', canvas.width / 2, canvas.height / 2 + 20);
+                var dummyStream = canvas.captureStream(30);
+                var videoTrack = dummyStream.getVideoTracks()[0];
+
+                // 트랙 종료 시 interval 정리
+                videoTrack.addEventListener('ended', function () {
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        console.log('더미 비디오 interval 정리됨');
+                    }
+                });
+
+                console.log('더미 비디오 스트림 생성:', videoTrack.id);
+                resolve(videoTrack);
             }
 
-            animationId = requestAnimationFrame(drawFrame);
-        }
+            img.onload = function () {
+                var imgRatio = img.width / img.height;
+                var canvasRatio = canvas.width / canvas.height;
 
-        drawFrame();
+                if (imgRatio > canvasRatio) {
+                    drawWidth = canvas.width;
+                    drawHeight = img.height * (canvas.width / img.width);
+                    drawX = 0;
+                    drawY = (canvas.height - drawHeight) / 2;
+                } else {
+                    drawHeight = canvas.height;
+                    drawWidth = img.width * (canvas.height / img.height);
+                    drawX = (canvas.width - drawWidth) / 2;
+                    drawY = 0;
+                }
 
-        const dummyStream = canvas.captureStream(30);
-        const videoTrack = dummyStream.getVideoTracks()[0];
+                imageLoaded = true;
+                console.log('더미 이미지 로드 완료:', imagePath);
+                resolveTrack();
+            };
 
-        // 트랙 종료 시 애니메이션 정리
-        videoTrack.addEventListener('ended', function() {
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-                animationId = null;
-                console.log('더미 비디오 애니메이션 정리됨');
-            }
+            img.onerror = function () {
+                console.error('더미 이미지 로드 실패, 텍스트 fallback 사용:', imagePath);
+                imageLoaded = false;
+                resolveTrack();
+            };
+
+            img.src = imagePath;
+
+            // 3초 타임아웃: 이미지 로드 지연 시 텍스트 fallback
+            setTimeout(function () {
+                if (!resolved) {
+                    console.warn('더미 이미지 로드 타임아웃, 텍스트 fallback 사용');
+                    resolveTrack();
+                }
+            }, 3000);
         });
-
-        console.log('더미 비디오 스트림 생성:', videoTrack.id);
-
-        return videoTrack;
     }
 }
 
-/**
- * WebSocket 메시지 수신 처리
- * - Handler Map 패턴으로 리팩토링
- * - 새로운 메시지 타입은 wsMessageHandlers에 추가
- */
-ws.onmessage = function (message) {
-    const parsedMessage = JSON.parse(message.data);
-    const handler = wsMessageHandlers[parsedMessage.id];
-
-    if (handler) {
-        handler(parsedMessage);
-    } else {
-        console.warn('Unrecognized message:', parsedMessage.id, parsedMessage);
-        showWarningToast(parsedMessage?.message, 3000);
-    }
-}
 
 function register() {
     // kurentoroom.html 진입 시 서버에서 방/유저 정보 조회
@@ -743,8 +802,13 @@ var leftUserfunc = function(){
         }
     }
 
+    // 더미 비디오 캐시 정리 및 canvas interval 포함)
+    if (window._cleanupDummyVideo) {
+        window._cleanupDummyVideo();
+    }
+
     // WebSocket 연결을 종료합니다.
-    ws.close();
+    if (ws) ws.close();
 }
 
 // 웹 종료 or 새로고침 시 이벤트
@@ -755,6 +819,7 @@ window.onbeforeunload = function () {
 // 나가기 버튼 눌렀을 때 이벤트
 // 결국 replace  되기 때문에 얘도 onbeforeunload 를 탄다
 $('#button-leave').on('click', function(){
+    sessionStorage.removeItem('chatforyou_connected');
     setCookie('room-id', '', -1); // 쿠키 삭제
     location.replace(window.__CONFIG__.BASE_URL + '/roomlist.html');
 });
@@ -791,10 +856,15 @@ function onParticipantLeft(request) {
         // onaddstream이나 다른 이벤트 핸들러가 완료될 시간을 줌
         setTimeout(function() {
             try {
-                if (participants[request.name]) {  // 다시 확인
+                // 재연결로 새 participant가 생성된 경우, 기존 것만 정리하고 map에서 삭제하지 않음
+                if (participants[request.name] === participant) {
                     participant.dispose();
                     delete participants[request.name];
                     console.log('[WebRTC:Participant] 정리 완료:', request.name);
+                } else if (participants[request.name]) {
+                    // 새 participant가 이미 교체됨 → 기존 participant만 dispose
+                    participant.dispose();
+                    console.log('[WebRTC:Participant] 기존 참가자 정리 (재연결 감지):', request.name);
                 }
             } catch (error) {
                 console.error('[WebRTC:Participant] 정리 중 에러:', error);
@@ -806,8 +876,11 @@ function onParticipantLeft(request) {
 }
 
 function sendMessageToServer(message) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.warn('[WebSocket] 연결되지 않은 상태에서 메시지 전송 시도:', message.event);
+        return;
+    }
     var jsonMessage = JSON.stringify(message);
-    //console.log('Sending message: ' + jsonMessage);
     ws.send(jsonMessage);
 }
 
