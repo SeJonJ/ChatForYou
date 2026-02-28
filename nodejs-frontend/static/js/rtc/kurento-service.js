@@ -95,7 +95,7 @@ const wsMessageHandlers = {
     },
     connectionFailed: (msg) => {
         $('#connectionFailModal').modal('show');
-        $('#reconnectButton').click(() => {
+        $('#reconnectButton').off('click').on('click', () => {
             sessionStorage.removeItem('chatforyou_connected');
             leaveRoom('error');
             window.location.reload();
