@@ -28,9 +28,9 @@ import org.kurento.client.*;
 import webChat.model.chat.ChatType;
 import webChat.model.game.GameSettingInfo;
 import webChat.model.record.RecordingInfo;
-import webChat.repository.KurentoCompositeMap;
-import webChat.repository.KurentoPipelineMap;
-import webChat.repository.KurentoRecorderMap;
+import webChat.repository.kurento.KurentoCompositeMap;
+import webChat.repository.kurento.KurentoPipelineMap;
+import webChat.repository.kurento.KurentoRecorderMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 
 import javax.annotation.PreDestroy;

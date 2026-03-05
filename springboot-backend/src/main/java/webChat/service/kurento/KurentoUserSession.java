@@ -26,8 +26,7 @@ import org.kurento.jsonrpc.JsonUtils;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import webChat.model.user.UserDto;
-import webChat.repository.KurentoHubPortMap;
-
+import webChat.repository.kurento.KurentoHubPortMap;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
@@ -85,7 +84,7 @@ public class KurentoUserSession extends UserDto implements Closeable {
 
   /**
    * 녹화 자동 중단을 위한 시스템 유저 세션
-   * 
+   *
    * @param userId
    * @param nickName
    * @param roomId

@@ -30,8 +30,8 @@ import org.springframework.web.socket.WebSocketSession;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.in.ChatRoomInVo;
-import webChat.repository.KurentoCompositeMap;
-import webChat.repository.KurentoPipelineMap;
+import webChat.repository.kurento.KurentoCompositeMap;
+import webChat.repository.kurento.KurentoPipelineMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.redis.RedisService;
 

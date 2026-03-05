@@ -1,15 +1,20 @@
 package webChat.controller;
 
 import com.google.firebase.auth.FirebaseToken;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import webChat.entity.DownloadLog;
 import webChat.model.file.FileDto;
+import webChat.model.login.OauthRedis;
 import webChat.service.file.impl.MinioFileService;
 import webChat.service.file.impl.RecordingFileService;
+import webChat.service.monitoring.DownloadLogService;
 import webChat.service.user.UserService;
+import webChat.utils.ClientUtils;
 import webChat.utils.TokenUtils;
 
 @RestController
@@ -20,6 +25,7 @@ public class FileController {
     private final MinioFileService minioFileService;
     private final RecordingFileService recordingFileService;
     private final UserService userService;
+    private final DownloadLogService downloadLogService;
 
     // 프론트에서 ajax 를 통해 /upload 로 MultipartFile 형태로 파일과 roomId 를 전달받는다.
     // 전달받은 file 를 uploadFile 메서드를 통해 업로드한다.
@@ -35,7 +41,7 @@ public class FileController {
         userService.getValidatedOauthUser(token.getEmail());
 
         FileDto uploadFile = minioFileService.uploadFile(file, roomId);
-        log.info("최종 upload Data {}", uploadFile);
+        log.debug("최종 upload Data {}", uploadFile);
 
         // fileReq 객체 리턴
         return uploadFile;
@@ -45,6 +51,7 @@ public class FileController {
     // fileName 과 파라미터로 넘어온 fileDir 을 getObject 메서드에 매개변수로 넣는다.
     @PostMapping("/download")
     public ResponseEntity<byte[]> download(
+            HttpServletRequest request,
             @RequestParam("roomId") String roomId,
             @RequestParam("bucket") String bucket,
             @RequestParam("fileName") String fileName,
@@ -54,18 +61,48 @@ public class FileController {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+
         // 유저 검증 및 로그인(레디스 저장) 정보 확인
-        userService.getValidatedOauthUser(token.getEmail());
+        OauthRedis oauthRedis = userService.getValidatedOauthUser(token.getEmail());
+
+        String ipAddress = ClientUtils.getRemoteAddr(request);
+        String userAgent = ClientUtils.getUserAgent(request);
+
+        DownloadLog.DownloadType downloadType = null;
+        try{
+            downloadType = DownloadLog.DownloadType.valueOf(bucket.toUpperCase());
+        } catch (IllegalArgumentException e){
+            // TODO #104 에서 수정 예정
+            throw new ExceptionController.UnauthorizedException("Invalid bucket name");
+        }
+
 
         // 변환된 byte, httpHeader 와 HttpStatus 가 포함된 ResponseEntity 객체를 return 한다.
         ResponseEntity<byte[]> fileData = null;
         try {
-            if("file".equals(bucket)){
+            if(DownloadLog.DownloadType.FILE.equals(downloadType)){
                 fileData = minioFileService.getObject(fileName, filePath);
-            } else if("recording".equals(bucket)) {
+            } else if(DownloadLog.DownloadType.RECORDING.equals(downloadType)) {
                 fileData = recordingFileService.getObject(roomId, fileName, filePath);
             }
+
+            downloadLogService.saveDownloadLog(
+                    DownloadLog.of(
+                            oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
+                            downloadType,
+                            filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.SUCCESS
+                    )
+            );
+
         } catch (Exception e) {
+            // TODO #104 에서 수정 예정
+            downloadLogService.saveDownloadLog(
+                    DownloadLog.of(
+                            oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
+                            downloadType,
+                            filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.FAIL
+                    )
+            );
             throw new ExceptionController.InternalServerError(e.getMessage());
         }
 

@@ -1,4 +1,4 @@
-package webChat.repository;
+package webChat.repository.kurento;
 
 import org.kurento.client.HubPort;
 

@@ -16,7 +16,7 @@ import webChat.model.record.RecordingFile;
 import webChat.model.record.RecordingInfo;
 import webChat.model.record.RecordingStatus;
 import webChat.model.room.KurentoRoom;
-import webChat.repository.KurentoCompositeMap;
+import webChat.repository.kurento.KurentoCompositeMap;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 import webChat.service.kurento.KurentoMessageBuilder;
 import webChat.service.kurento.KurentoMessageSender;
