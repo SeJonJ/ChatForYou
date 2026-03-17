@@ -4,7 +4,7 @@ import lombok.*;
 import webChat.model.user.UserDto;
 
 /**
- * catchMind 게임 유저 정보를 저장하기 위한 map
+ * catchMind 게임 유저 정보를 저장하기 위한 dto
  */
 @Getter
 @Setter

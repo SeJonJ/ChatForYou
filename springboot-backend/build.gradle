@@ -6,7 +6,7 @@ plugins {
 	id 'java'
 }
 
-version = '1.0.53'
+version = '1.0.54'
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -18,6 +18,7 @@ configurations {
 
 repositories {
 	mavenCentral()
+	maven { url 'https://jitpack.io' }
 }
 
 dependencies {
@@ -140,6 +141,9 @@ dependencies {
 
 	// firebase 라이브러리
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
+
+	// komoran 형태소 분석기
+	implementation 'com.github.shin285:KOMORAN:3.3.9'
 }
 
 // banner.txt 의 @project.version@ 토큰을 프로젝트 버전으로 치환

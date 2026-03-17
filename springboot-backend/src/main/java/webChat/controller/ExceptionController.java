@@ -176,13 +176,14 @@ public class ExceptionController {
         }
     }
 
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    // TODO exception_handling.md 에 따라 BusinessException + GlobalExceptionHandler 로 전면 리팩토링 예정
+    @ResponseStatus(HttpStatus.OK)
     @ExceptionHandler(SyncGameRound.class)
-    public @ResponseBody Map<String, Object> syncGameRound(String gameRound){
+    public @ResponseBody Map<String, Object> syncGameRound(SyncGameRound ex){
         Map<String, Object> result = new HashMap<>();
-        result.put("code", "40040");
+        result.put("result", "SyncGameRound");
         result.put("message", "Syncing game round info.");
-        result.put("data", gameRound);
+        result.put("currentGameRound", Integer.parseInt(ex.getMessage()));
         return result;
     }
 
