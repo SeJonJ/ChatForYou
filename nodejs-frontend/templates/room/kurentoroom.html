@@ -1,14 +1,15 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <base href="/chatforyou/">
     <meta charset="utf-8">
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.6.1.min.js"
-            integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ=" crossorigin="anonymous"></script>
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+        integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ=" crossorigin="anonymous"></script>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
 
     <script src="https://cdn.WebRTC-Experiment.com/getScreenId.js"></script>
@@ -26,16 +27,18 @@
     <link rel="stylesheet" href="static/css/chatroom/common.css">
 
     <!-- 로딩 관련 -->
-    <script src="https://cdn.jsdelivr.net/npm/gasparesganga-jquery-loading-overlay@2.1.7/dist/loadingoverlay.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/gasparesganga-jquery-loading-overlay@2.1.7/dist/loadingoverlay.min.js"></script>
     <script src="https://cdn.rawgit.com/kimmobrunfeldt/progressbar.js/0.5.6/dist/progressbar.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/spin.js/2.3.2/spin.js"></script>
     <link rel="stylesheet" href="css/common/spin.css" type="text/css" media="screen">
     <!-- 로딩 대체 -->
     <!-- Pace.js 스크립트를 옵션 설정 다음에 포함시킵니다 -->
-<!--    <link href="https://cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/themes/blue/pace-theme-minimal.min.css" rel="stylesheet" />-->
-<!--    <script src="https://cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/pace.min.js"></script>-->
+    <!--    <link href="https://cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/themes/blue/pace-theme-minimal.min.css" rel="stylesheet" />-->
+    <!--    <script src="https://cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/pace.min.js"></script>-->
 
 </head>
+
 <body class="body-kurentoroom">
     <input type="hidden" id="roomId" th:value="${roomId}">
     <input type="hidden" id="uuid" th:value="${uuid}">
@@ -51,20 +54,19 @@
                     <h2 class="justify-content-md-center" id="room-header"></h2>
                     <div class="row justify-content-md-center icon_wrap">
                         <img class="col-md-1" src="images/webrtc/screen-share-on.svg" width="24px" height="24px" alt=""
-                            id="screenShareBtn"
-                            data-flag="false" >
-                        <img src="images/webrtc/video-on.svg" class="col-md-1 localVideoToggle" width="24px" height="24px"
-                            alt="" id="videoBtn" data-flag="true">
-                        <img src="images/webrtc/audio-speaker-on.svg" class="col-md-1 localAudioToggle" width="24px" height="24px" alt="" id="audioBtn" data-flag="true">
+                            id="screenShareBtn" data-flag="false">
+                        <img src="images/webrtc/video-on.svg" class="col-md-1 localVideoToggle" width="24px"
+                            height="24px" alt="" id="videoBtn" data-flag="true">
+                        <img src="images/webrtc/audio-speaker-on.svg" class="col-md-1 localAudioToggle" width="24px"
+                            height="24px" alt="" id="audioBtn" data-flag="true">
                         <img src="images/webrtc/subtitle-off.svg" class="col-md-1" width="24px" height="24px" alt=""
                             id="subtitleBtn" data-flag="false" title="실시간 자막">
-                        <img src="images/webrtc/recording/record-start.svg" class="col-md-1" width="24px" height="24px" alt=""
-                            id="recordingStartBtn" data-flag="false" title="녹화 시작">
-                        <img src="images/webrtc/recording/record-stop-disabled.svg" class="col-md-1" width="24px" height="24px" alt=""
-                            id="recordingStopBtn" data-flag="false" title="녹화 중지">
-                        <img src="images/webrtc/setting.svg" class="col-md-1" width="24px" height="24px" id="userSetting"
-                            alt="userSetting"
-                            data-toggle="modal" data-target="#userSettingsModal">
+                        <img src="images/webrtc/recording/record-start.svg" class="col-md-1" width="24px" height="24px"
+                            alt="" id="recordingStartBtn" data-flag="false" title="녹화 시작">
+                        <img src="images/webrtc/recording/record-stop-disabled.svg" class="col-md-1" width="24px"
+                            height="24px" alt="" id="recordingStopBtn" data-flag="false" title="녹화 중지">
+                        <img src="images/webrtc/setting.svg" class="col-md-1" width="24px" height="24px"
+                            id="userSetting" alt="userSetting" data-toggle="modal" data-target="#userSettingsModal">
                     </div>
                 </div>
                 <div class="col-lg-12 mb-3">
@@ -79,10 +81,10 @@
                                     <g>
                                         <path d="M256,0C114.618,0,0,114.618,0,256s114.618,256,256,256s256-114.618,256-256S397.382,0,256,0z M256,469.333
                                                     c-117.818,0-213.333-95.515-213.333-213.333S138.182,42.667,256,42.667S469.333,138.182,469.333,256S373.818,469.333,256,469.333
-                                                    z"/>
+                                                    z" />
                                         <path d="M347.582,198.248L256,289.83l-91.582-91.582c-8.331-8.331-21.839-8.331-30.17,0c-8.331,8.331-8.331,21.839,0,30.17
                                                     l106.667,106.667c8.331,8.331,21.839,8.331,30.17,0l106.667-106.667c8.331-8.331,8.331-21.839,0-30.17
-                                                    C369.42,189.917,355.913,189.917,347.582,198.248z"/>
+                                                    C369.42,189.917,355.913,189.917,347.582,198.248z" />
                                     </g>
                                 </svg>
                             </div>
@@ -102,10 +104,10 @@
                                     <g>
                                         <path d="M256,0C114.618,0,0,114.618,0,256s114.618,256,256,256s256-114.618,256-256S397.382,0,256,0z M256,469.333
                                                     c-117.818,0-213.333-95.515-213.333-213.333S138.182,42.667,256,42.667S469.333,138.182,469.333,256S373.818,469.333,256,469.333
-                                                    z"/>
+                                                    z" />
                                         <path d="M347.582,198.248L256,289.83l-91.582-91.582c-8.331-8.331-21.839-8.331-30.17,0c-8.331,8.331-8.331,21.839,0,30.17
                                                     l106.667,106.667c8.331,8.331,21.839,8.331,30.17,0l106.667-106.667c8.331-8.331,8.331-21.839,0-30.17
-                                                    C369.42,189.917,355.913,189.917,347.582,198.248z"/>
+                                                    C369.42,189.917,355.913,189.917,347.582,198.248z" />
                                     </g>
                                 </svg>
                             </div>
@@ -118,56 +120,55 @@
                     </div>
                 </div>
                 <div id="participants"></div>
-                <input type="button" id="button-leave"
-                    value="Leave room">
+                <input type="button" id="button-leave" value="Leave room">
             </div>
         </div>
-        </div>
+    </div>
 
-        <div class="floating-game-canvas">
-            <button type="button" data-toggle="modal" data-target="#subjectModal">
-                <img src="images/canvas-paint-svgrepo-com.svg" width="25px" height="25px" alt="">
-            </button>
-        </div>
+    <div class="floating-game-canvas">
+        <button type="button" data-toggle="modal" data-target="#subjectModal">
+            <img src="images/canvas-paint-svgrepo-com.svg" width="25px" height="25px" alt="">
+        </button>
+    </div>
 
-        <!-- chatting start -->
-        <div class="floating-chat">
-            <i class="fa fa-comments" aria-hidden="true"></i>
-            <div class="chat">
-                <div class="header">
-                    <span class="title">
-                        Tell Me Your Story
-                    </span>
-                    <button>
-                        <i class="fa fa-times" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <ul class="messages">
+    <!-- chatting start -->
+    <div class="floating-chat">
+        <i class="fa fa-comments" aria-hidden="true"></i>
+        <div class="chat">
+            <div class="header">
+                <span class="title">
+                    Tell Me Your Story
+                </span>
+                <button>
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <ul class="messages">
 
-                </ul>
-                <div class="footer">
-                    <div class="absolute bottom-2 md:bottom-3 left-2 md:left-4">
-                        <div class="flex">
-                            <button class="btn relative p-0 text-black dark:text-white" id="uploadFile"
-                                    aria-label="Attach files">
-                                <div class="flex w-full gap-2 items-center justify-center">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                        xmlns="http://www.w3.org/2000/svg">
-                                        <path fill-rule="evenodd" clip-rule="evenodd"
-                                            d="M9 7C9 4.23858 11.2386 2 14 2C16.7614 2 19 4.23858 19 7V15C19 18.866 15.866 22 12 22C8.13401 22 5 18.866 5 15V9C5 8.44772 5.44772 8 6 8C6.55228 8 7 8.44772 7 9V15C7 17.7614 9.23858 20 12 20C14.7614 20 17 17.7614 17 15V7C17 5.34315 15.6569 4 14 4C12.3431 4 11 5.34315 11 7V15C11 15.5523 11.4477 16 12 16C12.5523 16 13 15.5523 13 15V9C13 8.44772 13.4477 8 14 8C14.5523 8 15 8.44772 15 9V15C15 16.6569 13.6569 18 12 18C10.3431 18 9 16.6569 9 15V7Z"
-                                            fill="currentColor"></path>
-                                    </svg>
-                                </div>
-                            </button>
-                            <input type="file" id="file" style="display: none;"/>
-                        </div>
+            </ul>
+            <div class="footer">
+                <div class="absolute bottom-2 md:bottom-3 left-2 md:left-4">
+                    <div class="flex">
+                        <button class="btn relative p-0 text-black dark:text-white" id="uploadFile"
+                            aria-label="Attach files">
+                            <div class="flex w-full gap-2 items-center justify-center">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path fill-rule="evenodd" clip-rule="evenodd"
+                                        d="M9 7C9 4.23858 11.2386 2 14 2C16.7614 2 19 4.23858 19 7V15C19 18.866 15.866 22 12 22C8.13401 22 5 18.866 5 15V9C5 8.44772 5.44772 8 6 8C6.55228 8 7 8.44772 7 9V15C7 17.7614 9.23858 20 12 20C14.7614 20 17 17.7614 17 15V7C17 5.34315 15.6569 4 14 4C12.3431 4 11 5.34315 11 7V15C11 15.5523 11.4477 16 12 16C12.5523 16 13 15.5523 13 15V9C13 8.44772 13.4477 8 14 8C14.5523 8 15 8.44772 15 9V15C15 16.6569 13.6569 18 12 18C10.3431 18 9 16.6569 9 15V7Z"
+                                        fill="currentColor"></path>
+                                </svg>
+                            </div>
+                        </button>
+                        <input type="file" id="file" style="display: none;" />
                     </div>
-                    <div class="text-box" id="userTextInput" contenteditable="true" disabled="true"></div>
-                    <button id="sendMessageBtn">send</button>
                 </div>
+                <div class="text-box" id="userTextInput" contenteditable="true" disabled="true"></div>
+                <button id="sendMessageBtn">send</button>
             </div>
         </div>
-        <!-- chatting end -->
+    </div>
+    <!-- chatting end -->
     </div>
     <script src='config/config.js'></script>
     <script src="js/common/common.js"></script>
@@ -188,16 +189,17 @@
     <script src="js/rtc/catchMind.js"></script>
     <script src="js/rtc/recording.js"></script>
 </body>
+
 </html>
 
 <!-- HTML에 음량 조절 슬라이더 추가 -->
 <div class="volume-control" type="hidden">
-    <input type="hidden" id="volumeControl" min="0" max="1" step="0.01" value="0.5"/>
+    <input type="hidden" id="volumeControl" min="0" max="1" step="0.01" value="0.5" />
 </div>
 
 <!-- "유저 설정" 모달 -->
 <div class="modal fade" id="userSettingsModal" tabindex="-1" role="dialog" aria-labelledby="userSettingsModalLabel"
-     aria-hidden="true">
+    aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -248,7 +250,7 @@
             </div>
             <div class="modal-body">
                 <p>새로고침이 감지되었습니다.<br>
-                   재연결 버튼을 클릭하여 다시 연결해주세요.</p>
+                    재연결 버튼을 클릭하여 다시 연결해주세요.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" id="reconnectModalBtn">재연결</button>
@@ -263,13 +265,18 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="roundSubject"></h5>
+                <span id="chosungHint" class="text-warning" style="display:none; font-size:14px;"></span>
                 <div class="status-bar">
                     <div id="progress-container" style="height: 20px;"></div>
                     <span id="maxClearCount"></span>
                 </div>
-                <div>
+                <div style="display:flex; align-items:center; gap:4px;">
                     <button type="button" id="clearCanvasBtn" class="btn btn-warning">Clear Canvas</button>
                     <button type="button" id="answerBtn" class="btn btn-success"></button>
+                    <div id="quickAnswerContainer" style="display:none;">
+                        <input type="text" id="quickAnswerInput" class="form-control form-control-sm"
+                            placeholder="정답을 입력하세요 (Enter)" autocomplete="off" style="width:180px;">
+                    </div>
                 </div>
             </div>
             <div class="modal-body">
@@ -282,12 +289,13 @@
 
 <!-- game subject modal -->
 <div class="modal fade" id="subjectModal" tabindex="-1" role="dialog" aria-labelledby="subjectModalLabel"
-     aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    aria-hidden="true" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <!-- 모달 헤더 -->
             <div class="modal-header">
                 <h5 class="modal-title" id="subjectModalLabel">게임 정보</h5>
+                <span id="roundIndicator" class="badge bg-info ms-2" style="display:none;"></span>
                 <!--                <button type="button" class="close" data-dismiss="modal" aria-label="Close">-->
                 <!--                    <span aria-hidden="true">&times;</span>-->
                 <!--                </button>-->
@@ -297,26 +305,27 @@
             <ul class="nav nav-tabs" id="myTab" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active" id="gameSubject-tab" data-toggle="tab" href="#gameSubject" role="tab"
-                       aria-controls="gameSubject" aria-selected="true">주제 선택</a>
+                        aria-controls="gameSubject" aria-selected="true">주제 선택</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" id="gameTip-tab" data-toggle="tab" href="#gameTip" role="tab"
-                       aria-controls="gameTip" aria-selected="false">게임 방법 & 팁</a>
+                        aria-controls="gameTip" aria-selected="false">게임 방법 & 팁</a>
                 </li>
             </ul>
 
             <!-- 탭 내용 -->
             <div class="tab-content" id="myTabContent">
                 <div class="tab-pane fade show active" id="gameSubject" role="tabpanel"
-                     aria-labelledby="gameSubject-tab">
+                    aria-labelledby="gameSubject-tab">
                     <!-- 주제 선택 버튼들 -->
                     <div class="modal-body" style="text-align: center;">
                         <label for="nickName_ld">게임 닉네임</label>
                         <input type="text" class="form-control" id="nickName_ld"
-                               style="width: 300px; display: block; margin: 0 auto;"
-                               placeholder="게임에 참여하기 위한 닉네임을 입력해주세요.">
+                            style="width: 300px; display: block; margin: 0 auto;"
+                            placeholder="게임에 참여하기 위한 닉네임을 입력해주세요.">
                         <p style="margin-top: 20px;">
-                            <strong>주제 선택:</strong></p>
+                            <strong>주제 선택:</strong>
+                        </p>
                         <div class="d-none" id="titleButtonContainer"></div>
                         <div class="d-none" id="subjectButtonContainer"></div>
                         <p id="selectedSubject" style="margin-top: 20px;"></p>
@@ -324,7 +333,7 @@
                         <div style="margin-top: 20px;">
                             <label for="maxGameCount">최대 게임 횟수:</label>
                             <input type="number" class="form-control" id="maxGameCount"
-                                   style="width: 100px; display: inline-block;" placeholder="최대 횟수" disabled>
+                                style="width: 100px; display: inline-block;" placeholder="최대 횟수" disabled>
                         </div>
                     </div>
                 </div>
@@ -332,11 +341,12 @@
                     <!-- 게임 방법 & 팁 -->
                     <div class="modal-body">
                         <h5>게임 방법</h5>
-                        <p>1. 그림을 그리는 사람은 30초 동안 정해진 주제에 관해 그림을 그려야합니다.</p>
-                        <p>2. 정답을 맞추기 위해서는 Tell Your Answer 버튼을 클릭해 음성을 정답을 외쳐야합니다. </p>
+                        <p>1. 그림을 그리는 사람은 60초 동안 정해진 주제에 관해 그림을 그려야합니다.</p>
+                        <p>2. 정답을 맞추기 위해서는 음성으로 정답을 말하거나, 텍스트로 입력할 수 있습니다.</p>
                         <h5>팁</h5>
                         <p>1. 그림을 그릴 수 있는 시간은 한정되어있습니다. 소중하게 사용하세요!</p>
                         <p>2. 음성인식은 오직 정답만 말씀하시면 됩니다. 앞에 '정답!'은 안 붙여도 되요.</p>
+                        <p>3. 음성인식이 3회 이상 실패하면 텍스트를 입력할 수 있는 기회가 주어집니다.</p>
                     </div>
                 </div>
             </div>
@@ -370,7 +380,7 @@
             <div class="modal-body">
                 <p>게임에 참여하시겠습니까?</p>
                 <input type="text" class="form-control" id="nickName_pt" width="300px;"
-                       placeholder="게임에 참여하기 위한 닉네임을 입력해주세요.">
+                    placeholder="게임에 참여하기 위한 닉네임을 입력해주세요.">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="rejectGameRequest" data-dismiss="modal">아니오</button>
@@ -399,26 +409,33 @@
                 <!-- Language Tabs -->
                 <ul class="nav nav-tabs" id="languageTabs" role="tablist">
                     <li class="nav-item">
-                        <a class="nav-link active" id="korean-tab" data-toggle="tab" href="#korean-feedback" role="tab" aria-controls="korean" aria-selected="true">한국어</a>
+                        <a class="nav-link active" id="korean-tab" data-toggle="tab" href="#korean-feedback" role="tab"
+                            aria-controls="korean" aria-selected="true">한국어</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="english-tab" data-toggle="tab" href="#english-feedback" role="tab" aria-controls="english" aria-selected="false">English</a>
+                        <a class="nav-link" id="english-tab" data-toggle="tab" href="#english-feedback" role="tab"
+                            aria-controls="english" aria-selected="false">English</a>
                     </li>
                 </ul>
                 <div class="tab-content">
-                    <div class="tab-pane fade show active" id="korean-feedback" role="tabpanel" aria-labelledby="korean-tab">
+                    <div class="tab-pane fade show active" id="korean-feedback" role="tabpanel"
+                        aria-labelledby="korean-tab">
                         <div class="feedback-request">
                             <h6>즐겁게 게임을 즐기셨나요?</h6>
                             <p>만약 불편한 점이나 개선이 필요한 점이 있으시다면 아래 연락처로 연락 주시면 더욱 멋지게 개선해서 서비스할 수 있도록 노력하겠습니다.</p>
-                            <p>또한 앞으로 더욱 발전하는 ChatForYou 가 되기 위해 기획자, 프론트 엔드 개발자, 디자이너를 모시고 있습니다. 함께 멋진 서비스를 만들어갈 능력자 분들의 많은 연락 부탁드립니다!</p>
+                            <p>또한 앞으로 더욱 발전하는 ChatForYou 가 되기 위해 기획자, 프론트 엔드 개발자, 디자이너를 모시고 있습니다. 함께 멋진 서비스를 만들어갈 능력자
+                                분들의 많은 연락 부탁드립니다!</p>
                             <p>Email: wkdtpwhs@gmail.com</p>
                         </div>
                     </div>
                     <div class="tab-pane fade" id="english-feedback" role="tabpanel" aria-labelledby="english-tab">
                         <div class="feedback-request">
                             <h6>Did you enjoy the game?</h6>
-                            <p>If there are any inconveniences or improvements needed, please contact us below, and we will make every effort to enhance our service.</p>
-                            <p>In addition, as ChatForYou aims to evolve further, we are looking for planners, front-end developers, and designers. We invite all talented individuals interested in building a great service to contact us!</p>
+                            <p>If there are any inconveniences or improvements needed, please contact us below, and we
+                                will make every effort to enhance our service.</p>
+                            <p>In addition, as ChatForYou aims to evolve further, we are looking for planners, front-end
+                                developers, and designers. We invite all talented individuals interested in building a
+                                great service to contact us!</p>
                             <p>Email: wkdtpwhs@gmail.com</p>
                         </div>
                     </div>

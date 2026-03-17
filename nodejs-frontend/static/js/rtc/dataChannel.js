@@ -174,14 +174,13 @@ const dataChannel = {
                 catchMind.addGameReady('participant', event.gameUser, event.nickName);
                 break;
             case 'newGame':
-                catchMind.subject = event.newSubject;
                 catchMind.title = event.newTitle;
                 break;
             case 'mouseEvent':
                 catchMind.canvasDrawingEvent(event);
                 break;
             case 'newWiner':
-                catchMind.speakWiner(event.winer);
+                catchMind.speakWiner(event.winer, event.timeout);
                 catchMind.resetGameRound(event.winer);
                 break;
             case 'clearCanvas':
