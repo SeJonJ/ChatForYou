@@ -14,7 +14,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Filter changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -35,17 +35,16 @@ jobs:
       packages: write
       contents: read
     env:
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
       K8S_NAMESPACE: chatforyou
       DEPLOYMENT_NAME: chatforyou-v03
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Configure Kubeconfig
-        run: |
-          mkdir -p ${HOME}/.kube
-          echo "${KUBE_CONFIG}" | base64 --decode > ${HOME}/.kube/config
-          export KUBECONFIG=${HOME}/.kube/config
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
       - name: Generate TIMESTAMP in KST
         id: timestamp
         run: |
@@ -59,8 +58,10 @@ jobs:
           docker build --file Dockerfile -t $IMAGE_URI .
           cd ..
       - name: Push Docker Image to GitHub Packages
+        env:
+          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "$CR_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker push $IMAGE_URI
       - name: Deploy to Kubernetes
         run: |
@@ -79,16 +80,15 @@ jobs:
       packages: write
       contents: read
     env:
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
       K8S_NAMESPACE: chatforyou
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Configure Kubeconfig
-        run: |
-          mkdir -p ${HOME}/.kube
-          echo "${KUBE_CONFIG}" | base64 --decode > ${HOME}/.kube/config
-          export KUBECONFIG=${HOME}/.kube/config
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
       - name: Generate TIMESTAMP in KST
         id: timestamp
         run: |
@@ -102,8 +102,10 @@ jobs:
           docker build -t $FRONT_IMAGE_URI .
           cd ..
       - name: Push Frontend Docker Image
+        env:
+          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "$CR_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker push $FRONT_IMAGE_URI
       - name: Deploy Frontend to Kubernetes
         run: |
