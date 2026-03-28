@@ -71,20 +71,6 @@
   margin: 5px; /* 상하좌우 모두 5px의 마진을 추가 */
 }
 
-/* 타이머와 maxClearCount 스타일 */
-#timer, #maxClearCount {
-  font-weight: bold; /* 글자를 굵게 */
-  color: #007bff; /* 색상 설정 */
-  font-size: 15px; /* 글자 크기 */
-  margin-right: 10px; /* 요소 사이의 간격 */
-}
-
-/* 타이머와 maxClearCount를 담을 컨테이너 스타일 */
-.status-bar {
-  text-align: center; /* 텍스트 중앙 정렬 */
-  margin-bottom: 10px; /* 하단 여백 */
-  color: #28a745; /* 컨테이너 내 텍스트 색상 */
-}
 
 /*
 캔버스 모달 css

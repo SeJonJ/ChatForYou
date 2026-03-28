@@ -165,7 +165,7 @@ public class CatchMindServiceImpl implements CatchMindService {
         try {
             switch (gameStatus) {
                 case TIMEOUT: // 타이머 만료 시 출제자 자동 승리
-                    if(gameSettingInfo.getCurrentGameLeader().equals(catchMindUser.getUserId())) {
+                    if(!gameSettingInfo.getCurrentGameLeader().equals(catchMindUser.getUserId())) {
                         throw new BadRequestException("게임 진행자가 아닙니다");
                     }
                     updateUserScore(catchMindUser, this.WINNER_SCORE);

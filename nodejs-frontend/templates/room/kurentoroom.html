@@ -263,19 +263,23 @@
 <div id="catchMindCanvas" class="modal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="roundSubject"></h5>
-                <span id="chosungHint" class="text-warning" style="display:none; font-size:14px;"></span>
-                <div class="status-bar">
-                    <div id="progress-container" style="height: 20px;"></div>
+            <div class="modal-header catchmind-header">
+                <!-- Row 1: 주제, 힌트, 초기화 횟수 -->
+                <div class="catchmind-header-row1">
+                    <h5 class="modal-title" id="roundSubject"></h5>
+                    <span id="chosungHint" class="text-warning"></span>
                     <span id="maxClearCount"></span>
                 </div>
-                <div style="display:flex; align-items:center; gap:4px;">
-                    <button type="button" id="clearCanvasBtn" class="btn btn-warning">Clear Canvas</button>
-                    <button type="button" id="answerBtn" class="btn btn-success"></button>
-                    <div id="quickAnswerContainer" style="display:none;">
-                        <input type="text" id="quickAnswerInput" class="form-control form-control-sm"
-                            placeholder="정답을 입력하세요 (Enter)" autocomplete="off" style="width:180px;">
+                <!-- Row 2: 타이머, Clear, 정답 입력 -->
+                <div class="catchmind-header-row2">
+                    <div id="progress-container"></div>
+                    <div class="catchmind-actions">
+                        <button type="button" id="clearCanvasBtn" class="btn btn-warning btn-sm">Clear</button>
+                        <button type="button" id="answerBtn" class="btn btn-success btn-sm"></button>
+                        <div id="quickAnswerContainer">
+                            <input type="text" id="quickAnswerInput" class="form-control form-control-sm"
+                                placeholder="정답을 입력하세요 (Enter)" autocomplete="off">
+                        </div>
                     </div>
                 </div>
             </div>

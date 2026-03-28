@@ -38,6 +38,7 @@ const catchMind = {
     recognition: null, // 음성 인식 객체
     synth: null,
     wrongAnswerCount: 0, // 오답 횟수 (3회 이상 시 텍스트 입력 표시)
+    isCheckingAnswer: false, // 정답 확인 중복 호출 방지
     alreadyPlayedGame: false, // 게임 이미 진행되었는지 여부
     init: function () {
         this.canvas = document.getElementById('mycanvas');
@@ -214,7 +215,7 @@ const catchMind = {
                 self.showToast("더 이상 캔버스 초기화가 불가능해요!!");
             }
 
-            self.clearCanvas();
+            self.clearCanvas(true);
 
             const clearCanvasEvent = {
                 "gameEvent": "clearCanvas"
@@ -527,8 +528,9 @@ const catchMind = {
             }
         });
 
-        // PC 텍스트 입력으로 정답 제출 (Enter 키)
-        $('#quickAnswerInput').on('keydown', function (e) {
+        // 텍스트 입력으로 정답 제출 (Enter 키) — 한글 IME 중복 방지
+        $('#quickAnswerInput').off('keydown').on('keydown', function (e) {
+            if (e.isComposing) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
                 let answer = self.replaceStr($(this).val());
@@ -540,15 +542,13 @@ const catchMind = {
         });
 
         if (isMobile()) {
-            $('#submitAnswer').on('click', function() {
+            $('#submitAnswer').off('click').on('click', function() {
                 let $userAnswer = $('#userAnswer');
-                // 사용자가 입력한 정답 가져오기
                 let answer = self.replaceStr($userAnswer.val());
+                if (!answer) return;
                 console.log("사용자가 입력한 정답:", answer);
-                // 정답 처리 로직
                 self.checkAnswer([answer]);
 
-                // 입력 필드 초기화 및 모달 닫기
                 $userAnswer.val('');
                 $('#answerInputModal').modal('hide');
             });
@@ -558,29 +558,24 @@ const catchMind = {
     answerEvent : function(){
         let self = this;
         if (!self.recognition) {
-            // SpeechRecognition 미지원 시 텍스트 입력으로 전환
             $('#quickAnswerContainer').show();
             $('#answerBtn').hide();
             self.showToast('음성인식을 지원하지 않는 브라우저입니다. 텍스트로 입력해주세요.');
             return;
         }
         $('#answerBtn').attr('disabled', true);
-        let text = "이제 정답을 외쳐주세요!";
-        self.showToast(text);
+        self.showToast("이제 정답을 외쳐주세요!");
 
-        // 음성 인식 언어 설정 (더 구체적인 설정)
         self.recognition.lang = 'ko-KR';
-        
-        // 실시간 결과 활성화 (인식률 향상)
         self.recognition.interimResults = true;
-        
-        // 연속 인식 활성화
-        self.recognition.continuous = true;
-        
-        // 적절한 대안 수 설정 (너무 크면 오히려 정확도 저하)
+        self.recognition.continuous = false;
         self.recognition.maxAlternatives = 5;
 
-        // console.log("음성 인식 시작");
+        // 음성인식 상태 플래그
+        let collectedAlternatives = [];
+        let hasError = false;
+        let isTimedOut = false;
+
         try {
             self.recognition.start();
         } catch (e) {
@@ -589,27 +584,27 @@ const catchMind = {
             return;
         }
 
-        // 5초 동안 음성이 감지되지 않으면 인식 종료
+        // 5초 타임아웃 — 음성 미감지 시 인식 종료
         let recognitionTimeout = setTimeout(function() {
-            self.recognition.stop();
-            $('#answerBtn').attr('disabled', false);
-            console.error("5초 동안 음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
+            isTimedOut = true;
+            try { self.recognition.abort(); } catch (e) { /* ignore */ }
             self.showToast("음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
-            // 음성 인식 실패 시 오답 카운트 증가 → 3회 이상 시 텍스트 입력 표시
-            self.wrongAnswerCount++;
-            if (self.wrongAnswerCount >= 3) {
-                $('#quickAnswerContainer').show();
-                $('#answerBtn').hide();
-                self.showToast('텍스트로 정답을 입력할 수 있습니다.');
-            }
         }, 5000);
 
-        // 음성 인식 결과 이벤트
+        // 8초 안전장치 — onend 미발생 시 강제 복구
+        let safetyTimeout = setTimeout(function() {
+            console.warn('[CatchMind] 음성인식 안전장치 타임아웃 — 강제 복구');
+            try { self.recognition.abort(); } catch (e) { /* ignore */ }
+            $('#answerBtn').attr('disabled', false);
+            self.wrongAnswerCount++;
+            self.showQuickAnswerIfNeeded();
+            self.showToast("음성 인식이 응답하지 않습니다. 텍스트로 입력해주세요.");
+        }, 8000);
+
+        // onresult: 결과 수집만, checkAnswer 호출 안함
         self.recognition.onresult = function (event) {
-            // 타이머 취소
             clearTimeout(recognitionTimeout);
 
-            // 최종 결과만 처리 (실시간 결과는 무시)
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
@@ -617,52 +612,37 @@ const catchMind = {
                 }
             }
 
-            // 최종 결과가 있을 때만 처리
             if (finalTranscript.trim()) {
-                // 텍스트 정제 (공백, 특수문자 제거)
                 finalTranscript = finalTranscript
                     .replaceAll(' ', '')
                     .replaceAll(/[^\w가-힣]/g, '')
                     .toLowerCase();
-                
+
                 console.log('인식된 텍스트:', finalTranscript);
 
-                // 여러 대안 결과 확인
-                let alternatives = [];
+                // 대안 결과 수집
                 for (let i = 0; i < Math.min(event.results[event.results.length - 1].length, 3); i++) {
                     let altText = event.results[event.results.length - 1][i].transcript
                         .replaceAll(' ', '')
                         .replaceAll(/[^\w가-힣]/g, '')
                         .toLowerCase();
-                    if (altText && !alternatives.includes(altText)) {
-                        alternatives.push(altText);
+                    if (altText && !collectedAlternatives.includes(altText)) {
+                        collectedAlternatives.push(altText);
                     }
                 }
 
-                console.log('대안 결과들:', alternatives);
-
-                // alternatives 배열을 서버에 한 번에 전송
-                if (alternatives.length > 0) {
-                    self.checkAnswer(alternatives);
-                } else if (finalTranscript) {
-                    self.checkAnswer([finalTranscript]);
-                }
-
-                // 음성 인식 종료
-                self.recognition.stop();
-                // answerBtn disabled는 checkAnswer 콜백에서 처리
+                console.log('대안 결과들:', collectedAlternatives);
+                try { self.recognition.abort(); } catch (e) { /* ignore */ }
             }
         };
 
-        // 음성 인식 에러 이벤트 (개선된 에러 처리)
+        // onerror: 에러 메시지만 표시, 카운트/버튼 관리는 onend에서
         self.recognition.onerror = function(event) {
-            // 타이머 취소
             clearTimeout(recognitionTimeout);
-            $('#answerBtn').attr('disabled', false);
-            
+            hasError = true;
+
             console.log('음성 인식 에러:', event.error);
-            
-            // 에러 타입별 메시지
+
             let errorMessage = '';
             switch(event.error) {
                 case 'no-speech':
@@ -680,14 +660,22 @@ const catchMind = {
                 default:
                     errorMessage = '음성 인식 중 오류가 발생했습니다.';
             }
-            
             self.showToast(errorMessage);
-            // 음성 인식 에러 시 오답 카운트 증가 → 3회 이상 시 텍스트 입력 표시
-            self.wrongAnswerCount++;
-            if (self.wrongAnswerCount >= 3) {
-                $('#quickAnswerContainer').show();
-                $('#answerBtn').hide();
-                self.showToast('텍스트로 정답을 입력할 수 있습니다.');
+        };
+
+        // onend: recognition 완전 종료 후 1회만 실행 (버튼/카운트 단일 관리)
+        self.recognition.onend = function () {
+            clearTimeout(recognitionTimeout);
+            clearTimeout(safetyTimeout);
+
+            if (!hasError && !isTimedOut && collectedAlternatives.length > 0) {
+                // 정상 인식 완료 → 서버 전송 (버튼은 checkAnswer 콜백에서 관리)
+                self.checkAnswer(collectedAlternatives);
+            } else {
+                // 음성 감지 실패 (에러/타임아웃/무음)
+                $('#answerBtn').attr('disabled', false);
+                self.wrongAnswerCount++;
+                self.showQuickAnswerIfNeeded();
             }
         };
     },
@@ -785,6 +773,8 @@ const catchMind = {
     checkAnswer: function (answers) {
         let self = this;
         if (!answers || answers.length === 0) return;
+        if (self.isCheckingAnswer) return;
+        self.isCheckingAnswer = true;
 
         let requestData = {
             "roomId": roomId,
@@ -793,6 +783,7 @@ const catchMind = {
         };
 
         let successCallback = function (resp) {
+            self.isCheckingAnswer = false;
             let data = resp.data;
 
             if (data.isCorrect) {
@@ -814,7 +805,7 @@ const catchMind = {
         };
 
         let errorCallback = function (error) {
-            // WINNER_CHECK_PROCESSED → 무시
+            self.isCheckingAnswer = false;
             console.log('check_answer error:', error.responseText);
             $('#answerBtn').attr('disabled', false);
         };
@@ -878,10 +869,13 @@ const catchMind = {
     setGameUser: function () {
         this.gameUserCount = Object.keys(participants).length;
     },
-    clearCanvas: function () {
-        this.maxClearCount -= 1;
+    clearCanvas: function (isManualClear) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+        // 라운드 리셋 시 캔버스만 초기화 (토스트/카운트 변경 없음)
+        if (!isManualClear) return;
+
+        this.maxClearCount -= 1;
         if (this.isGameParticipant) {
             if (this.maxClearCount === 0) {
                 $('#maxClearCount').text("진행자가 초기화 기회를 모두 소진했습니다");
@@ -890,7 +884,7 @@ const catchMind = {
                 $('#maxClearCount').text("진행자의 캔버스 초기화 기회 : " + this.maxClearCount);
                 this.showToast("진행자가 캔버스를 초기화 했습니다!");
             }
-        } else if (this.isGameLeader) { // 게임 리더면 maxclearCanvas -=1
+        } else if (this.isGameLeader) {
             if (this.maxClearCount === 0) {
                 $('#clearCanvasBtn').prop('disabled', true);
                 $('#maxClearCount').text("이제 캔버스 초기화는 할 수 없어요!!");
@@ -898,8 +892,6 @@ const catchMind = {
                 $('#maxClearCount').text("캔버스 초기화 기회 : " + this.maxClearCount);
             }
         }
-        // // 캔버스 초기화
-        // this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     },
     showToast: function (text) {
         Toastify({
@@ -930,7 +922,10 @@ const catchMind = {
             text = '정답이 아니에요';
         }
         this.showToast(text);
-        // 3회 이상 오답 시 텍스트 입력 표시
+        this.showQuickAnswerIfNeeded();
+    },
+    // 3회 이상 오답 시 텍스트 입력 표시
+    showQuickAnswerIfNeeded: function () {
         if (this.wrongAnswerCount >= 3 && !isMobile()) {
             $('#quickAnswerContainer').show();
             $('#answerBtn').hide();
@@ -944,6 +939,7 @@ const catchMind = {
         $('#quickAnswerInput').val('');
         $('#chosungHint').hide().text('');
         self.wrongAnswerCount = 0;
+        self.isCheckingAnswer = false;
         // 캔버스 초기화
         self.clearCanvas();
         $('#catchMindCanvas').modal('hide');

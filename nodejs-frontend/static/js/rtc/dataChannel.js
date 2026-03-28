@@ -184,7 +184,7 @@ const dataChannel = {
                 catchMind.resetGameRound(event.winer);
                 break;
             case 'clearCanvas':
-                catchMind.clearCanvas();
+                catchMind.clearCanvas(true);
                 break;
             case 'newRoundSetting':
                 catchMind.newRoundSubject(event);
