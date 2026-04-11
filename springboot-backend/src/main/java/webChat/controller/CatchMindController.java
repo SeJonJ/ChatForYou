@@ -22,7 +22,7 @@ public class CatchMindController {
 
     private static final Logger log = LoggerFactory.getLogger(CatchMindController.class);
 
-    @GetMapping(value = "/titles", produces = "application/json; charset=UTF8")
+    @GetMapping(value = "/titles", produces = "application/json; charset=UTF-8")
     public GameTitles getGameTitles(@RequestParam("roomId") String roomId) throws Exception {
         log.info(">>>>>>> Successfully Get Game Titles!! <<<<<<<");
         if (catchMindService.chkAlreadyPlayedGame(roomId)) {
@@ -31,14 +31,14 @@ public class CatchMindController {
         return catchMindService.getTitles();
     }
 
-    @PostMapping(value = "/subjects", produces = "application/json; charset=UTF8")
+    @PostMapping(value = "/subjects", produces = "application/json; charset=UTF-8")
     public GameSubjects getGameSubjects(@RequestParam("roomId") String roomId, @RequestBody GameSubjects gameSubjects) throws Exception {
         log.info(">>>>>>> Successfully Get Game Subjects!! <<<<<<<");
         gameSubjects = catchMindService.getSubjects(roomId, gameSubjects);
         return gameSubjects;
     }
 
-    @PostMapping(value = "/game_setting", produces = "application/json; charset=UTF8")
+    @PostMapping(value = "/game_setting", produces = "application/json; charset=UTF-8")
     public Map<String, String> initGameEnv(
             @RequestBody GameSettingInfo gameSettingInfo) {
         catchMindService.setGameSettingInfo(gameSettingInfo);
@@ -48,7 +48,7 @@ public class CatchMindController {
         return result;
     }
 
-    @PostMapping(value = "/check_answer", produces = "application/json; charset=UTF8")
+    @PostMapping(value = "/check_answer", produces = "application/json; charset=UTF-8")
     public ResponseEntity<ChatForYouResponse> checkAnswer(
             @RequestBody AnswerReq answerReq) throws Exception {
         AnswerResp resp = catchMindService.checkAnswer(answerReq);
@@ -59,7 +59,7 @@ public class CatchMindController {
                 .build());
     }
 
-    @PostMapping(value = "/update_game_status", produces = "application/json; charset=UTF8")
+    @PostMapping(value = "/update_game_status", produces = "application/json; charset=UTF-8")
     public Map<String, String> updateGameStatus(
             @RequestBody GameStatusRequest gameStatusRequest) throws BadRequestException {
         Map<String, String> result = new ConcurrentHashMap<>();
@@ -69,7 +69,7 @@ public class CatchMindController {
         return result;
     }
 
-    @GetMapping(value = "/game_result", produces = "application/json; charset=UTF8")
+    @GetMapping(value = "/game_result", produces = "application/json; charset=UTF-8")
     public Map<String, Object> gameResult(@RequestParam("roomId") String roomId) throws BadRequestException, ExceptionController.SyncGameRound {
         Map<String, Object> result = new ConcurrentHashMap<>();
 

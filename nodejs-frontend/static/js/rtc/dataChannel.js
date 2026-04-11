@@ -179,9 +179,9 @@ const dataChannel = {
             case 'mouseEvent':
                 catchMind.canvasDrawingEvent(event);
                 break;
-            case 'newWiner':
-                catchMind.speakWiner(event.winer, event.timeout);
-                catchMind.resetGameRound(event.winer);
+            case 'newWinner':
+                catchMind.speakWinner(event.winner, event.timeout);
+                catchMind.resetGameRound(event.winner);
                 break;
             case 'clearCanvas':
                 catchMind.clearCanvas(true);
@@ -189,10 +189,8 @@ const dataChannel = {
             case 'newRoundSetting':
                 catchMind.newRoundSubject(event);
                 break;
-            default:
-                if (event === 'gameStart') {
-                    catchMind.participantGameStartEvent();
-                }
+            case 'gameStart':
+                catchMind.participantGameStartEvent();
                 break;
         }
     }

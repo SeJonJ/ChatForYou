@@ -13,7 +13,7 @@ import webChat.model.user.UserDto;
 public class CatchMindUserDto extends UserDto {
     private int score;
     private int winCount;
-    private boolean isWiner;
+    private boolean isWinner;
 
     CatchMindUserDto(String userId, String nickName) {
         super(userId, nickName);

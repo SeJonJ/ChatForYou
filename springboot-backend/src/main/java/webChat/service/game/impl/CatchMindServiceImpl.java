@@ -218,7 +218,7 @@ public class CatchMindServiceImpl implements CatchMindService {
             return Integer.compare(score2, score1); // 내림차순 정렬
         });
 
-        gameSettingInfo.getGameUserList().get(0).setWiner(true);
+        gameSettingInfo.getGameUserList().get(0).setWinner(true);
         gameSettingInfo.setAlreadyPlayedGame(true);
         redisService.updateChatRoom(kurentoRoom);
         winnerProcessMap.remove(roomId);

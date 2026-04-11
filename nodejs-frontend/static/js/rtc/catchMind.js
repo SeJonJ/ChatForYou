@@ -43,6 +43,10 @@ const catchMind = {
     init: function () {
         this.canvas = document.getElementById('mycanvas');
         this.ctx = this.canvas.getContext('2d');
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#000';
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
         if (!this.isInit) {
             if (isMobile()) {
                 this.initMobileCanvasEvents();
@@ -166,14 +170,16 @@ const catchMind = {
         $('#answerBtn').text('Type Your Answer!');
     },
     setMousePosition: function (e) {
-        // 정리 필요!!
         let rect = this.canvas.getBoundingClientRect();
+        // CSS 좌표 → Canvas 내부 좌표 변환 (화면 크기 무관하게 800x600 기준)
+        let scaleX = this.canvas.width / rect.width;
+        let scaleY = this.canvas.height / rect.height;
         if (e.clientX) {
-            this.lastX = e.clientX - rect.left;
-            this.lastY = e.clientY - rect.top;
+            this.lastX = (e.clientX - rect.left) * scaleX;
+            this.lastY = (e.clientY - rect.top) * scaleY;
         } else if (e.touches) {
-            this.lastX = e.touches[0].clientX - rect.left;
-            this.lastY = e.touches[0].clientY - rect.top;
+            this.lastX = (e.touches[0].clientX - rect.left) * scaleX;
+            this.lastY = (e.touches[0].clientY - rect.top) * scaleY;
         }
     },
     canvasDrawingEvent: function (event) {
@@ -213,6 +219,8 @@ const catchMind = {
 
             if (self.maxClearCount <= 0) {
                 self.showToast("더 이상 캔버스 초기화가 불가능해요!!");
+                spinnerOpt.stop();
+                return;
             }
 
             self.clearCanvas(true);
@@ -508,7 +516,7 @@ const catchMind = {
                     dataChannel.sendMessage(newRoundSetting, 'gameEvent');
                 }
 
-                dataChannel.sendMessage('gameStart', 'gameEvent');
+                dataChannel.sendMessage({gameEvent: 'gameStart'}, 'gameEvent');
 
                 $('#catchMindCanvas').modal('show');
                 $('#clearCanvasBtn').show();
@@ -557,6 +565,9 @@ const catchMind = {
     },
     answerEvent : function(){
         let self = this;
+        // 자막 음성인식과 충돌 방지 — 게임 음성인식 전에 자막 정지
+        let subtitleWasActive = (typeof stopSpeechRecognition === 'function') && stopSpeechRecognition();
+
         if (!self.recognition) {
             $('#quickAnswerContainer').show();
             $('#answerBtn').hide();
@@ -667,6 +678,11 @@ const catchMind = {
         self.recognition.onend = function () {
             clearTimeout(recognitionTimeout);
             clearTimeout(safetyTimeout);
+
+            // 자막 음성인식 복원
+            if (subtitleWasActive && typeof startSpeechRecognition === 'function') {
+                startSpeechRecognition();
+            }
 
             if (!hasError && !isTimedOut && collectedAlternatives.length > 0) {
                 // 정상 인식 완료 → 서버 전송 (버튼은 checkAnswer 콜백에서 관리)
@@ -789,13 +805,13 @@ const catchMind = {
             if (data.isCorrect) {
                 // 정답 처리
                 let nickName = data.catchMindUser.nickName;
-                let gameWiner = {
-                    "gameEvent": "newWiner",
-                    "winer": nickName
+                let gameWinner = {
+                    "gameEvent": "newWinner",
+                    "winner": nickName
                 };
-                dataChannel.sendMessage(gameWiner, 'gameEvent');
+                dataChannel.sendMessage(gameWinner, 'gameEvent');
                 $('#answerBtn').attr('disabled', true);
-                self.speakWiner(nickName);
+                self.speakWinner(nickName);
                 self.resetGameRound(nickName);
             } else {
                 // 오답 처리 — 초성 힌트 표시
@@ -813,12 +829,12 @@ const catchMind = {
         ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/check_answer',
                    'POST', '', requestData, successCallback, errorCallback);
     },
-    speakWiner: function (winerName, isTimeout) {
+    speakWinner: function (winnerName, isTimeout) {
 
-        if (winerName !== '') {
+        if (winnerName !== '') {
             var speakText = isTimeout
-                ? "누구도 정답을 맞추지 못해 " + winerName + "님이 승리했습니다"
-                : winerName + "님이 정답을 맞췄습니다";
+                ? "누구도 정답을 맞추지 못해 " + winnerName + "님이 승리했습니다"
+                : winnerName + "님이 정답을 맞췄습니다";
 
             this.showToast(speakText);
 
@@ -835,9 +851,9 @@ const catchMind = {
                 console.error('음성 합성 중 오류가 발생했습니다.');
             };
 
-            // 사용할 수 있는 음성 중 하나를 선택 (예: 첫 번째 음성)
+            // 한국어 음성 우선, 없으면 브라우저 기본 음성 사용
             var voices = this.synth.getVoices();
-            utterThis.voice = voices[0];
+            utterThis.voice = voices.find(function(v) { return v.lang.startsWith('ko'); }) || voices[0] || null;
 
             // 음성 속도와 피치 설정 (선택 사항)
             utterThis.pitch = 1; // 기본값은 1
@@ -1066,7 +1082,7 @@ const catchMind = {
 
         self.timerId = setInterval(function () {
             self.timeLeft--;
-            let timeFraction = self.timeLeft / self.totalTime;
+            let timeFraction = Math.max(0, self.timeLeft / self.totalTime);
 
             // 매 초마다 프로그레스 바 업데이트
             self.timerBar.animate(timeFraction, {duration: 1000});
@@ -1083,9 +1099,9 @@ const catchMind = {
                         userId: self.nickName
                     };
                     let successCallback = function(data) {
-                        let gameWiner = { "gameEvent": "newWiner", "winer": data.nickName, "timeout": true };
-                        dataChannel.sendMessage(gameWiner, 'gameEvent');
-                        self.speakWiner(data.nickName, true);
+                        let gameWinner = { "gameEvent": "newWinner", "winner": data.nickName, "timeout": true };
+                        dataChannel.sendMessage(gameWinner, 'gameEvent');
+                        self.speakWinner(data.nickName, true);
                         self.resetGameRound(data.nickName);
                     };
                     ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/update_game_status', 'POST', '', timeoutData, successCallback);
