@@ -154,6 +154,9 @@ springboot-backend/.nb-gradle/
 springboot-backend/src/main/resources/data/
 springboot-backend/src/main/resources/geodata/
 
+# 개발 설계 분석 파일
+**/plan_md/
+
 # ========================================
 # figma-ai 설정
 # ========================================
