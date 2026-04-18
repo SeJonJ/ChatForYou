@@ -42,7 +42,7 @@
   "license": "by-nc-sa 4.0",
   "devDependencies": {
     "electron": "^39.8.5",
-    "electron-builder": "^24.0.0",
+    "electron-builder": "^26.8.1",
     "sass": "^1.89.2",
     "rimraf": "^5.0.0",
     "commander": "^11.0.0",
