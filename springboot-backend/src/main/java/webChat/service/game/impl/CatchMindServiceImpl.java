@@ -152,44 +152,24 @@ public class CatchMindServiceImpl implements CatchMindService {
             throw new BadRequestException("User not found with ID: " + userId);
         }
 
-        // lock 이 필요한 게임 상태
-        boolean needLockStatus = gameStatus == GameStatus.TIMEOUT;
-        if (needLockStatus) {
-            AtomicBoolean isProcess = winnerProcessMap.get(roomId);
-            if (!isProcess.compareAndSet(false, true)) {
-                throw new BadRequestException("WINNER_CHECK_PROCESSED");
-            }
-        }
-
         CatchMindUserDto catchMindUser = user.get();
-        try {
-            switch (gameStatus) {
-                case TIMEOUT: // 타이머 만료 시 출제자 자동 승리
-                    if(!gameSettingInfo.getCurrentGameLeader().equals(catchMindUser.getUserId())) {
-                        throw new BadRequestException("게임 진행자가 아닙니다");
-                    }
-                    updateUserScore(catchMindUser, this.WINNER_SCORE);
-                    catchMindUser.setWinCount(catchMindUser.getWinCount() + 1);
-                    // 마지막 라운드가 아닐 때만 라운드 증가
-                    if (gameSettingInfo.getCurrentGameRound() < gameSettingInfo.getTotalGameRound()) {
-                        gameSettingInfo.newGameRound();
-                    }
-                    break;
-                case MORE_TIME:
-                    updateUserScore(catchMindUser, this.MORE_TIME_SCORE);
-                    break;
-
-                case TOO_MANY_FAIL:
-                    updateUserScore(catchMindUser, this.TOO_MANY_FAIL_SCORE);
-                    break;
-                default:
-                    throw new BadRequestException("지원하지 않는 게임 상태입니다 : " + gameStatus);
-            }
-            redisService.updateChatRoom(kurentoRoom);
-        } finally {
-            if(needLockStatus){
-                winnerProcessMap.get(roomId).compareAndSet(true, false);
-            }
+        switch (gameStatus) {
+            case TIMEOUT: // 타이머 만료 시 출제자 자동 승리
+                if (!gameSettingInfo.getCurrentGameLeader().equals(catchMindUser.getUserId())) {
+                    throw new BadRequestException("게임 진행자가 아닙니다");
+                }
+                withWinnerLock(roomId, () -> declareWinner(kurentoRoom, gameSettingInfo, catchMindUser));
+                break;
+            case MORE_TIME:
+                updateUserScore(catchMindUser, this.MORE_TIME_SCORE);
+                redisService.updateChatRoom(kurentoRoom);
+                break;
+            case TOO_MANY_FAIL:
+                updateUserScore(catchMindUser, this.TOO_MANY_FAIL_SCORE);
+                redisService.updateChatRoom(kurentoRoom);
+                break;
+            default:
+                throw new BadRequestException("지원하지 않는 게임 상태입니다 : " + gameStatus);
         }
         return catchMindUser;
     }
@@ -272,25 +252,32 @@ public class CatchMindServiceImpl implements CatchMindService {
             return AnswerResp.ofIncorrect(gameUtilService.getChosungHint(answerReq), isCorrect);
         } else {
             // 정답 -> lock 획득 후 점수 업데이트
-            AtomicBoolean isProcess = winnerProcessMap.get(roomId);
-            if (!isProcess.compareAndSet(false, true)) {
-                throw new BadRequestException("WINNER_CHECK_PROCESSED");
-            }
-
             CatchMindUserDto catchMindUser = user.get();
-            try {
-                updateUserScore(catchMindUser, this.WINNER_SCORE);
-                catchMindUser.setWinCount(catchMindUser.getWinCount() + 1);
-                if (gameSettingInfo.getCurrentGameRound() < gameSettingInfo.getTotalGameRound()) {
-                    gameSettingInfo.newGameRound();
-                }
-                redisService.updateChatRoom(kurentoRoom);
-            } finally {
-                winnerProcessMap.get(roomId).compareAndSet(true, false);
-            }
-
-            return AnswerResp.ofCollect(catchMindUser, isCorrect);
+            withWinnerLock(roomId, () -> declareWinner(kurentoRoom, gameSettingInfo, catchMindUser));
+            return AnswerResp.ofCorrect(catchMindUser, isCorrect);
         }
+    }
+
+    private void withWinnerLock(String roomId, Runnable action) throws BadRequestException {
+        AtomicBoolean isProcess = winnerProcessMap.get(roomId);
+        if (!isProcess.compareAndSet(false, true)) {
+            throw new BadRequestException("WINNER_CHECK_PROCESSED");
+        }
+        try {
+            action.run();
+        } finally {
+            isProcess.compareAndSet(true, false);
+        }
+    }
+
+    private void declareWinner(KurentoRoom kurentoRoom, GameSettingInfo gameSettingInfo, CatchMindUserDto winner) {
+        updateUserScore(winner, this.WINNER_SCORE);
+        winner.setWinCount(winner.getWinCount() + 1);
+        // 마지막 라운드가 아닐 때만 라운드 증가
+        if (gameSettingInfo.getCurrentGameRound() < gameSettingInfo.getTotalGameRound()) {
+            gameSettingInfo.newGameRound();
+        }
+        redisService.updateChatRoom(kurentoRoom);
     }
 
     private void updateUserScore(CatchMindUserDto catchMindUser, int score){

@@ -22,7 +22,7 @@ public class AnswerResp {
                 .build();
     }
 
-    public static AnswerResp ofCollect(CatchMindUserDto catchMindUser, boolean isCorrect) {
+    public static AnswerResp ofCorrect(CatchMindUserDto catchMindUser, boolean isCorrect) {
         return AnswerResp.builder()
                 .isCorrect(isCorrect)
                 .catchMindUser(catchMindUser)
