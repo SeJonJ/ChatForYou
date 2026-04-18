@@ -153,6 +153,7 @@ Both frontend and backend include Dockerfiles for containerized deployment with 
 | 백엔드 테스트 코드 컨벤션 검증 | `backend-test-convention-checker` agent |
 | 프론트 코드 컨벤션 검증 | `frontend-convention-checker` agent |
 | 설계·분석·코드 외부 독립 검토 | `external-consultant` agent |
+| 설계·분석 3단계 검증 (Claude → 외부검토 → 최종) | `design-review` skill |
 | 디버깅 / 버그 원인 추적 | `error-debugging:debugger` agent |
 | 보안 취약점 검토 | `backend-development:security-auditor` agent |
 | 코드 단순화·정리 | `simplify` skill |
