@@ -18,6 +18,6 @@
   "dependencies": {
     "firebase": "^8.6.5",
     "firebase-app": "^0.0.1",
-    "firebase-tools": "^14.10.1"
+    "firebase-tools": "^15.15.0"
   }
 }
