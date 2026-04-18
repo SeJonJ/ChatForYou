@@ -23,7 +23,7 @@ const catchMind = {
     gameUserCount: 1, // 게임 참여자 수
     gameUserList: [], // 게임 유저 정보(리스트)
     totalGameRound: 3, // 고정값
-    gameRound: 1,
+    currentGameRound: 1,
     timerBar: null,
     timerId: null,
     drawing: false, // 그리기 상태를 추적하는 변수
@@ -32,15 +32,21 @@ const catchMind = {
     lastY: 0,
     saveX: 0,
     saveY: 0,
-    totalTime: 60, // 라운드 그림 시간 제한
+    totalTime: 120, // 라운드 그림 시간 제한
     isTimeRemain: false, // 라운드 남은 시간
     maxClearCount: 3, // 캔버스 클리어 최대 횟수
     recognition: null, // 음성 인식 객체
     synth: null,
+    wrongAnswerCount: 0, // 오답 횟수 (3회 이상 시 텍스트 입력 표시)
+    isCheckingAnswer: false, // 정답 확인 중복 호출 방지
     alreadyPlayedGame: false, // 게임 이미 진행되었는지 여부
     init: function () {
         this.canvas = document.getElementById('mycanvas');
         this.ctx = this.canvas.getContext('2d');
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#000';
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
         if (!this.isInit) {
             if (isMobile()) {
                 this.initMobileCanvasEvents();
@@ -49,9 +55,9 @@ const catchMind = {
             }
             this.initClickEvent();
 
-            // SpeechRecognition 인터페이스 확인
-            // window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            this.recognition = new webkitSpeechRecognition() || new SpeechRecognition();
+            // SpeechRecognition 크로스 브라우저 초기화
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.recognition = SpeechRecognition ? new SpeechRecognition() : null;
             this.synth = window.speechSynthesis;
 
             // 게임 관련 변수 초기화
@@ -164,14 +170,16 @@ const catchMind = {
         $('#answerBtn').text('Type Your Answer!');
     },
     setMousePosition: function (e) {
-        // 정리 필요!!
         let rect = this.canvas.getBoundingClientRect();
+        // CSS 좌표 → Canvas 내부 좌표 변환 (화면 크기 무관하게 800x600 기준)
+        let scaleX = this.canvas.width / rect.width;
+        let scaleY = this.canvas.height / rect.height;
         if (e.clientX) {
-            this.lastX = e.clientX - rect.left;
-            this.lastY = e.clientY - rect.top;
+            this.lastX = (e.clientX - rect.left) * scaleX;
+            this.lastY = (e.clientY - rect.top) * scaleY;
         } else if (e.touches) {
-            this.lastX = e.touches[0].clientX - rect.left;
-            this.lastY = e.touches[0].clientY - rect.top;
+            this.lastX = (e.touches[0].clientX - rect.left) * scaleX;
+            this.lastY = (e.touches[0].clientY - rect.top) * scaleY;
         }
     },
     canvasDrawingEvent: function (event) {
@@ -211,13 +219,18 @@ const catchMind = {
 
             if (self.maxClearCount <= 0) {
                 self.showToast("더 이상 캔버스 초기화가 불가능해요!!");
+                spinnerOpt.stop();
+                return;
             }
 
-            self.clearCanvas();
+            self.clearCanvas(true);
 
             const clearCanvasEvent = {
                 "gameEvent": "clearCanvas"
             };
+
+            self.addTime(60);
+
             dataChannel.sendMessage(clearCanvasEvent, 'gameEvent');
             // 버튼 로딩 종료
             spinnerOpt.stop();
@@ -228,58 +241,61 @@ const catchMind = {
                 self.showToast("이미 게임이 진행되었습니다!");
                 return;
             }
+
+            // 게임 참여 정보 세팅
             $('#maxGameCount').val(self.totalGameRound);
             // 로그인 사용자의 nickName 으로 설정
             $('#nickName_ld').val(self.nickName);
             // 닉네임 수정 불가능하도록 설정
             $('#nickName_ld').attr('disabled', true);
 
-            let $body = $('body');
-            spinnerOpt.initByOption(20, 15, 4.0, 'shrink', '#ffffff', '50%', '50%');
-            spinnerOpt.start($body);
+            if(!self.isGameParticipant) {
+                let $body = $('body');
+                spinnerOpt.initByOption(20, 15, 4.0, 'shrink', '#ffffff', '50%', '50%');
+                spinnerOpt.start($body);
 
-            let $titleButtonContainer = $('#titleButtonContainer');
-            let $subjectButtonContainer = $('#subjectButtonContainer');
+                let $titleButtonContainer = $('#titleButtonContainer');
+                let $subjectButtonContainer = $('#subjectButtonContainer');
 
-            $titleButtonContainer.empty(); // 버튼 넣기 전 한번 비우기
-            $subjectButtonContainer.empty();
-            $titleButtonContainer.removeClass('d-none');
+                $titleButtonContainer.empty(); // 버튼 넣기 전 한번 비우기
+                $subjectButtonContainer.empty();
+                $titleButtonContainer.removeClass('d-none');
 
-            let url = window.__CONFIG__.API_BASE_URL + `/catchmind/titles?roomId=${roomId}`;
+                let url = window.__CONFIG__.API_BASE_URL + `/catchmind/titles?roomId=${roomId}`;
 
-            let successCallback = function (data) {
-                let titles = data.titles;
-                // 배열 순회
-                $.each(titles, function (index, title) {
-                    // 버튼 생성
-                    let button = $('<button>', {
-                        class: 'btn btn-outline-primary title-btn',
-                        text: title, // 버튼 내용으로 title 사용
-                        'data-title': title, // data-title 속성 설정
-                        value: title // value 속성 설정
+                let successCallback = function (data) {
+                    let titles = data.titles;
+                    // 배열 순회
+                    $.each(titles, function (index, title) {
+                        // 버튼 생성
+                        let button = $('<button>', {
+                            class: 'btn btn-outline-primary title-btn',
+                            text: title, // 버튼 내용으로 title 사용
+                            'data-title': title, // data-title 속성 설정
+                            value: title // value 속성 설정
+                        });
+
+                        // 스피너 중지
+                        spinnerOpt.stop();
+
+                        // 생성된 버튼을 컨테이너에 추가
+                        $titleButtonContainer.append(button);
                     });
 
-                    // 스피너 중지
+                    $('#startBtn').attr('disabled', false);
+                };
+
+                let errorCallback = function (data) {
+                    self.preventGameEvent();
+                    let result = data?.responseJSON;
+                    console.error("error :: ", result);
+                    alert(result.message);
                     spinnerOpt.stop();
+                    return false;
+                };
 
-                    // 생성된 버튼을 컨테이너에 추가
-                    $titleButtonContainer.append(button);
-                });
-
-                $('#startBtn').attr('disabled', false);
-            };
-
-            let errorCallback = function (data) {
-                self.preventGameEvent();
-                let result = data?.responseJSON;
-                console.error("error :: ", result);
-                alert(result.message);
-                spinnerOpt.stop();
-                return false;
-            };
-
-            ajax(url, "GET", true, '', successCallback, errorCallback);
-
+                ajax(url, "GET", true, '', successCallback, errorCallback);   
+            }
         });
 
         $('#titleButtonContainer').off('click').on('click', '.title-btn', function () {
@@ -344,9 +360,18 @@ const catchMind = {
 
         // game ready btn
         $('#readyBtn').off('click').on('click', function () {
-            if (!self.title || !self.subject) {
-                alert("게임 주제를 선정 후 시작하실 수 있습니다!");
-                return;
+            if (self.isGameParticipant) {
+                // 참여자: title은 DataChannel로 수신됨, subject는 서버만 알고 있음
+                if (!self.title) {
+                    alert("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+            } else {
+                // 리더: title + subject 모두 선택 필수
+                if (!self.title || !self.subject) {
+                    alert("게임 주제를 선정 후 시작하실 수 있습니다!");
+                    return;
+                }
             }
             self.setGameUser(); // 게임 참여 가능 인원 세팅
             if (!self.isGameParticipant && !self.isGameReady && !self.isGameStart) {
@@ -367,8 +392,7 @@ const catchMind = {
                 // dataChannel.sendMessage("addParticipant", "gameEvent");
                 const newGame = {
                     "gameEvent": "newGame",
-                    "newTitle": self.title,
-                    "newSubject": self.subject
+                    "newTitle": self.title
                 }
                 dataChannel.sendMessage(newGame, 'gameEvent');
 
@@ -440,64 +464,67 @@ const catchMind = {
                 alert("혼자서는 게임 진행이 불가능해요!");
                 return;
             }
-            if (!self.title || !self.subject) {
-                alert("게임 주제를 선정 후 시작하실 수 있습니다!");
-                return;
+            if (self.isGameParticipant) {
+                if (!self.title) {
+                    alert("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+            } else {
+                if (!self.title || !self.subject) {
+                    alert("게임 주제를 선정 후 시작하실 수 있습니다!");
+                    return;
+                }
             }
 
 
             $('#subjectModal').modal('hide');
             $('#answerBtn').attr('disabled', true);
 
-            if (self.gameRound === 1) { // 1라운드 일때만 서버로 게임 정보 전달
-                let url = window.__CONFIG__.API_BASE_URL +'/catchmind/gameSetting';
-                let data = {
-                    "roomId": roomId,
-                    "gameUserList": self.gameUserList,
-                    "totalGameRound" : self.totalGameRound,
-                    "nowGameRound" : self.gameRound
-                };
+            // 매 라운드 서버로 게임 정보 전달
+            let url = window.__CONFIG__.API_BASE_URL + '/catchmind/game_setting';
+            let data = {
+                "roomId": roomId,
+                "currentGameRound": self.currentGameRound,
+                "currentGameSubject": self.subject,
+                "currentGameLeader": self.nickName
+            };
 
-                // let successCallback = function (data) {
-                //     console.log(data.message);
-                // };
-                //
-                // let errorCallback = function (error) {
-                //     // TODO 실패한 경우 모든 이벤트 초기화 필요
-                // };
-
-                ajaxToJson(url, 'POST', '', data);
-
+            // 1라운드에만 gameUserList, totalGameRound 포함
+            if (self.currentGameRound === 1) {
+                data.gameUserList = self.gameUserList;
+                data.totalGameRound = self.totalGameRound;
             }
 
-            // self.timeLeft = 60; // N초로 설정
-            self.isGameStart = true;
-            self.isGameLeader = true;
-            self.isTimeRemain = true;
+            ajaxToJson(url, 'POST', '', data, function(resp) {
+                // 성공 시에만 게임 시작
+                self.isGameStart = true;
+                self.isGameLeader = true;
+                self.isTimeRemain = true;
 
-            // 게임 진행자만 캔버스 초기화 기회
-            // 캔버스 초기화
-            $('#maxClearCount').text("캔버스 초기화 기회 : " + self.maxClearCount);
-            self.showRoundSubject();
+                // 라운드 표시
+                $('#roundIndicator').text(self.currentGameRound + '/' + self.totalGameRound).show();
 
-            if (self.gameRound > 1) {
-                // 새로운 라운드에 맞는 새로운 주제 선택 이벤트
-                const newRoundSetting = {
-                    'gameEvent': 'newRoundSetting',
-                    'title': self.title,
-                    'subject': self.subject
+                // 캔버스 초기화 기회 표시
+                $('#maxClearCount').text("캔버스 초기화 기회 : " + self.maxClearCount);
+                self.showRoundSubject();
+
+                if (self.currentGameRound > 1) {
+                    const newRoundSetting = {
+                        'gameEvent': 'newRoundSetting',
+                        'title': self.title
+                    }
+                    dataChannel.sendMessage(newRoundSetting, 'gameEvent');
                 }
-                dataChannel.sendMessage(newRoundSetting, 'gameEvent');
-            }
 
-            dataChannel.sendMessage('gameStart', 'gameEvent');
+                dataChannel.sendMessage({gameEvent: 'gameStart'}, 'gameEvent');
 
-            $('#catchMindCanvas').modal('show');
-            // 모달 바디의 크기를 캔버스에 맞춤
+                $('#catchMindCanvas').modal('show');
+                $('#clearCanvasBtn').show();
 
-            $('#clearCanvasBtn').show();
-
-            self.startTimer();
+                self.startTimer();
+            }, function(err) {
+                self.showToast('게임 설정에 실패했습니다. 다시 시도해주세요.');
+            });
 
         });
 
@@ -509,16 +536,27 @@ const catchMind = {
             }
         });
 
-        if (isMobile()) {
-            $('#submitAnswer').on('click', function() {
-                let $userAnswer = $('#userAnswer');
-                // 사용자가 입력한 정답 가져오기
-                let answer = self.replaceStr($userAnswer.val());
-                console.log("사용자가 입력한 정답:", answer);
-                // 정답 처리 로직
-                self.checkAnswer(answer, false);
+        // 텍스트 입력으로 정답 제출 (Enter 키) — 한글 IME 중복 방지
+        $('#quickAnswerInput').off('keydown').on('keydown', function (e) {
+            if (e.isComposing) return;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                let answer = self.replaceStr($(this).val());
+                if (!answer) return;
+                console.log('[CatchMind] 텍스트 입력 정답:', answer);
+                self.checkAnswer([answer]);
+                $(this).val('');
+            }
+        });
 
-                // 입력 필드 초기화 및 모달 닫기
+        if (isMobile()) {
+            $('#submitAnswer').off('click').on('click', function() {
+                let $userAnswer = $('#userAnswer');
+                let answer = self.replaceStr($userAnswer.val());
+                if (!answer) return;
+                console.log("사용자가 입력한 정답:", answer);
+                self.checkAnswer([answer]);
+
                 $userAnswer.val('');
                 $('#answerInputModal').modal('hide');
             });
@@ -527,39 +565,57 @@ const catchMind = {
     },
     answerEvent : function(){
         let self = this;
-        $('#answerBtn').attr('disabled', true);
-        let text = "이제 정답을 외쳐주세요!";
-        self.showToast(text);
+        // 자막 음성인식과 충돌 방지 — 게임 음성인식 전에 자막 정지
+        let subtitleWasActive = (typeof stopSpeechRecognition === 'function') && stopSpeechRecognition();
 
-        // 음성 인식 언어 설정 (더 구체적인 설정)
+        if (!self.recognition) {
+            $('#quickAnswerContainer').show();
+            $('#answerBtn').hide();
+            self.showToast('음성인식을 지원하지 않는 브라우저입니다. 텍스트로 입력해주세요.');
+            return;
+        }
+        $('#answerBtn').attr('disabled', true);
+        self.showToast("이제 정답을 외쳐주세요!");
+
         self.recognition.lang = 'ko-KR';
-        
-        // 실시간 결과 활성화 (인식률 향상)
         self.recognition.interimResults = true;
-        
-        // 연속 인식 활성화
-        self.recognition.continuous = true;
-        
-        // 적절한 대안 수 설정 (너무 크면 오히려 정확도 저하)
+        self.recognition.continuous = false;
         self.recognition.maxAlternatives = 5;
 
-        // console.log("음성 인식 시작");
-        self.recognition.start();
+        // 음성인식 상태 플래그
+        let collectedAlternatives = [];
+        let hasError = false;
+        let isTimedOut = false;
 
-        // 5초 동안 음성이 감지되지 않으면 인식 종료 (시간 연장)
-        let recognitionTimeout = setTimeout(function() {
-            self.recognition.stop();
+        try {
+            self.recognition.start();
+        } catch (e) {
+            console.warn('SpeechRecognition already started:', e.message);
             $('#answerBtn').attr('disabled', false);
-            // console.log("5초 동안 음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
+            return;
+        }
+
+        // 5초 타임아웃 — 음성 미감지 시 인식 종료
+        let recognitionTimeout = setTimeout(function() {
+            isTimedOut = true;
+            try { self.recognition.abort(); } catch (e) { /* ignore */ }
             self.showToast("음성을 감지하지 못했습니다. 음성 인식을 종료합니다.");
         }, 5000);
 
-        // 음성 인식 결과 이벤트
+        // 8초 안전장치 — onend 미발생 시 강제 복구
+        let safetyTimeout = setTimeout(function() {
+            console.warn('[CatchMind] 음성인식 안전장치 타임아웃 — 강제 복구');
+            try { self.recognition.abort(); } catch (e) { /* ignore */ }
+            $('#answerBtn').attr('disabled', false);
+            self.wrongAnswerCount++;
+            self.showQuickAnswerIfNeeded();
+            self.showToast("음성 인식이 응답하지 않습니다. 텍스트로 입력해주세요.");
+        }, 8000);
+
+        // onresult: 결과 수집만, checkAnswer 호출 안함
         self.recognition.onresult = function (event) {
-            // 타이머 취소
             clearTimeout(recognitionTimeout);
 
-            // 최종 결과만 처리 (실시간 결과는 무시)
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
@@ -567,59 +623,37 @@ const catchMind = {
                 }
             }
 
-            // 최종 결과가 있을 때만 처리
             if (finalTranscript.trim()) {
-                // 텍스트 정제 (공백, 특수문자 제거)
                 finalTranscript = finalTranscript
                     .replaceAll(' ', '')
                     .replaceAll(/[^\w가-힣]/g, '')
                     .toLowerCase();
-                
+
                 console.log('인식된 텍스트:', finalTranscript);
 
-                // 여러 대안 결과 확인
-                let alternatives = [];
+                // 대안 결과 수집
                 for (let i = 0; i < Math.min(event.results[event.results.length - 1].length, 3); i++) {
                     let altText = event.results[event.results.length - 1][i].transcript
                         .replaceAll(' ', '')
                         .replaceAll(/[^\w가-힣]/g, '')
                         .toLowerCase();
-                    if (altText && !alternatives.includes(altText)) {
-                        alternatives.push(altText);
+                    if (altText && !collectedAlternatives.includes(altText)) {
+                        collectedAlternatives.push(altText);
                     }
                 }
 
-                console.log('대안 결과들:', alternatives);
-
-                // 모든 대안에 대해 정답 확인
-                let answerFound = false;
-                for (let alt of alternatives) {
-                    if (self.checkAnswer(alt, true)) {
-                        answerFound = true;
-                        break;
-                    }
-                }
-
-                // 정답을 찾지 못한 경우 메인 결과로 재시도
-                if (!answerFound) {
-                    self.checkAnswer(finalTranscript, false);
-                }
-
-                // 음성 인식 종료
-                self.recognition.stop();
-                $('#answerBtn').attr('disabled', false);
+                console.log('대안 결과들:', collectedAlternatives);
+                try { self.recognition.abort(); } catch (e) { /* ignore */ }
             }
         };
 
-        // 음성 인식 에러 이벤트 (개선된 에러 처리)
+        // onerror: 에러 메시지만 표시, 카운트/버튼 관리는 onend에서
         self.recognition.onerror = function(event) {
-            // 타이머 취소
             clearTimeout(recognitionTimeout);
-            $('#answerBtn').attr('disabled', false);
-            
+            hasError = true;
+
             console.log('음성 인식 에러:', event.error);
-            
-            // 에러 타입별 메시지
+
             let errorMessage = '';
             switch(event.error) {
                 case 'no-speech':
@@ -637,8 +671,28 @@ const catchMind = {
                 default:
                     errorMessage = '음성 인식 중 오류가 발생했습니다.';
             }
-            
             self.showToast(errorMessage);
+        };
+
+        // onend: recognition 완전 종료 후 1회만 실행 (버튼/카운트 단일 관리)
+        self.recognition.onend = function () {
+            clearTimeout(recognitionTimeout);
+            clearTimeout(safetyTimeout);
+
+            // 자막 음성인식 복원
+            if (subtitleWasActive && typeof startSpeechRecognition === 'function') {
+                startSpeechRecognition();
+            }
+
+            if (!hasError && !isTimedOut && collectedAlternatives.length > 0) {
+                // 정상 인식 완료 → 서버 전송 (버튼은 checkAnswer 콜백에서 관리)
+                self.checkAnswer(collectedAlternatives);
+            } else {
+                // 음성 감지 실패 (에러/타임아웃/무음)
+                $('#answerBtn').attr('disabled', false);
+                self.wrongAnswerCount++;
+                self.showQuickAnswerIfNeeded();
+            }
         };
     },
     mobileAnswerEvent : function(){
@@ -693,10 +747,26 @@ const catchMind = {
         // 게임 참여자 수 감소
         this.gameUserCount -= 1;
         if(this.gameUserCount === 1 && this.isGameLeader) {
-            self.showToast('다른 게임 참여자가 없어 게임을 시작할 수 없습니다.');
+            this.showToast('다른 게임 참여자가 없어 게임을 시작할 수 없습니다.');
             $('#subjectModal').modal('hide');
+
+            // 게임 상태 초기화 (재요청 가능하도록)
+            this.isGameLeader = false;
+            this.isGameReady = false;
+            this.gameReadyUser = 0;
+            this.gameUserList = [];
+            this.title = '';
+            this.subject = '';
+
+            // UI 초기화 (readyBtn 복원, startBtn 숨김)
+            $('#readyBtn').show().prop('disabled', true);
+            $('#exitBtn').show();
+            $('#startBtn').hide();
+            $('#readyUser').text('');
+            $('#titleButtonContainer').empty();
+            $('#subjectButtonContainer').empty();
             return;
-        } 
+        }
         
         if (this.isGameLeader) {
             $('#readyUser').text(this.gameReadyUser + "/" + this.gameUserCount);
@@ -711,50 +781,60 @@ const catchMind = {
         $('#subjectModal').modal('hide');
         $('#catchMindCanvas').modal('show');
 
-
         this.showRoundSubject();
 
         $('#clearCanvasBtn').hide();
         $('#answerBtn').attr('disabled', false);
     },
-    checkAnswer: function (answer, isAltAnswer) {
+    checkAnswer: function (answers) {
         let self = this;
-        if (answer !== this.subject && !isAltAnswer) {
-            $('#answerBtn').attr('disabled', false);
-            let text = "아쉽지만 " + answer + " 는(은) 정답이 아니에요";
-            this.showToast(text);
-            return false;
-        }
+        if (!answers || answers.length === 0) return;
+        if (self.isCheckingAnswer) return;
+        self.isCheckingAnswer = true;
 
-        const gameData = {
-            gameStatus: "WINNER",
+        let requestData = {
             "roomId": roomId,
-            "userId": self.nickName
+            "userId": self.nickName,
+            "answers": answers
         };
 
-        let successCallback = function (data) {
-            let gameWiner = {
-                "gameEvent": "newWiner",
-                "winer": data.nickName
+        let successCallback = function (resp) {
+            self.isCheckingAnswer = false;
+            let data = resp.data;
+
+            if (data.isCorrect) {
+                // 정답 처리
+                let nickName = data.catchMindUser.nickName;
+                let gameWinner = {
+                    "gameEvent": "newWinner",
+                    "winner": nickName
+                };
+                dataChannel.sendMessage(gameWinner, 'gameEvent');
+                $('#answerBtn').attr('disabled', true);
+                self.speakWinner(nickName);
+                self.resetGameRound(nickName);
+            } else {
+                // 오답 처리 — 초성 힌트 표시
+                self.showAnswerFeedback(data.hint);
+                $('#answerBtn').attr('disabled', false);
             }
-
-            dataChannel.sendMessage(gameWiner, 'gameEvent');
-
-            $('#answerBtn').attr('disabled', true);
-            self.speakWiner(data.nickName);
-            self.resetGameRound(data.nickName);
         };
 
-        let errorCallback = function (data) {
-
+        let errorCallback = function (error) {
+            self.isCheckingAnswer = false;
+            console.log('check_answer error:', error.responseText);
+            $('#answerBtn').attr('disabled', false);
         };
 
-        ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/updateGameStatus', 'POST', '', gameData, successCallback, errorCallback);
+        ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/check_answer',
+                   'POST', '', requestData, successCallback, errorCallback);
     },
-    speakWiner: function (winerName) {
+    speakWinner: function (winnerName, isTimeout) {
 
-        if (winerName !== '') {
-            var speakText = winerName + "님이 정답을 맞췄습니다";
+        if (winnerName !== '') {
+            var speakText = isTimeout
+                ? "누구도 정답을 맞추지 못해 " + winnerName + "님이 승리했습니다"
+                : winnerName + "님이 정답을 맞췄습니다";
 
             this.showToast(speakText);
 
@@ -771,9 +851,9 @@ const catchMind = {
                 console.error('음성 합성 중 오류가 발생했습니다.');
             };
 
-            // 사용할 수 있는 음성 중 하나를 선택 (예: 첫 번째 음성)
+            // 한국어 음성 우선, 없으면 브라우저 기본 음성 사용
             var voices = this.synth.getVoices();
-            utterThis.voice = voices[0];
+            utterThis.voice = voices.find(function(v) { return v.lang.startsWith('ko'); }) || voices[0] || null;
 
             // 음성 속도와 피치 설정 (선택 사항)
             utterThis.pitch = 1; // 기본값은 1
@@ -805,10 +885,13 @@ const catchMind = {
     setGameUser: function () {
         this.gameUserCount = Object.keys(participants).length;
     },
-    clearCanvas: function () {
-        this.maxClearCount -= 1;
+    clearCanvas: function (isManualClear) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+        // 라운드 리셋 시 캔버스만 초기화 (토스트/카운트 변경 없음)
+        if (!isManualClear) return;
+
+        this.maxClearCount -= 1;
         if (this.isGameParticipant) {
             if (this.maxClearCount === 0) {
                 $('#maxClearCount').text("진행자가 초기화 기회를 모두 소진했습니다");
@@ -817,7 +900,7 @@ const catchMind = {
                 $('#maxClearCount').text("진행자의 캔버스 초기화 기회 : " + this.maxClearCount);
                 this.showToast("진행자가 캔버스를 초기화 했습니다!");
             }
-        } else if (this.isGameLeader) { // 게임 리더면 maxclearCanvas -=1
+        } else if (this.isGameLeader) {
             if (this.maxClearCount === 0) {
                 $('#clearCanvasBtn').prop('disabled', true);
                 $('#maxClearCount').text("이제 캔버스 초기화는 할 수 없어요!!");
@@ -825,8 +908,6 @@ const catchMind = {
                 $('#maxClearCount').text("캔버스 초기화 기회 : " + this.maxClearCount);
             }
         }
-        // // 캔버스 초기화
-        // this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     },
     showToast: function (text) {
         Toastify({
@@ -843,19 +924,49 @@ const catchMind = {
             },
         }).showToast();
     },
+    /**
+     * 오답 시 초성 힌트 피드백 토스트
+     */
+    showAnswerFeedback: function (hint) {
+        this.wrongAnswerCount++;
+        let text;
+        if (hint && hint.hintChosung) {
+            text = '힌트: ' + hint.hintChosung + ' (' + hint.totalChosung + '개 중 ' + hint.matchedChosung + '개 일치!)';
+            // 캔버스 모달 내 고정 영역에 표시
+            $('#chosungHint').text(text).show();
+        } else {
+            text = '정답이 아니에요';
+        }
+        this.showToast(text);
+        this.showQuickAnswerIfNeeded();
+    },
+    // 3회 이상 오답 시 텍스트 입력 표시
+    showQuickAnswerIfNeeded: function () {
+        if (this.wrongAnswerCount >= 3 && !isMobile()) {
+            $('#quickAnswerContainer').show();
+            $('#answerBtn').hide();
+        }
+    },
     resetGameRound: async function (winner) {
         let self = this;
+        // 텍스트 입력 숨김 + 오답 카운트 초기화 + 초성 힌트 초기화
+        $('#quickAnswerContainer').hide();
+        $('#answerBtn').show();
+        $('#quickAnswerInput').val('');
+        $('#chosungHint').hide().text('');
+        self.wrongAnswerCount = 0;
+        self.isCheckingAnswer = false;
         // 캔버스 초기화
         self.clearCanvas();
         $('#catchMindCanvas').modal('hide');
 
-        if (self.gameRound === self.totalGameRound) {
-            let url = window.__CONFIG__.API_BASE_URL +`/catchmind/gameResult?roomId=${roomId}`;
+        if (self.currentGameRound === self.totalGameRound) {
+            let url = window.__CONFIG__.API_BASE_URL +`/catchmind/game_result?roomId=${roomId}`;
             try {
                 let data = await ajaxToJsonPromise(url, 'GET');
                 if (data.result === 'SyncGameRound') {
                     console.log(data.message);
-                    self.gameRound = data.gameRound;
+                    self.currentGameRound = data.currentGameRound;
                 } else {
                     let gameResult = data.gameResult;
                     self.displayGameResults(gameResult);
@@ -930,12 +1041,12 @@ const catchMind = {
             $('#loadingUser').text('승리자의 주제 선택을 기다리는 중...!! : ' + this.gameReadyUser + "/" + this.gameUserCount);
         }
 
+        self.currentGameRound += 1; // 게임 라운드 추가
+        $('#roundIndicator').text(self.currentGameRound + '/' + self.totalGameRound).show();
         $('#subjectModal').modal('show');
-        self.gameRound += 1; // 게임 라운드 추가
     },
     newRoundSubject: function (data) {
         this.title = data.title;
-        this.subject = this.replaceStr(data.subject);
     },
     /**
      * 타이머 시작
@@ -943,7 +1054,9 @@ const catchMind = {
     startTimer: function () {
         let self = this;
         let totalTime = self.totalTime;
-        let timeLeft = self.totalTime;
+        if (!self.timeLeft || self.timeLeft <= 0) {
+            self.timeLeft = self.totalTime;
+        }
         // ProgressBar.js를 사용한 타이머 표시 업데이트
         self.timerBar = new ProgressBar.Line('#progress-container', {
             strokeWidth: 2,
@@ -957,7 +1070,7 @@ const catchMind = {
             // to: {color: '#5153c4'}, // 종료 색상
             step: function (state, bar, attachment) {
                 // 남은 시간에 따라 색상을 동적으로 계산
-                let progress = (totalTime - timeLeft) / totalTime;
+                let progress = (totalTime - self.timeLeft) / totalTime;
                 let red = Math.round(4 + progress * (248 - 4)); // 4에서 248로 변화
                 let green = Math.round(8 + progress * (4 - 8)); // 8에서 4로 변화
                 let blue = Math.round(248 + progress * (4 - 248)); // 248에서 4로 변화
@@ -968,22 +1081,45 @@ const catchMind = {
         });
 
         self.timerId = setInterval(function () {
-            timeLeft--;
-            let timeFraction = timeLeft / self.totalTime;
+            self.timeLeft--;
+            let timeFraction = Math.max(0, self.timeLeft / self.totalTime);
 
             // 매 초마다 프로그레스 바 업데이트
             self.timerBar.animate(timeFraction, {duration: 1000});
 
-            if (timeLeft <= 0) {
+            if (self.timeLeft <= 0) {
                 clearInterval(self.timerId);
                 self.isTimeRemain = false;
-                console.log("타이머 종료");
+
+                // 타이머 만료 시 출제자 자동 승리
+                if (self.isGameLeader) {
+                    const timeoutData = {
+                        gameStatus: "TIMEOUT",
+                        roomId: roomId,
+                        userId: self.nickName
+                    };
+                    let successCallback = function(data) {
+                        let gameWinner = { "gameEvent": "newWinner", "winner": data.nickName, "timeout": true };
+                        dataChannel.sendMessage(gameWinner, 'gameEvent');
+                        self.speakWinner(data.nickName, true);
+                        self.resetGameRound(data.nickName);
+                    };
+                    ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/update_game_status', 'POST', '', timeoutData, successCallback);
+                }
             }
         }, 1000);
     },
     /**
      * 타이머 초기화
      */
+    /**
+     * 타이머에 시간 추가
+     * @param {number} seconds 추가할 초
+     */
+    addTime: function (seconds) {
+        if (!this.isGameLeader) return;
+        this.timeLeft = Math.min(this.timeLeft + seconds, this.totalTime);
+    },
     resetTimer: function () {
         let self = this;
         // 타이머 중지
@@ -1000,7 +1136,6 @@ const catchMind = {
      * @returns {String} str
      */
     replaceStr: function (str) {
-        // let 정제된문자열 = 문자열.replace(/AI\s*:\s*/g, "");
         str = str.replace(/[^a-zA-Z0-9가-힣]/g, '');
         return str;
     },
@@ -1060,6 +1195,7 @@ const catchMind = {
     //     console.log("게임 결과를 저장합니다.");
     //
     // }
+
     // 게임 참여자 데이터를 기반으로 모달 내용을 동적으로 생성
     displayGameResults: function (data) {
         let self = this;

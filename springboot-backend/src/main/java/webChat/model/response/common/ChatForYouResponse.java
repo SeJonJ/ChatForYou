@@ -14,7 +14,7 @@ public class ChatForYouResponse {
     private String message;
     private Object data;
 
-    public static ChatForYouResponse ofSuccess(String data) {
+    public static ChatForYouResponse ofSuccess(Object data) {
         return ChatForYouResponse.builder()
                 .result(ChatForYouResponseResult.SUCCESS.name())
                 .data(data)

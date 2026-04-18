@@ -174,26 +174,23 @@ const dataChannel = {
                 catchMind.addGameReady('participant', event.gameUser, event.nickName);
                 break;
             case 'newGame':
-                catchMind.subject = event.newSubject;
                 catchMind.title = event.newTitle;
                 break;
             case 'mouseEvent':
                 catchMind.canvasDrawingEvent(event);
                 break;
-            case 'newWiner':
-                catchMind.speakWiner(event.winer);
-                catchMind.resetGameRound(event.winer);
+            case 'newWinner':
+                catchMind.speakWinner(event.winner, event.timeout);
+                catchMind.resetGameRound(event.winner);
                 break;
             case 'clearCanvas':
-                catchMind.clearCanvas();
+                catchMind.clearCanvas(true);
                 break;
             case 'newRoundSetting':
                 catchMind.newRoundSubject(event);
                 break;
-            default:
-                if (event === 'gameStart') {
-                    catchMind.participantGameStartEvent();
-                }
+            case 'gameStart':
+                catchMind.participantGameStartEvent();
                 break;
         }
     }

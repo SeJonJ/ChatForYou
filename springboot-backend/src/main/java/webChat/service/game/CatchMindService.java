@@ -32,9 +32,9 @@ public interface CatchMindService {
 
     /**
      * 게임 전체 정보 세팅
-     * @param gameSettingInfo
+     * @param requestSettingInfo
      */
-    void setGameSettingInfo(GameSettingInfo gameSettingInfo);
+    void setGameSettingInfo(GameSettingInfo requestSettingInfo);
 
     /**
      * 유저 정보 업데이트
@@ -50,7 +50,12 @@ public interface CatchMindService {
      * @param roomId
      * @return 방에서의 게임 결과
      */
-    GameSettingInfo getGameResult(String roomId) throws BadRequestException, ExceptionController.SyncGameRound;
-    List<CatchMindUserDto> getGameUserInfos(String roomId) throws BadRequestException;
-    boolean chkDuplicateNickName(String nickName);
+    GameSettingInfo getGameResult(String roomId) throws BadRequestException;
+
+    /**
+     * 게임 정답 확인
+     * @return 정답 여부
+     * @throws BadRequestException
+     */
+    AnswerResp checkAnswer(AnswerReq answerReq) throws BadRequestException;
 }

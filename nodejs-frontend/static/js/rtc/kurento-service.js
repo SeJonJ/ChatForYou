@@ -96,7 +96,7 @@ const wsMessageHandlers = {
     connectionFailed: (msg) => {
         $('#connectionFailModal').modal('show');
         $('#reconnectButton').off('click').on('click', () => {
-            sessionStorage.removeItem('chatforyou_connected');
+            clearConnectedSession();
             leaveRoom('error');
             window.location.reload();
         });
@@ -151,6 +151,22 @@ const wsMessageHandlers = {
     ])
 };
 
+// roomId에서 하이픈을 제거한 _connected 키 생성
+function getConnectedKey() {
+    var roomId = new URLSearchParams(window.location.search).get('roomId');
+    return roomId.replaceAll('-', '') + '_connected';
+}
+
+// _connected 키 정리 헬퍼
+function clearConnectedSession() {
+    for (var i = sessionStorage.length - 1; i >= 0; i--) {
+        var key = sessionStorage.key(i);
+        if (key && key.endsWith('_connected')) {
+            sessionStorage.removeItem(key);
+        }
+    }
+}
+
 // WebSocket 지연 생성: 새로고침 시 autoplay 정책 우회
 var ws = null;
 
@@ -159,10 +175,19 @@ function connectWebSocket() {
 
     ws.onopen = function () {
         console.log('[WebSocket] 연결 성공');
-        sessionStorage.setItem('chatforyou_connected', 'true');
+        sessionStorage.setItem(getConnectedKey(), 'true');
         register();
         initScript();
         initEvent();
+    };
+
+    ws.onclose = function (event) {
+        console.warn('[WebSocket] 연결 종료:', event.code, event.reason);
+    };
+
+    ws.onerror = function (error) {
+        console.error('[WebSocket] 에러 발생:', error);
+        clearConnectedSession();
     };
 
     ws.onmessage = function (message) {
@@ -179,15 +204,18 @@ function connectWebSocket() {
 
 // 새로고침 감지 및 연결 분기
 $(function () {
-    if (sessionStorage.getItem('chatforyou_connected') === 'true') {
-        // 새로고침 감지: 모달 표시 → 클릭 시 연결 (유저 인터랙션 확보)
+    var connectedKey = getConnectedKey();
+
+    if (sessionStorage.getItem(connectedKey) === 'true') {
+        // 같은 방에서 새로고침: 재연결 모달
         $('#reconnectModal').modal('show');
         $('#reconnectModalBtn').off('click').on('click', function () {
             $('#reconnectModal').modal('hide');
             connectWebSocket();
         });
     } else {
-        // 첫 입장: 즉시 연결
+        // 첫 입장 또는 다른 방: 이전 키 정리 후 즉시 연결
+        clearConnectedSession();
         connectWebSocket();
     }
 });
@@ -531,9 +559,11 @@ function register() {
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (response) => {
             if(response.result === 'REDIRECT_ROOM'){
+                clearConnectedSession();
                 console.log('room redirect to : ', response.data.roomId);
                 location.reload();
             } else if(response.result === 'REDIRECT_DASHBOARD'){
+                clearConnectedSession();
                 Toastify({
                     text: "현재 방에 참여할 수 없습니다. \n 잠시 후 다시 시도해주세요.",
                     duration: 3000, // 토스트는 3초 유지
@@ -581,6 +611,7 @@ function register() {
             }
         };
         const errorCallback = (error) => {
+            clearConnectedSession();
             console.error('방 정보 조회 실패:', error);
             if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
                 self.showToast('로그인이 필요한 서비스입니다.');
@@ -809,6 +840,9 @@ var leftUserfunc = function(){
 
     // WebSocket 연결을 종료합니다.
     if (ws) ws.close();
+
+    // session storage 제거
+    clearConnectedSession();
 }
 
 // 웹 종료 or 새로고침 시 이벤트
@@ -819,7 +853,8 @@ window.onbeforeunload = function () {
 // 나가기 버튼 눌렀을 때 이벤트
 // 결국 replace  되기 때문에 얘도 onbeforeunload 를 탄다
 $('#button-leave').on('click', function(){
-    sessionStorage.removeItem('chatforyou_connected');
+    clearConnectedSession();
+    sessionStorage.removeItem('roomAccessToken');
     setCookie('room-id', '', -1); // 쿠키 삭제
     location.replace(window.__CONFIG__.BASE_URL + '/roomlist.html');
 });

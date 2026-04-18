@@ -1,0 +1,123 @@
+name: '📅 Gemini Scheduled Bug Verify'
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at 00:00 UTC (9 AM KST)
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  get-issues:
+    runs-on: ubuntu-latest
+    outputs:
+      issue_numbers: ${{ steps.list_issues.outputs.issue_numbers }}
+    steps:
+      - name: 'List bug issues (open & closed)'
+        id: 'list_issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get open bug issues
+          OPEN_ISSUES=$(gh issue list --label "bug" --state open --json number --jq '.[].number' | tr '\n' ',' | sed 's/,$//')
+          # Get closed bug issues (recent 10)
+          CLOSED_ISSUES=$(gh issue list --label "bug" --state closed --limit 10 --json number --jq '.[].number' | tr '\n' ',' | sed 's/,$//')
+          
+          COMBINED_ISSUES=""
+          if [ ! -z "$OPEN_ISSUES" ] && [ ! -z "$CLOSED_ISSUES" ]; then
+            COMBINED_ISSUES="$OPEN_ISSUES,$CLOSED_ISSUES"
+          elif [ ! -z "$OPEN_ISSUES" ]; then
+            COMBINED_ISSUES="$OPEN_ISSUES"
+          else
+            COMBINED_ISSUES="$CLOSED_ISSUES"
+          fi
+          
+          if [ -z "$COMBINED_ISSUES" ]; then
+            echo "No bug issues found."
+            echo "issue_numbers=[]" >> $GITHUB_OUTPUT
+          else
+            # Format as JSON array for matrix
+            JSON_ARRAY=$(echo "[$COMBINED_ISSUES]" | sed 's/,/","/g' | sed 's/\[/["/' | sed 's/\]/"]/')
+            echo "issue_numbers=$JSON_ARRAY" >> $GITHUB_OUTPUT
+          fi
+
+  verify-bug:
+    needs: get-issues
+    if: needs.get-issues.outputs.issue_numbers != '[]'
+    strategy:
+      matrix:
+        issue_number: ${{ fromJson(needs.get-issues.outputs.issue_numbers) }}
+      fail-fast: false
+      max-parallel: 1 # Run sequentially to avoid rate limits
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: 'Get issue details'
+        id: 'get_issue'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_DATA=$(gh issue view ${{ matrix.issue_number }} --json title,body,state)
+          echo "title=$(echo $ISSUE_DATA | jq -r .title)" >> $GITHUB_ENV
+          echo "body=$(echo $ISSUE_DATA | jq -r .body)" >> $GITHUB_ENV
+          echo "state=$(echo $ISSUE_DATA | jq -r .state)" >> $GITHUB_ENV
+
+      - name: 'Run Gemini Bug Verification'
+        id: 'gemini_verify'
+        uses: 'google-github-actions/run-gemini-cli@v0' # ratchet:exclude
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_TITLE: ${{ env.title }}
+          ISSUE_BODY: ${{ env.body }}
+          ISSUE_STATE: ${{ env.state }}
+        with:
+          gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
+          gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
+          gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
+          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
+          gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
+          gemini_model: '${{ vars.GEMINI_MODEL }}'
+          google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
+          use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
+          use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
+          workflow_name: 'gemini-bug-verify'
+          settings: |-
+            {
+              "model": {
+                "maxSessionTurns": 50
+              }
+            }
+          prompt: '/gemini-bug-verify'
+
+      - name: 'Process AI Output'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ matrix.issue_number }}
+          AI_OUTPUT: ${{ steps.gemini_verify.outputs.output }}
+        run: |
+          # Extract components using basic parsing (assuming structured format in prompt)
+          ACTION=$(echo "$AI_OUTPUT" | grep "^action:" | cut -d' ' -f2 | tr -d '\r')
+          LABELS=$(echo "$AI_OUTPUT" | grep "^labels_to_add:" | cut -d' ' -f2 | tr -d '\r')
+          COMMENT=$(echo "$AI_OUTPUT" | sed -n '/comment:/,$p' | sed '1d')
+
+          echo "Action: $ACTION"
+          echo "Labels: $LABELS"
+
+          if [ "$ACTION" == "close_and_comment" ]; then
+            gh issue comment $ISSUE_NUMBER --body "$COMMENT"
+            gh issue close $ISSUE_NUMBER
+            if [ ! -z "$LABELS" ]; then gh issue edit $ISSUE_NUMBER --add-label "$LABELS"; fi
+          elif [ "$ACTION" == "reopen_and_comment" ]; then
+            gh issue reopen $ISSUE_NUMBER
+            gh issue comment $ISSUE_NUMBER --body "$COMMENT"
+            if [ ! -z "$LABELS" ]; then gh issue edit $ISSUE_NUMBER --add-label "$LABELS"; fi
+            # Remove verified label if exists
+            gh issue edit $ISSUE_NUMBER --remove-label "verified" || true
+          elif [ "$ACTION" == "comment" ]; then
+            gh issue comment $ISSUE_NUMBER --body "$COMMENT"
+            if [ ! -z "$LABELS" ]; then gh issue edit $ISSUE_NUMBER --add-label "$LABELS"; fi
+          fi

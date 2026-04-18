@@ -154,6 +154,9 @@ springboot-backend/.nb-gradle/
 springboot-backend/src/main/resources/data/
 springboot-backend/src/main/resources/geodata/
 
+# 개발 설계 분석 파일
+**/plan_docs/
+
 # ========================================
 # figma-ai 설정
 # ========================================
@@ -162,10 +165,18 @@ figma-plugin
 # ========================================
 # AI Tool 설정
 # ========================================
-.claude
-.cursor
-CLAUDE*.md
+## claude 관련
+# .claude
+!CLAUDE.md
+CLAUDE.local.md
+settings.local.json
+.claude/agent-memory/
+
+## gemini 관련
 .agent
+
+# cursor 관련
+.cursor
 
 # 테스트 결과물
 test-results/
@@ -174,3 +185,5 @@ coverage-report/
 # 로그 파일들
 *.log
 logs/
+.gemini/
+gha-creds-*.json
