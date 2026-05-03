@@ -6,7 +6,7 @@
 - 가이드 요청 시 순서:
   1. 관련 코드 전체 분석
   2. 필요한 정보 유저에게 문의
-  3. `springboot-backend/[기능명]_plan.md` 작성
+  3. `springboot-backend/plan_docs/[기능명]_plan.md` 작성
   4. "개발을 시작할까요?" 확인 요청
 
 ---
@@ -126,7 +126,7 @@ log.error(">>>>>>> " + e.getMessage());             // Bad (문자열 연산 금
 
 ### 7. 주석 규칙
 - **인라인 주석**: WHY가 명확한 한 줄만 허용 (WHAT 설명 금지)
-- **JavaDoc**: 모든 메서드에 작성, `@param` / `@return` 사용
+- **JavaDoc**: 모든 메서드에 작성, 메서드의 기능(간단하게), `@param` / `@return` 사용
 - **TODO 주석**: 리팩토링 예정 코드에만 허용, 담당자와 이유 명시
 
 ```java

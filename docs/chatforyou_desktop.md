@@ -1,6 +1,6 @@
 ## 개발 시 유의점 : chatforyou-desktop(electron) ##
 
-### Agent / Skill 활용
+### Agent / Skill 활용(사용 가능 하다면)
 
 | 작업 영역 | 사용 권장 |
 |---|---|
