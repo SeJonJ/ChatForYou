@@ -21,11 +21,14 @@ const dataChannelFileUtil = {
 
     },
     uploadFile : function(){
+        let self = this;
 
         // 파일 확인
         let file = $('#file')[0].files[0];
         if (!file) {
             console.log('No file chosen');
+            self.showToast('업로드할 파일을 먼저 선택해주세요.');
+            return;
         }
 
         let formData = new FormData();
@@ -39,8 +42,8 @@ const dataChannelFileUtil = {
         let fileType = file.name.substring(fileDot + 1, file.name.length);
         // console.log('type : ' + fileType);
 
-        if(!this.allowFileExt.includes(fileType)){
-            this.showToast('파일 업로드는 png, jpg, gif, jpeg 만 가능합니다');
+        if(!self.allowFileExt.includes(fileType)){
+            self.showToast('파일 업로드는 png, jpg, gif, jpeg 만 가능합니다');
             return;
         }
 
@@ -48,7 +51,7 @@ const dataChannelFileUtil = {
 
             // console.log('업로드 성공')
             if (data.status === 'FAIL') {
-                alert('서버와의 연결 문제로 파일 업로드에 실패했습니다 \n 잠시 후 다시 시도해주세요')
+                self.showToast('서버와의 연결 문제로 파일 업로드에 실패했습니다.\n잠시 후 다시 시도해주세요.');
                 return;
             }
 
@@ -63,14 +66,16 @@ const dataChannelFileUtil = {
         };
 
         let errorCallback = function (error) {
-            let errorJson = error?.responseJSON;
+            const errorJson = error?.responseJSON;
             if (!errorJson) {
-                alert('파일 업로드 용량 또는 파일 확장자를 확인해주세요 \n 확장자 : jpg, jepg, png, gif \n 용량 제한 : Max 10MB');
+                self.showToast('파일 업로드 용량 또는 파일 확장자를 확인해주세요.\n확장자 : jpg, jpeg, png, gif\n용량 제한 : Max 10MB');
                 return;
             }
-            if (errorJson?.code === '40022') {
-                alert('업로드는 jpg, jepg, png, gif 파일 만 가능합니다');
+            if (isFileExtensionErrorCode(errorJson.code)) {
+                self.showToast('업로드는 jpg, jpeg, png, gif 파일만 가능합니다.');
+                return;
             }
+            self.showToast(getApiErrorMessage(errorJson, '파일 업로드 중 오류가 발생했습니다.'));
         };
 
         // 2. 서버에 파일 전송
@@ -146,7 +151,7 @@ const dataChannelFileUtil = {
             self.showToast('파일 다운로드에 실패했습니다.');
         };
 
-        fileDownloadAjax(apiUrl, 'POST', '', data, successCallback, errorCallback);
+        fileDownloadAjax(apiUrl, 'POST', true, data, successCallback, errorCallback);
     },
     showToast : function(message) {
         Toastify({

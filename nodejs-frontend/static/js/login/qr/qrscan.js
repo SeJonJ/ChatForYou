@@ -1,10 +1,11 @@
 const QRScan = {
     isInit: false,
     sessionId: null,
-    $statusMessage: $('#status-message'),
+    $statusMessage: null,
     init: function() {
         console.log('[QR Scan] 초기화 시작...');
         let self = this;
+        self.$statusMessage = $('#status-message');
         self.initSessionId();
         self.initFirebase();
     },
@@ -41,8 +42,8 @@ const QRScan = {
                      }
                  }
              ],
-             callbacks: {
-                 signInSuccessWithAuthResult: async (authResult) => {
+            callbacks: {
+                 signInSuccessWithAuthResult: (authResult) => {
                      console.log('Firebase 로그인 성공:', authResult.user.email);
                      const {user} = authResult;
                      self.authenticateSession(user);
@@ -50,7 +51,7 @@ const QRScan = {
                  },
                  signInFailure: (error) => {
                      console.error('Firebase 로그인 실패:', error);
-                     showError('로그인에 실패했습니다. 다시 시도해주세요.');
+                     self.showError('로그인에 실패했습니다. 다시 시도해주세요.');
                  }
              },
              signInFlow: 'popup', // 팝업 방식 (모바일 친화적)
@@ -84,9 +85,10 @@ const QRScan = {
             });
             
             // 백엔드 API 호출
-            ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(result) {
-                console.log('백엔드 인증 성공:', result);
-                if (result.result && result.data) {
+            ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(response) {
+                const { result, data } = response || {};
+                console.log('백엔드 인증 성공:', response);
+                if (result === 'SUCCESS' && data) {
                     console.log('백엔드 인증 성공');
                     self.showSpinner(false);
                     
@@ -99,12 +101,12 @@ const QRScan = {
                         $('#instructions').hide(); 
                     }, 2000);
                 } else {
-                    console.error('백엔드 인증 실패:', result);
-                    self.showError('인증 실패: ' + (result.message || '알 수 없는 오류'));
+                    console.error('백엔드 인증 실패:', response);
+                    self.showError('인증 실패: ' + (response?.message || '알 수 없는 오류'));
                 }
             }, function(error) {
                 console.error('백엔드 인증 실패:', error);
-                self.showError('인증 중 오류가 발생했습니다.\n네트워크 연결을 확인하세요.');
+                self.showError(getApiErrorMessage(error?.responseJSON, '인증 중 오류가 발생했습니다.\n네트워크 연결을 확인하세요.'));
             }, function() {
                 self.showSpinner(false);
             });

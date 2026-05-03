@@ -124,7 +124,8 @@ const wsMessageHandlers = {
         if (recording?.handleUploadCompleted) {
             recording.handleUploadCompleted(msg);
         } else {
-            alert('녹화 완료', msg.message);
+            // 녹화 모듈이 초기화되지 않은 경우에도 최소한의 완료 피드백은 유지한다.
+            showToast(msg.message || '녹화가 완료되었습니다.', 'success');
         }
     },
     uploadFailed: (msg) => {
@@ -132,7 +133,8 @@ const wsMessageHandlers = {
         if (recording?.handleUploadFailed) {
             recording.handleUploadFailed(msg);
         } else {
-            alert('녹화 실패', msg.message);
+            // 업로드 실패는 화면 전환 없이 즉시 재시도 판단이 가능해야 하므로 경고 토스트로 남긴다.
+            showWarningToast(msg.message || '녹화 업로드에 실패했습니다.');
         }
     },
     recordingInProgress: (msg) => recording.recordingInProgress(msg),
@@ -148,19 +150,27 @@ const wsMessageHandlers = {
         'permissionDeniedError',
         'recordingFileExistsError',
         'recordingAutoStopFailed'
-    ])
+    ]),
+
+    // ==========================================
+    // 6. 서버 에러 (표준 에러 응답 처리)
+    // ==========================================
+    error: (msg) => {
+        // handleApiError는 ajaxUtil.js에 선언되어 있으므로 jqXHR 구조로 래핑
+        handleApiError({ responseJSON: msg });
+    }
 };
 
 // roomId에서 하이픈을 제거한 _connected 키 생성
 function getConnectedKey() {
-    var roomId = new URLSearchParams(window.location.search).get('roomId');
-    return roomId.replaceAll('-', '') + '_connected';
+    const connectedRoomId = new URLSearchParams(window.location.search).get('roomId');
+    return connectedRoomId.replaceAll('-', '') + '_connected';
 }
 
 // _connected 키 정리 헬퍼
 function clearConnectedSession() {
-    for (var i = sessionStorage.length - 1; i >= 0; i--) {
-        var key = sessionStorage.key(i);
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
         if (key && key.endsWith('_connected')) {
             sessionStorage.removeItem(key);
         }
@@ -168,7 +178,7 @@ function clearConnectedSession() {
 }
 
 // WebSocket 지연 생성: 새로고침 시 autoplay 정책 우회
-var ws = null;
+let ws = null;
 
 function connectWebSocket() {
     ws = new WebSocket(window.__CONFIG__.API_BASE_URL.replace(/^http/, 'ws') + '/signal');
@@ -191,8 +201,8 @@ function connectWebSocket() {
     };
 
     ws.onmessage = function (message) {
-        var parsedMessage = JSON.parse(message.data);
-        var handler = wsMessageHandlers[parsedMessage.id];
+        const parsedMessage = JSON.parse(message.data);
+        const handler = wsMessageHandlers[parsedMessage.id];
         if (handler) {
             handler(parsedMessage);
         } else {
@@ -204,7 +214,7 @@ function connectWebSocket() {
 
 // 새로고침 감지 및 연결 분기
 $(function () {
-    var connectedKey = getConnectedKey();
+    const connectedKey = getConnectedKey();
 
     if (sessionStorage.getItem(connectedKey) === 'true') {
         // 같은 방에서 새로고침: 재연결 모달
@@ -220,15 +230,15 @@ $(function () {
     }
 });
 
-var initTurnServer = function(){
-    fetch(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
+const initTurnServer = function () {
+    fetchJson(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         }
-    })
-        .then(response => response.json()) // JSON 데이터로 변환
-        .then(data => {
+    }, 'TURN 서버 정보를 불러오지 못했습니다.')
+        .then(response => {
+            const { data } = response || {};
             turnUrl = data.url;
             turnUser = data.username;
             turnPwd = data.credential;
@@ -236,7 +246,7 @@ var initTurnServer = function(){
         .catch(error => {
             console.error('Error:', error);
         });
-}
+};
 
 let initScript = function () {
     dataChannel.init();
@@ -269,36 +279,36 @@ let constraints = {
 };
 
 let initEvent = function(){
-    $('#subtitleBtn').click(function(){
+    $('#subtitleBtn').on('click', function(){
         toggleSubtitle();
     });    
-    $('#screenShareBtn').click(function(){
+    $('#screenShareBtn').on('click', function(){
         screenShare();
     });
 }
 
-// 오디오 권한 체크 후 미디어 초기화
-async function initializeMediaDevices() {
-    // 오디오 에러 popup 로드
-    await PopupLoader.loadPopup('audio_error');
-    
-    // 먼저 오디오 권한을 체크
-    const hasAudioPermission = await checkAudioPermission();
-    
-    if (!hasAudioPermission.success) {
-        // 오디오 권한이 없으면 에러 모달 표시
-        await showAudioErrorModal(hasAudioPermission.errorType, hasAudioPermission.error);
-        return;
-    }
+// 오디오 권한과 입력 장치를 먼저 점검해 이후 WebRTC 초기화 실패를 줄인다.
+function initializeMediaDevices() {
+    return PopupLoader.loadPopup('audio_error')
+        .then(function () {
+            return checkAudioPermission();
+        })
+        .then(function (hasAudioPermission) {
+            if (!hasAudioPermission.success) {
+                return showAudioErrorModal(hasAudioPermission.errorType, hasAudioPermission.error);
+            }
 
-    // 오디오 전용 테스트 (비디오 장치와의 충돌 방지)
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints.audio });
-        stream.getTracks().forEach(track => track.stop());
-    } catch (error) {
-        console.error('Media devices initialization failed:', error);
-        await showAudioErrorModal(classifyMediaError(error), error);
-    }
+            return navigator.mediaDevices.getUserMedia({ audio: constraints.audio })
+                .then(function (stream) {
+                    stream.getTracks().forEach(function (track) {
+                        track.stop();
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Media devices initialization failed:', error);
+                    return showAudioErrorModal(classifyMediaError(error), error);
+                });
+        });
 }
 
 // 함수 호출
@@ -379,7 +389,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         // (rtcPeer.dispose() 시 공유 트랙이 stop되는 것을 방지)
         if (hasDummyVideo && cachedDummyStream) {
             console.log('[WebRTC:Media] 더미 비디오 캐시 재사용 (clone)');
-            var clonedStream = new MediaStream();
+            const clonedStream = new MediaStream();
             cachedDummyStream.getTracks().forEach(function(track) {
                 clonedStream.addTrack(track.clone());
             });
@@ -450,19 +460,19 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     // 더미 비디오 트랙 생성 (Promise 기반: 이미지 로드 완료 후 resolve)
     function getDummyVideoTrack() {
         return new Promise(function (resolve) {
-            var canvas = document.createElement('canvas');
+            const canvas = document.createElement('canvas');
             canvas.width = 1280;
             canvas.height = 720;
-            var ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d');
 
-            var randomImageNum = Math.floor(Math.random() * 4) + 1;
-            var imagePath = 'images/webrtc/non-video/non_video_' + randomImageNum + '.png';
+            const randomImageNum = Math.floor(Math.random() * 4) + 1;
+            const imagePath = 'images/webrtc/non-video/non_video_' + randomImageNum + '.png';
 
-            var img = new Image();
-            var imageLoaded = false;
-            var drawX = 0, drawY = 0, drawWidth = 1280, drawHeight = 720;
-            var intervalId = null;
-            var resolved = false;
+            const img = new Image();
+            let imageLoaded = false;
+            let drawX = 0, drawY = 0, drawWidth = 1280, drawHeight = 720;
+            let intervalId = null;
+            let resolved = false;
 
             // 캔버스에 프레임 그리기
             function drawFrame() {
@@ -494,8 +504,8 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 // 키프레임 갱신을 위한 주기적 그리기
                 intervalId = setInterval(drawFrame, 500);
 
-                var dummyStream = canvas.captureStream(30);
-                var videoTrack = dummyStream.getVideoTracks()[0];
+                const dummyStream = canvas.captureStream(30);
+                const videoTrack = dummyStream.getVideoTracks()[0];
 
                 // 트랙 종료 시 interval 정리
                 videoTrack.addEventListener('ended', function () {
@@ -511,8 +521,8 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             }
 
             img.onload = function () {
-                var imgRatio = img.width / img.height;
-                var canvasRatio = canvas.width / canvas.height;
+                const imgRatio = img.width / img.height;
+                const canvasRatio = canvas.width / canvas.height;
 
                 if (imgRatio > canvasRatio) {
                     drawWidth = canvas.width;
@@ -558,11 +568,12 @@ function register() {
         // 방 정보를 서버에서 조회
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + new URLSearchParams(window.location.search).get('roomId');
         const successCallback = (response) => {
-            if(response.result === 'REDIRECT_ROOM'){
+            const { result, data } = response || {};
+            if(result === 'REDIRECT_ROOM'){
                 clearConnectedSession();
-                console.log('room redirect to : ', response.data.roomId);
+                console.log('room redirect to : ', data?.roomId);
                 location.reload();
-            } else if(response.result === 'REDIRECT_DASHBOARD'){
+            } else if(result === 'REDIRECT_DASHBOARD'){
                 clearConnectedSession();
                 Toastify({
                     text: "현재 방에 참여할 수 없습니다. \n 잠시 후 다시 시도해주세요.",
@@ -582,8 +593,8 @@ function register() {
                     location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
                 }, 2000);
             } else {
-                if (response?.data) {
-                    kurentoRoomInfo = response.data;
+                if (data) {
+                    kurentoRoomInfo = data;
                     
                         initTurnServer();
                         // 방 정보가 있으면 필요한 데이터 할당
@@ -613,12 +624,13 @@ function register() {
         const errorCallback = (error) => {
             clearConnectedSession();
             console.error('방 정보 조회 실패:', error);
-            if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
-                self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
-            } else if (error?.responseJSON && '40061' === error.responseJSON.code) {
-                alert("입장 정보가 확인되지 않았습니다. 다시 시도해주세요.")
-                window.location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                showWarningToast(getApiErrorMessage(error.responseJSON, '입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'));
+                redirectToRoomList();
             }
         };
         // AJAX 요청 실행
@@ -651,19 +663,19 @@ function callResponse(message) {
 }
 
 function onExistingParticipants(msg) {
-    var participant = new Participant(userId, nickName, roomId);
+    const participant = new Participant(userId, nickName, roomId);
     participants[userId] = participant;
     dataChannel.initDataChannelUser(participant);
-    var video = participant.getVideoElement();
-    var audio = participant.getAudioElement();
+    const video = participant.getVideoElement();
+    const audio = participant.getAudioElement();
 
     function handleSuccess(stream) {
-        var hasVideo = constraints.video && stream.getVideoTracks().length > 0
+        const hasVideo = constraints.video && stream.getVideoTracks().length > 0;
 
         // 로컬 스트림 백업 (화면 공유 복원용)
         participant.setLocalStream(stream);
 
-        var options = {
+        const options = {
             localVideo: hasVideo ? video : null,
             localAudio: audio,
             videoStream: stream,
@@ -700,34 +712,38 @@ function onExistingParticipants(msg) {
         msg.data.forEach(receiveVideo)
     }
 
-    // 오디오 권한 체크 후 getUserMedia 호출
-    async function initializeUserMedia() {
-        const hasAudioPermission = await checkAudioPermission();
-        
-        if (!hasAudioPermission.success) {
-            showAudioErrorModal(hasAudioPermission.errorType, hasAudioPermission.error);
-            return;
-        }
+    // 입장 직후에는 권한 검사 결과가 먼저 정리돼야 handleSuccess로 넘어간다.
+    function initializeUserMedia() {
+        return checkAudioPermission()
+            .then(function (hasAudioPermission) {
+                if (!hasAudioPermission.success) {
+                    showAudioErrorModal(hasAudioPermission.errorType, hasAudioPermission.error);
+                    return null;
+                }
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            handleSuccess(stream);
-        } catch (error) {
-            console.error('getUserMedia failed:', error);
-            showAudioErrorModal(classifyMediaError(error), error);
-        }
+                return navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function (stream) {
+                        handleSuccess(stream);
+                        return stream;
+                    })
+                    .catch(function (error) {
+                        console.error('getUserMedia failed:', error);
+                        showAudioErrorModal(classifyMediaError(error), error);
+                        return null;
+                    });
+            });
     }
 
     initializeUserMedia();
 }
 
 function receiveVideo(sender) {
-    var participant = new Participant(sender.userId, sender.nickName, roomId);
+    const participant = new Participant(sender.userId, sender.nickName, roomId);
     participants[sender.userId] = participant;
-    var video = participant.getVideoElement();
-    var audio = participant.getAudioElement();
+    const video = participant.getVideoElement();
+    const audio = participant.getAudioElement();
 
-    var options = {
+    const options = {
         remoteVideo: video,
         remoteAudio : audio,
         onicecandidate: participant.onIceCandidate.bind(participant),
@@ -783,7 +799,7 @@ function receiveVideo(sender) {
         audio.muted = true;
 
         // 오디오 재생 함수 (비디오 재생 성공 후 호출)
-        var playAudio = function() {
+        const playAudio = function() {
             if (audio && audio.srcObject) {
                 audio.play().then(function() {
                     console.log('[WebRTC:Play] 오디오 재생 시작됨');
@@ -818,7 +834,7 @@ function receiveVideo(sender) {
     };
 }
 
-var leftUserfunc = function(){
+const leftUserfunc = function() {
     // 서버로 연결 종료 메시지 전달
     sendMessageToServer({
         event: 'LEAVE_ROOM',
@@ -843,7 +859,7 @@ var leftUserfunc = function(){
 
     // session storage 제거
     clearConnectedSession();
-}
+};
 
 // 웹 종료 or 새로고침 시 이벤트
 window.onbeforeunload = function () {
@@ -873,7 +889,7 @@ function leaveRoom(type) {
 function onParticipantLeft(request) {
     console.log('[WebRTC:Participant] 퇴장:', request.name);
 
-    var participant = participants[request.name];
+    const participant = participants[request.name];
 
     if (!participant) {
         console.warn('[WebRTC:Participant] 참가자 없음:', request.name);
@@ -915,7 +931,7 @@ function sendMessageToServer(message) {
         console.warn('[WebSocket] 연결되지 않은 상태에서 메시지 전송 시도:', message.event);
         return;
     }
-    var jsonMessage = JSON.stringify(message);
+    const jsonMessage = JSON.stringify(message);
     ws.send(jsonMessage);
 }
 
@@ -997,37 +1013,35 @@ const screenShareConfig = {
 };
 
 // 네트워크 품질 감지
-async function detectNetworkQuality() {
-    try {
-        // RTCPeerConnection에서 통계 정보 수집
-        const participant = participants[userId];
-        if (!participant || !participant.rtcPeer || !participant.rtcPeer.peerConnection) {
-            return 'medium';
-        }
+function detectNetworkQuality() {
+    const participant = participants[userId];
+    if (!participant || !participant.rtcPeer || !participant.rtcPeer.peerConnection) {
+        return Promise.resolve('medium');
+    }
 
-        const stats = await participant.rtcPeer.peerConnection.getStats();
-        let outboundRtp = null;
-        let candidatePair = null;
-        
-        stats.forEach(report => {
-            if (report.type === 'outbound-rtp' && report.kind === 'video') {
-                outboundRtp = report;
-            } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-                candidatePair = report;
+    return participant.rtcPeer.peerConnection.getStats()
+        .then(function (stats) {
+            let outboundRtp = null;
+            let candidatePair = null;
+
+            stats.forEach(function (report) {
+                if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                    outboundRtp = report;
+                } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    candidatePair = report;
+                }
+            });
+
+            if (!outboundRtp || !candidatePair) {
+                return 'medium';
             }
-        });
 
-        if (outboundRtp && candidatePair) {
-            // 향상된 네트워크 품질 분석
-            const bitrate = outboundRtp.bytesSent * 8 / 1000; // kbps
+            const bitrate = outboundRtp.bytesSent * 8 / 1000;
             const packetLoss = outboundRtp.packetsLost || 0;
-            const rtt = candidatePair.currentRoundTripTime * 1000 || 0; // ms
+            const rtt = candidatePair.currentRoundTripTime * 1000 || 0;
             const jitter = outboundRtp.jitter || 0;
-            
-            // 다중 지표 기반 품질 결정
+
             let qualityScore = 100;
-            
-            // 비트레이트 점수 (40%)
             if (bitrate > 2000) {
                 qualityScore += 0;
             } else if (bitrate > 1000) {
@@ -1035,23 +1049,19 @@ async function detectNetworkQuality() {
             } else {
                 qualityScore -= 30;
             }
-            
-            // 패킷 손실 점수 (30%)
+
             qualityScore -= Math.min(packetLoss * 2, 40);
-            
-            // RTT 점수 (20%)
+
             if (rtt > 200) {
                 qualityScore -= 20;
             } else if (rtt > 100) {
                 qualityScore -= 10;
             }
-            
-            // 지터 점수 (10%)
+
             if (jitter > 0.05) {
                 qualityScore -= 10;
             }
-            
-            // 품질 등급 결정
+
             let quality;
             if (qualityScore >= 80) {
                 quality = 'high';
@@ -1060,16 +1070,14 @@ async function detectNetworkQuality() {
             } else {
                 quality = 'low';
             }
-            
+
             lastNetworkQuality = quality;
             return quality;
-        }
-        
-        return 'medium';
-    } catch (error) {
-        console.warn('네트워크 품질 감지 실패:', error);
-        return 'medium';
-    }
+        })
+        .catch(function (error) {
+            console.warn('네트워크 품질 감지 실패:', error);
+            return 'medium';
+        });
 }
 
 // 디바이스 성능 감지 시스템
@@ -1095,56 +1103,45 @@ const devicePerformance = {
 };
 
 // 디바이스 성능 감지
-async function detectDevicePerformance() {
-    try {
-        const participant = participants[userId];
-        if (!participant || !participant.rtcPeer) {
-            return 'medium';
-        }
+function detectDevicePerformance() {
+    const participant = participants[userId];
+    if (!participant || !participant.rtcPeer) {
+        return Promise.resolve('medium');
+    }
 
-        const stats = await participant.rtcPeer.peerConnection.getStats();
-        let outboundRtp = null;
-        let codecStats = null;
-        
-        stats.forEach(report => {
-            if (report.type === 'outbound-rtp' && report.kind === 'video') {
-                outboundRtp = report;
-            } else if (report.type === 'codec' && report.mimeType && report.mimeType.includes('video')) {
-                codecStats = report;
+    return participant.rtcPeer.peerConnection.getStats()
+        .then(function (stats) {
+            let outboundRtp = null;
+
+            stats.forEach(function (report) {
+                if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                    outboundRtp = report;
+                }
+            });
+
+            if (!outboundRtp) {
+                return 'medium';
             }
-        });
 
-        if (outboundRtp) {
-            // 프레임률 계산
             const currentFrameRate = outboundRtp.framesPerSecond || 0;
             const framesSent = outboundRtp.framesSent || 0;
             const framesEncoded = outboundRtp.framesEncoded || 0;
-            
-            // 프레임 드롭률 계산
             const frameDropRate = framesSent > 0 ? ((framesEncoded - framesSent) / framesEncoded) * 100 : 0;
-            
-            // 인코딩 시간 (밀리초)
             const encodeTime = outboundRtp.totalEncodeTime || 0;
             const encodedFrames = outboundRtp.framesEncoded || 1;
-            const avgEncodeTime = (encodeTime * 1000) / encodedFrames; // ms per frame
-            
-            // 메트릭 업데이트
+            const avgEncodeTime = (encodeTime * 1000) / encodedFrames;
+
             devicePerformance.metrics.frameDropRate = frameDropRate;
             devicePerformance.metrics.encodeTime = avgEncodeTime;
             devicePerformance.metrics.lastUpdated = Date.now();
-            
-            // 히스토리 업데이트
+
             updatePerformanceHistory(currentFrameRate, avgEncodeTime, outboundRtp.bytesSent);
-            
-            // 성능 등급 결정
             return calculatePerformanceGrade();
-        }
-        
-        return 'medium';
-    } catch (error) {
-        console.warn('디바이스 성능 감지 실패:', error);
-        return 'medium';
-    }
+        })
+        .catch(function (error) {
+            console.warn('디바이스 성능 감지 실패:', error);
+            return 'medium';
+        });
 }
 
 // 성능 히스토리 업데이트
@@ -1213,78 +1210,79 @@ function calculatePerformanceGrade() {
 }
 
 // 통합 품질 결정 (네트워크 + 디바이스)
-async function determineOptimalQuality() {
-    const networkQuality = await detectNetworkQuality();
-    const deviceQuality = await detectDevicePerformance();
-    
-    // 품질 우선순위 매트릭스
-    const qualityMatrix = {
-        'high_high': 'high',
-        'high_medium': 'medium',
-        'high_low': 'medium',
-        'medium_high': 'medium',
-        'medium_medium': 'medium',
-        'medium_low': 'low',
-        'low_high': 'low',
-        'low_medium': 'low',
-        'low_low': 'low'
-    };
-    
-    const key = `${networkQuality}_${deviceQuality}`;
-    const optimalQuality = qualityMatrix[key] || 'medium';
-    
-    console.log(`품질 결정: 네트워크(${networkQuality}) + 디바이스(${deviceQuality}) = ${optimalQuality}`);
-    
-    return optimalQuality;
+function determineOptimalQuality() {
+    return Promise.all([
+        detectNetworkQuality(),
+        detectDevicePerformance()
+    ]).then(function (qualities) {
+        const networkQuality = qualities[0];
+        const deviceQuality = qualities[1];
+        const qualityMatrix = {
+            'high_high': 'high',
+            'high_medium': 'medium',
+            'high_low': 'medium',
+            'medium_high': 'medium',
+            'medium_medium': 'medium',
+            'medium_low': 'low',
+            'low_high': 'low',
+            'low_medium': 'low',
+            'low_low': 'low'
+        };
+
+        const key = `${networkQuality}_${deviceQuality}`;
+        const optimalQuality = qualityMatrix[key] || 'medium';
+
+        console.log(`품질 결정: 네트워크(${networkQuality}) + 디바이스(${deviceQuality}) = ${optimalQuality}`);
+        return optimalQuality;
+    });
 }
 
 // 고급 화면 공유 품질 자동 조정
-async function adjustScreenShareQuality() {
-    if (!shareView || !screenShareConfig.autoOptimize) return;
-
-    const optimalQuality = await determineOptimalQuality();
-    
-    // 현재 품질과 다를 때만 조정
-    if (optimalQuality !== screenShareConfig.currentQuality) {
-        const currentPreset = screenShareConfig.qualityPresets[optimalQuality];
-        
-        // 현재 트랙의 제약조건 업데이트
-        const videoTrack = shareView.getVideoTracks()[0];
-        if (videoTrack && currentPreset) {
-            try {
-                // 점진적 품질 조정 (급격한 변화 방지)
-                const smoothTransition = await createSmoothQualityTransition(
-                    screenShareConfig.currentQuality, 
-                    optimalQuality
-                );
-                
-                await videoTrack.applyConstraints(smoothTransition);
-                screenShareConfig.currentQuality = optimalQuality;
-                
-                console.log(`화면 공유 품질 조정: ${optimalQuality} (점진적 전환)`);
-                
-                // UI 업데이트
-                updateScreenShareUI(optimalQuality);
-                
-                // 품질 변경 알림
-                showQualityChangeNotification(optimalQuality);
-                
-            } catch (error) {
-                console.warn('화면 공유 품질 조정 실패:', error);
-                // 실패 시 이전 품질로 롤백
-                try {
-                    const fallbackPreset = screenShareConfig.qualityPresets[screenShareConfig.currentQuality];
-                    await videoTrack.applyConstraints(fallbackPreset);
-                } catch (rollbackError) {
-                    console.error('품질 롤백 실패:', rollbackError);
-                }
-            }
-        }
+function adjustScreenShareQuality() {
+    if (!shareView || !screenShareConfig.autoOptimize) {
+        return Promise.resolve();
     }
+
+    return determineOptimalQuality()
+        .then(function (optimalQuality) {
+            if (optimalQuality === screenShareConfig.currentQuality) {
+                return null;
+            }
+
+            const currentPreset = screenShareConfig.qualityPresets[optimalQuality];
+            const videoTrack = shareView.getVideoTracks()[0];
+            if (!videoTrack || !currentPreset) {
+                return null;
+            }
+
+            return createSmoothQualityTransition(
+                screenShareConfig.currentQuality,
+                optimalQuality
+            ).then(function (smoothTransition) {
+                return videoTrack.applyConstraints(smoothTransition)
+                    .then(function () {
+                        screenShareConfig.currentQuality = optimalQuality;
+                        console.log(`화면 공유 품질 조정: ${optimalQuality} (점진적 전환)`);
+                        updateScreenShareUI(optimalQuality);
+                        showQualityChangeNotification(optimalQuality);
+                    })
+                    .catch(function (error) {
+                        console.warn('화면 공유 품질 조정 실패:', error);
+                        const fallbackPreset = screenShareConfig.qualityPresets[screenShareConfig.currentQuality];
+                        if (!fallbackPreset) {
+                            return null;
+                        }
+                        return videoTrack.applyConstraints(fallbackPreset).catch(function (rollbackError) {
+                            console.error('품질 롤백 실패:', rollbackError);
+                            return null;
+                        });
+                    });
+            });
+        });
 }
 
 // 점진적 품질 전환 생성
-async function createSmoothQualityTransition(currentQuality, targetQuality) {
+function createSmoothQualityTransition(currentQuality, targetQuality) {
     const current = screenShareConfig.qualityPresets[currentQuality];
     const target = screenShareConfig.qualityPresets[targetQuality];
     
@@ -1304,7 +1302,7 @@ async function createSmoothQualityTransition(currentQuality, targetQuality) {
         }
     };
     
-    return transition;
+    return Promise.resolve(transition);
 }
 
 // 품질 변경 알림
@@ -1352,57 +1350,55 @@ function showQualityChangeNotification(quality) {
 }
 
 // 강화된 화면 공유 통계 업데이트
-async function updateScreenShareStats() {
-    if (!shareView) return;
+function updateScreenShareStats() {
+    if (!shareView) {
+        return Promise.resolve();
+    }
 
-    try {
-        const participant = participants[userId];
-        if (!participant || !participant.rtcPeer) return;
+    const participant = participants[userId];
+    if (!participant || !participant.rtcPeer) {
+        return Promise.resolve();
+    }
 
-        const stats = await participant.rtcPeer.peerConnection.getStats();
-        let outboundRtp = null;
-        let inboundRtp = null;
-        
-        stats.forEach(report => {
-            if (report.type === 'outbound-rtp' && report.kind === 'video') {
-                outboundRtp = report;
-            } else if (report.type === 'inbound-rtp' && report.kind === 'video') {
-                inboundRtp = report;
+    return participant.rtcPeer.peerConnection.getStats()
+        .then(function (stats) {
+            let outboundRtp = null;
+
+            stats.forEach(function (report) {
+                if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                    outboundRtp = report;
+                }
+            });
+
+            if (!outboundRtp) {
+                return;
             }
-        });
 
-        if (outboundRtp) {
             const now = Date.now();
             const timeDiff = (now - screenShareConfig.stats.timestamp) / 1000;
-            
-            if (timeDiff > 0) {
-                // 기본 통계
-                const bytesDiff = outboundRtp.bytesSent - (screenShareConfig.stats.bytesLastSent || 0);
-                screenShareConfig.stats.bitrate = (bytesDiff * 8) / (timeDiff * 1000); // kbps
-                screenShareConfig.stats.frameRate = outboundRtp.framesPerSecond || 0;
-                screenShareConfig.stats.packetsLost = outboundRtp.packetsLost || 0;
-                screenShareConfig.stats.bytesLastSent = outboundRtp.bytesSent;
-                screenShareConfig.stats.timestamp = now;
-                
-                // 확장 통계
-                screenShareConfig.stats.framesEncoded = outboundRtp.framesEncoded || 0;
-                screenShareConfig.stats.framesSent = outboundRtp.framesSent || 0;
-                screenShareConfig.stats.encodeTime = outboundRtp.totalEncodeTime || 0;
-                screenShareConfig.stats.qualityLimitationReason = outboundRtp.qualityLimitationReason || 'none';
-                
-                // 화질 제한 원인 분석
-                analyzeQualityLimitation(outboundRtp.qualityLimitationReason);
-                
-                // 성능 경고 확인
-                checkPerformanceWarnings();
-                
-                // UI 업데이트
-                updateStatsDisplay();
+            if (timeDiff <= 0) {
+                return;
             }
-        }
-    } catch (error) {
-        console.warn('화면 공유 통계 업데이트 실패:', error);
-    }
+
+            const bytesDiff = outboundRtp.bytesSent - (screenShareConfig.stats.bytesLastSent || 0);
+            screenShareConfig.stats.bitrate = (bytesDiff * 8) / (timeDiff * 1000);
+            screenShareConfig.stats.frameRate = outboundRtp.framesPerSecond || 0;
+            screenShareConfig.stats.packetsLost = outboundRtp.packetsLost || 0;
+            screenShareConfig.stats.bytesLastSent = outboundRtp.bytesSent;
+            screenShareConfig.stats.timestamp = now;
+
+            screenShareConfig.stats.framesEncoded = outboundRtp.framesEncoded || 0;
+            screenShareConfig.stats.framesSent = outboundRtp.framesSent || 0;
+            screenShareConfig.stats.encodeTime = outboundRtp.totalEncodeTime || 0;
+            screenShareConfig.stats.qualityLimitationReason = outboundRtp.qualityLimitationReason || 'none';
+
+            analyzeQualityLimitation(outboundRtp.qualityLimitationReason);
+            checkPerformanceWarnings();
+            updateStatsDisplay();
+        })
+        .catch(function (error) {
+            console.warn('화면 공유 통계 업데이트 실패:', error);
+        });
 }
 
 // 화질 제한 원인 분석
@@ -1619,6 +1615,7 @@ function ScreenHandler() {
      * 화면 공유를 시작합니다.
      * @returns {Promise<MediaStream>} 화면 공유에 사용되는 미디어 스트림을 반환합니다.
      */
+    // 화면 공유 핵심 경로는 트랙 교체와 종료 이벤트 순서가 민감해서 async/await 흐름을 유지한다.
     async function start() {
         try {
             shareView = await getCrossBrowserScreenCapture();
@@ -1674,9 +1671,14 @@ function startScreenShareMonitoring() {
     }
     
     // 통계 업데이트 및 품질 조정 (2초마다 - 더 빠른 반응성)
-    screenShareConfig.qualityAdjustInterval = setInterval(async () => {
-        await updateScreenShareStats();
-        await adjustScreenShareQuality();
+    screenShareConfig.qualityAdjustInterval = setInterval(function () {
+        updateScreenShareStats()
+            .then(function () {
+                return adjustScreenShareQuality();
+            })
+            .catch(function (error) {
+                console.warn('화면 공유 모니터링 루프 실패:', error);
+            });
     }, 2000);
     
     // UI 표시
@@ -1717,8 +1719,7 @@ function showScreenShareError(error) {
     }
     
     console.warn(`[WebRTC:Screen] 화면 공유 오류: ${message}`, error);
-    // 사용자에게 알림 (필요시 모달로 확장 가능)
-    alert(message);
+    showWarningToast(message);
 }
 
 
@@ -1741,29 +1742,35 @@ function toggleAutoOptimize() {
 }
 
 // 화면 공유 품질 수동 변경
-async function changeScreenShareQuality(quality) {
+function changeScreenShareQuality(quality) {
     screenShareConfig.currentQuality = quality;
-    
-    if (shareView) {
-        const videoTrack = shareView.getVideoTracks()[0];
-        const constraints = screenShareConfig.qualityPresets[quality];
-        
-        if (videoTrack && constraints) {
-            try {
-                await videoTrack.applyConstraints(constraints);
-                updateScreenShareUI(quality);
-                console.log(`[WebRTC:Screen] 품질 변경: ${quality}`);
-            } catch (error) {
-                console.warn('[WebRTC:Screen] 품질 변경 실패:', error);
-            }
-        }
+
+    if (!shareView) {
+        return Promise.resolve();
     }
+
+    const videoTrack = shareView.getVideoTracks()[0];
+    const constraints = screenShareConfig.qualityPresets[quality];
+
+    if (!videoTrack || !constraints) {
+        return Promise.resolve();
+    }
+
+    return videoTrack.applyConstraints(constraints)
+        .then(function () {
+            updateScreenShareUI(quality);
+            console.log(`[WebRTC:Screen] 품질 변경: ${quality}`);
+        })
+        .catch(function (error) {
+            console.warn('[WebRTC:Screen] 품질 변경 실패:', error);
+        });
 }
 
 /**
  * 강화된 화면 공유 시작 함수
  * @returns {Promise<void>}
  */
+// 이 구간은 WebRTC sender.replaceTrack와 AudioContext 정리 타이밍이 민감해 Promise 체인으로 바꾸지 않는다.
 async function startScreenShare() {
     try {
         // 화면 공유 스트림 획득
@@ -1893,6 +1900,7 @@ async function startScreenShare() {
  * 강화된 화면 공유 중지 함수
  * @returns {Promise<void>}
  */
+// 중지 시에는 원본 스트림 복원과 AudioContext close 순서가 중요해서 async/await를 유지한다.
 async function stopScreenShare() {
     try {
         const participant = participants[userId];
@@ -2001,6 +2009,7 @@ async function stopScreenShare() {
  * 화면 공유 토글 함수 (버튼 클릭 시 호출)
  * @returns {Promise<void>}
  */
+// 토글 함수는 시작/중지 성공 여부를 순차적으로 반영해야 해서 async/await를 유지한다.
 async function screenShare() {
     const screenShareBtn = $("#screenShareBtn");
     const isScreenShare = screenShareBtn.data("flag");
@@ -3115,43 +3124,42 @@ function toggleMinimalMode() {
 }
 
 // 원클릭 최적화
-async function oneClickOptimize() {
+function oneClickOptimize() {
     showToast('최적화를 진행하고 있습니다...', 'info');
-    
-    try {
-        // 1. 네트워크 및 디바이스 상태 재분석
-        const networkQuality = await detectNetworkQuality();
-        const deviceQuality = await detectDevicePerformance();
-        
-        // 2. 최적 품질 결정
-        const optimalQuality = await determineOptimalQuality();
-        
-        // 3. 품질 즉시 적용
-        if (optimalQuality !== screenShareConfig.currentQuality) {
-            await changeScreenShareQuality(optimalQuality);
-            quickQualityChange(optimalQuality);
-        }
-        
-        // 4. 자동 최적화 활성화
-        if (!screenShareConfig.autoOptimize) {
-            toggleAutoOptimize();
-        }
-        
-        // 5. 결과 표시
-        const resultMessage = `최적화 완료!\n네트워크: ${getQualityLabel(networkQuality)}\n디바이스: ${getQualityLabel(deviceQuality)}\n적용된 화질: ${getQualityLabel(optimalQuality)}`;
-        
-        showToast(resultMessage, 'success');
-        
-        console.log('원클릭 최적화 완료:', {
-            networkQuality,
-            deviceQuality,
-            optimalQuality
+
+    return Promise.all([
+        detectNetworkQuality(),
+        detectDevicePerformance(),
+        determineOptimalQuality()
+    ]).then(function (qualities) {
+        const networkQuality = qualities[0];
+        const deviceQuality = qualities[1];
+        const optimalQuality = qualities[2];
+
+        const applyQualityChange = optimalQuality !== screenShareConfig.currentQuality
+            ? changeScreenShareQuality(optimalQuality).then(function () {
+                quickQualityChange(optimalQuality);
+            })
+            : Promise.resolve();
+
+        return applyQualityChange.then(function () {
+            if (!screenShareConfig.autoOptimize) {
+                toggleAutoOptimize();
+            }
+
+            const resultMessage = `최적화 완료!\n네트워크: ${getQualityLabel(networkQuality)}\n디바이스: ${getQualityLabel(deviceQuality)}\n적용된 화질: ${getQualityLabel(optimalQuality)}`;
+            showToast(resultMessage, 'success');
+
+            console.log('원클릭 최적화 완료:', {
+                networkQuality,
+                deviceQuality,
+                optimalQuality
+            });
         });
-        
-    } catch (error) {
+    }).catch(function (error) {
         console.error('원클릭 최적화 실패:', error);
         showToast('최적화 중 오류가 발생했습니다.', 'error');
-    }
+    });
 }
 
 // 향상된 토스트 알림
@@ -3260,7 +3268,9 @@ function initSubtitleUI() {
     updateSubtitleButtonUI({
         status: 'stopped',
         isEnabled: false,
-        isRecognizing: false
+        isRecognizing: false,
+        isElectronBlocked: false,
+        canManualRetry: false
     });
 }
 
@@ -3292,7 +3302,7 @@ function updateSubtitleButtonUI(status) {
     const $subtitleBtn = $('#subtitleBtn')[0];
     if (!$subtitleBtn) return;
     
-    const { isEnabled, isRecognizing, status: currentStatus } = status;
+    const { isEnabled, isRecognizing, status: currentStatus, isElectronBlocked, canManualRetry } = status;
     
     // 버튼 상태 업데이트
     $subtitleBtn.setAttribute('data-flag', isEnabled.toString());
@@ -3320,6 +3330,9 @@ function updateSubtitleButtonUI(status) {
     if (currentStatus === 'error' || currentStatus === 'permission-denied') {
         $subtitleBtn.style.opacity = '0.4';
         $subtitleBtn.title = '자막 기능 오류';
+    } else if (currentStatus === 'unsupported' || isElectronBlocked) {
+        $subtitleBtn.style.opacity = canManualRetry === false ? '0.4' : '0.6';
+        $subtitleBtn.title = 'Electron 음성 인식 불안정 - 수동 재시도 가능';
     }
 }
 
