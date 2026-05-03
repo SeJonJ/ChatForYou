@@ -1,0 +1,4 @@
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+model_instructions_file = "/Users/sejon/project/ChatForYou_v2/.codex/agents/external-consultant.md"

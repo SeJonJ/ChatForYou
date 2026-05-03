@@ -1,7 +1,7 @@
 ---
 name: "backend-test-convention-checker"
 description: "Use this agent when test code needs to be validated — specifically to check recently changed test files (via git diff) against the backend-test-layer skill conventions, and update the PLAN file's checklist accordingly.\n\n<example>\nContext: The user has finished writing test code and wants to validate conventions.\nuser: \"테스트 코드 작성 완료. plan 파일 테스트 컨벤션 검증 단계 진행해줘\"\nassistant: \"backend-test-convention-checker 에이전트를 실행해서 git diff 기준으로 변경된 테스트 파일의 컨벤션을 검증하겠습니다.\"\n</example>\n\n<example>\nContext: The user is at the test convention step of a PLAN file.\nuser: \"recording_plan.md 의 테스트 컨벤션 검증 단계 체크해줘\"\nassistant: \"backend-test-convention-checker 에이전트를 사용해서 테스트 컨벤션 검증 항목을 확인하겠습니다.\"\n</example>"
-model: sonnet
+model: haiku
 color: blue
 memory: project
 ---

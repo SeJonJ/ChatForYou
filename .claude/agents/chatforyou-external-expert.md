@@ -89,6 +89,16 @@ color: orange
 | 코드 품질 전반 검토 | `code-review:code-review` skill |
 | 개별 설계 독립 검토 방법론 참고 | `.claude/agents/external-consultant.md` |
 
+### 선택적 스킬 호출 (기능 맥락에 따라)
+
+| 조건 | 사용 스킬 |
+|------|---------|
+| 코드·설계·보안 전반의 종합 감사가 필요할 때 | `bkit:audit` |
+| 팀 결과물 종합 코드 리뷰 시 | `bkit:code-review` |
+| 프로덕션 레디 여부를 엄격하게 검토할 때 | `gstack:review` |
+| 다른 AI 모델(OpenAI)의 독립적 관점으로 교차 검증할 때 | `gstack:codex` |
+| 보안 위협 종합 검토(OWASP + STRIDE)가 필요할 때 | `gstack:cso` |
+
 ---
 
 ## 행동 규칙

@@ -10,6 +10,7 @@
    - `docs/springboot_backend.md`
    - `docs/nodejs_frontend.md`
    - `docs/chatforyou_desktop.md`
+   - `docs/git_commit_convention.md`
 4. Claude runtime assets
    - `.claude/agents/*`
    - `.claude/skills/*`

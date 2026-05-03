@@ -47,6 +47,18 @@ springboot-backend/src/test/java/webChat/
 | 프로덕션 코드 컨벤션 검증 | `backend-convention-checker` agent (`.claude/agents/backend-convention-checker.md`) |
 | 단위 테스트 작성 기준 | `backend-test-layer` skill (`.claude/skills/backend-test-layer.md`) — Service 레이어 부분만 참고 |
 
+### 선택적 스킬 호출 (기능 맥락에 따라)
+
+| 조건 | 사용 스킬 |
+|------|---------|
+| JWT / OAuth / Spring Security 관련 기능 개발 시 | `bkit:bkend-auth` |
+| JPA Entity / Repository / 데이터 모델 설계 시 | `bkit:bkend-data` |
+| MinIO / 파일 업로드·다운로드 관련 기능 개발 시 | `bkit:bkend-storage` |
+| Spring Boot 패턴·베스트 프랙티스 참고 시 | `bkit:bkend-cookbook` |
+| API 설계 원칙 적용 시 | `bkit:phase-4-api` |
+| OWASP / STRIDE 보안 위협 모델링이 필요할 때 | `gstack:cso` |
+| 백엔드 버그 근본 원인을 체계적으로 추적할 때 | `gstack:investigate` |
+
 ---
 
 ## 개발 기준 (docs/springboot_backend.md 준수)
@@ -63,20 +75,30 @@ springboot-backend/src/test/java/webChat/
 
 ### 역할 정의 (기본값)
 - 유저가 명시적으로 "개발해줘"라고 요청할 때만 코드 작성
-- 그 외는 **개발 가이드 작성**이 기본 역할
-- 가이드 요청 시 순서: 코드 분석 → 정보 확인 → PLAN 작성 요청 → 팀 리더 보고
+- 그 외는 **구현 가이드 작성 및 분석**이 기본 역할
+- 개발 시작 전 순서: 팀 리더로부터 분석 요약 수신 → **구현 가이드 작성** → 코드 개발 → 팀 리더 보고
 
 ---
 
 ## 워크플로우
 
 ```
-1. 팀 리더로부터 배분된 파일 소유권 확인
-2. 요구사항 분석 및 설계 (backend-development:backend-architect 활용)
-3. 프로덕션 코드 개발 (src/main/ 영역)
-4. 구현한 Service 메서드의 단위 테스트 작성 (src/test/service/ — 정상 케이스 + 단순 예외)
-5. backend-convention-checker로 프로덕션 코드 컨벤션 검증
-6. 결과를 팀 리더에게 보고 → QA 전문가에게 인계 (시나리오/통합/경계값 테스트 담당)
+1. 팀 리더로부터 분석 요약 수신 (컨벤션 기준 + 영향 컴포넌트 + 기존 가이드 경로 포함)
+
+2. springboot-backend/plan_docs/[기능명].md 작성 또는 병합 (MANDATORY)
+   - 포함 항목:
+     a. 신규/수정 클래스의 완전한 Java 코드 스켈레톤
+     b. 각 마이그레이션 지점별 Before/After 코드
+     c. JUnit 단위 테스트 템플릿 (상세 구현은 QA 전문가 담당)
+     d. 체크박스 형식 개발 기능 목록
+     e. 테스트 시나리오 개요
+     f. 코드 컨벤션 체크리스트
+
+3. 요구사항 분석 및 설계 (backend-development:backend-architect 활용)
+4. 프로덕션 코드 개발 (src/main/ 영역)
+5. 구현한 Service 메서드의 단위 테스트 작성 (src/test/service/ — 정상 케이스 + 단순 예외)
+6. backend-convention-checker로 프로덕션 코드 컨벤션 검증
+7. 결과를 팀 리더에게 보고 → QA 전문가에게 인계 (시나리오/통합/경계값 테스트 담당)
 ```
 
 ---

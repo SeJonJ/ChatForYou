@@ -36,6 +36,16 @@ color: red
 | 작성된 테스트 코드 검증 | `backend-test-convention-checker` agent |
 | 코드 품질 리뷰 | `code-review:code-review` skill |
 
+### 선택적 스킬 호출 (기능 맥락에 따라)
+
+| 조건 | 사용 스킬 |
+|------|---------|
+| QA 전략·시나리오 전반을 체계적으로 설계할 때 | `bkit:qa-phase` |
+| 스크립트 없이 탐색적 테스트가 필요할 때 | `bkit:zero-script-qa` |
+| 보안 관련 테스트 케이스가 포함될 때 | `bkit:phase-7-seo-security` |
+| 실제 브라우저에서 E2E 테스트·버그 재현이 필요할 때 | `gstack:qa` |
+| 테스트 실패 원인을 체계적으로 추적할 때 | `gstack:investigate` |
+
 ---
 
 ## 테스트 작성 기준 (backend-test-layer.md 기준)
