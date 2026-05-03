@@ -154,9 +154,6 @@ springboot-backend/.nb-gradle/
 springboot-backend/src/main/resources/data/
 springboot-backend/src/main/resources/geodata/
 
-# 개발 설계 분석 파일
-**/plan_docs/
-
 # ========================================
 # figma-ai 설정
 # ========================================
@@ -165,6 +162,9 @@ figma-plugin
 # ========================================
 # AI Tool 설정
 # ========================================
+**/.bkit/
+.agent
+
 ## claude 관련
 # .claude
 !CLAUDE.md
@@ -173,10 +173,34 @@ settings.local.json
 .claude/agent-memory/
 
 ## gemini 관련
-.agent
+.gemini/
+GEMINI.md
 
 # cursor 관련
 .cursor
+
+# codex project-local runtime
+.codex/auth.json
+.codex/history.jsonl
+.codex/installation_id
+.codex/models_cache.json
+.codex/version.json
+.codex/.personality_migration
+.codex/cache/
+.codex/log/
+.codex/logs_*.sqlite
+.codex/logs_*.sqlite-shm
+.codex/logs_*.sqlite-wal
+.codex/agent-memory/
+.codex/memories/
+.codex/rules/
+.codex/sessions/
+.codex/shell_snapshots/
+.codex/state_*.sqlite
+.codex/state_*.sqlite-shm
+.codex/state_*.sqlite-wal
+.codex/tmp/
+.codex/.tmp/
 
 # 테스트 결과물
 test-results/
@@ -185,5 +209,17 @@ coverage-report/
 # 로그 파일들
 *.log
 logs/
-.gemini/
 gha-creds-*.json
+
+# ========================================
+# AI 결과물 설정
+# ========================================
+plan_docs/old
+plan_docs/01**
+plan_docs/02**
+plan_docs/03**
+plan_docs/04**
+plan_docs/05**
+
+springboot-backend/plan_docs/*
+nodejs-frontend/plan_docs/*
