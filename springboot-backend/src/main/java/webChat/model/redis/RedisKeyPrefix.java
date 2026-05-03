@@ -15,7 +15,8 @@ public enum RedisKeyPrefix {
     COOKIE_DISCOVERY_LOCK("cookie:discovery:lock:"),
     INSTANCE_INFO_PREFIX("instance:info:"),
     OAUTH_PREFIX("oauth:"),
-    QR_SESSION_PREFIX("qr:session:")
+    QR_SESSION_PREFIX("qr:session:"),
+    NOTI_PREFIX("noti:")
     ;
 
 

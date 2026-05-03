@@ -142,10 +142,13 @@ public class RedisConfig {
 //                .addField(new TextField("userId").noStem())
 //                .addField(new TextField("nickName").noStem());
 
+        Schema notiSchema = new Schema()
+                .addField(new Field("userIdx", FieldType.NUMERIC));
 
         // 인덱스 생성 (존재하지 않을 경우에만 생성)
         try {
             redisSearchClient.getRediSearch(RedisIndex.CHATROOM.getType()).createIndex(chatRoomSchema);
+            redisSearchClient.getRediSearch(RedisIndex.NOTI.getType()).createIndex(notiSchema);
 //            redisSearchClient.getRediSearch(RedisIndex.LOGIN_USER.getType()).createIndex(userSchema);
             log.info("##### Successfully create Index #####");
         } catch (Exception e) {

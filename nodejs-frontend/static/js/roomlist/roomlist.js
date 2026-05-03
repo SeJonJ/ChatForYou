@@ -4,7 +4,7 @@ const roomList = {
   init: function() {
     const self = this;
     self.loadRoomList();
-    self.initSse();
+    idlocalStorage.getItem('access_token') == null ? self.initSse() : self.changeSse();
     self.checkVisitor();
     self.initModals();
     self.initInputLimits();
@@ -57,7 +57,15 @@ const roomList = {
   },
   initSse: function() {
     const self = this;
-    const eventSource = new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events');
+    const uuid = localStorage.getItem('uuid') != null ? localStorage.getItem('uuid') : crypto.randomUUID();
+    var eventSource;
+    if () {
+      const uuid = localStorage.getItem('uuid');
+      const accountId = localStorage.getItem('email');
+      const eventSource = new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events/' + uuid + '/' + accountId);
+    }
+     new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events/' + uuid);
+    localStorage.setItem('uuid', uuid);    
 
     eventSource.addEventListener('roomCreated', function(event) {
       const newRoom = JSON.parse(event.data);
@@ -100,6 +108,13 @@ const roomList = {
     window.addEventListener("beforeunload", () => {
       eventSource.close();
     });
+  },
+  changeSse: function() {
+    const self = this;
+    const uuid = localStorage.getItem('uuid');
+    const accountId = localStorage.getItem('email');
+    const eventSource = new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events/' + uuid + '/' + accountId);
+
   },
   numberChk: function() {
     let check = /^[0-9]+$/;
@@ -209,4 +224,18 @@ const roomList = {
 
 $(function() {
   roomList.init();
+});
+
+$('#requestTest').on('click', function() {
+    let url = window.__CONFIG__.API_BASE_URL + '/friend/request';
+    var data = {
+      userId: 'dlwhsktm@gmail.com',
+      friendId: 'dlwhsktm2@gmail.com',
+      nickname: '123'
+    };
+    tokenAjaxToJson(url, 'POST', true, data, function(){
+        
+    }, function(error){
+        
+    });
 });

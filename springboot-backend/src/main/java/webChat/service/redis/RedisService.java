@@ -7,6 +7,8 @@ import org.apache.coyote.BadRequestException;
 import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
+import webChat.model.noti.FriendNoti;
+import webChat.model.noti.NotiRedis;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
@@ -84,4 +86,6 @@ public interface RedisService {
     void deleteLoginInfo(long idx);
     void insertQRSession(QRSession qrSession);
     QRSession getQRSession(String sessionId);
+    void insertFriendRequestInfo(NotiRedis notiRedis);
+    List<NotiRedis> getNotiList(long userIdx);
 }

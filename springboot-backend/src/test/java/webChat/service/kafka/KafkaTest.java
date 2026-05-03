@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest
 @Slf4j
 public class KafkaTest {
-    @MockBean
-    private ServletServerContainerFactoryBean webSocketContainer;
+//    @MockBean
+//    private ServletServerContainerFactoryBean webSocketContainer;
     @Autowired
     private KafkaProducerTest kafkaProducerTest;
     @Autowired

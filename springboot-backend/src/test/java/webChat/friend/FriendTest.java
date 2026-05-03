@@ -14,8 +14,8 @@ import webChat.repository.FriendsRepository;
 @Slf4j
 public class FriendTest {
 
-    @MockBean
-    private ServletServerContainerFactoryBean webSocketContainer;
+//    @MockBean
+//    private ServletServerContainerFactoryBean webSocketContainer;
     @Autowired
     FriendsRepository friendsRepository;
     @Test

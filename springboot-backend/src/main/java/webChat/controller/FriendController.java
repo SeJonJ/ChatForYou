@@ -44,7 +44,7 @@ public class FriendController {
      *  친구 추가
      *
      */
-    @PostMapping(value = "", produces = "application/json; charset=UTF8")
+    @PostMapping(value = "/request", produces = "application/json; charset=UTF8")
     public ResponseEntity<ChatForYouResponse> addFriend(@RequestHeader("Authorization") String authorization,
                                                         @RequestBody FriendInVo friendInVo) throws Exception {
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
@@ -53,7 +53,7 @@ public class FriendController {
         }
         String userId = token.getEmail();
 
-        friendService.addFriend(friendInVo);
+        friendService.addFriend(friendInVo, userId);
 
         return ResponseEntity.ok(ChatForYouResponse.builder()
                 .result("success")
@@ -100,5 +100,39 @@ public class FriendController {
                 .build());
     }
 
+    // 친구 승인
+    @PostMapping(value = "/accept", produces = "application/json; charset=UTF8")
+    public ResponseEntity<ChatForYouResponse> acceptFriend(@RequestHeader("Authorization") String authorization,
+                                                           @RequestBody FriendInVo friendInVo) throws Exception {
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        if (!token.isEmailVerified()) {
+            throw new BadRequestException("This account is not verified.");
+        }
+        String userId = token.getEmail();
+        friendService.acceptFriend(friendInVo, userId);
+
+        return ResponseEntity.ok(ChatForYouResponse.builder()
+                .result("success")
+                .build());
+    }
+
+    // 친구 거절
+    @PostMapping(value = "/reject", produces = "application/json; charset=UTF8")
+    public ResponseEntity<ChatForYouResponse> rejectFriend(@RequestHeader("Authorization") String authorization,
+                                                           @RequestBody FriendInVo friendInVo) throws Exception {
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        if (!token.isEmailVerified()) {
+            throw new BadRequestException("This account is not verified.");
+        }
+        String userId = token.getEmail();
+        friendService.rejectFriend(friendInVo, userId);
+
+        return ResponseEntity.ok(ChatForYouResponse.builder()
+                .result("success")
+                .build());
+    }
+
+
+    // 친구 요청 목록
 
 }

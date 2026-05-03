@@ -111,4 +111,23 @@ public class KafkaConfig {
         factory.setConsumerFactory(kafkaRoomEventConsumerFactory());
         return factory;
     }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> kafkaFriendEventListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, KafkaEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(kafkaFriendEventConsumerFactory());
+        return factory;
+    }
+    @Bean
+    public ConsumerFactory<String, KafkaEvent> kafkaFriendEventConsumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+
+        JsonDeserializer<KafkaEvent> deserializer = new JsonDeserializer<>(KafkaEvent.class);
+        deserializer.addTrustedPackages("");
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), deserializer);
+    }
 }

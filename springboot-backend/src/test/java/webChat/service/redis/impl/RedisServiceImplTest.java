@@ -18,8 +18,8 @@ import java.util.Map;
 @Slf4j
 class RedisServiceImplTest {
 
-    @MockBean
-    private ServletServerContainerFactoryBean webSocketContainer;
+//    @MockBean
+//    private ServletServerContainerFactoryBean webSocketContainer;
 
     @Autowired
     private RedisService redisService;

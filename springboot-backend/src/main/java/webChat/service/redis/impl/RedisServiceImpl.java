@@ -21,6 +21,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
+import webChat.model.noti.FriendNoti;
+import webChat.model.noti.NotiRedis;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisKeyPrefix;
 import webChat.model.redis.RoomSearchCriteria;
@@ -562,5 +564,19 @@ public class RedisServiceImpl implements RedisService {
     public QRSession getQRSession(String sessionId){
         String redisKey = QR_SESSION_PREFIX.getPrefix() + sessionId;
         return (QRSession) slaveTemplate.opsForValue().get(redisKey);
+    }
+
+    @Override
+    public void insertFriendRequestInfo(NotiRedis noti) {
+        String redisKey = NOTI_PREFIX.getPrefix() + noti.getNotiId();
+        masterTemplate.opsForHash().put(redisKey, DataType.NOTI.getType(), noti);
+        masterTemplate.opsForHash().put(redisKey, "userIdx", noti.getUserIdx());
+    }
+
+    @Override
+    public List<NotiRedis> getNotiList(long userIdx) {
+        List<NotiRedis> result = new ArrayList<>();
+        String redisKey = NOTI_PREFIX.getPrefix() + userIdx;
+        slaveTemplate.opsForHash().get(redisKey);
     }
 }
