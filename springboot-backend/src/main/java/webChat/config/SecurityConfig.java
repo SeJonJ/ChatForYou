@@ -10,7 +10,8 @@ import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
-import webChat.controller.ExceptionController;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.service.social.PrincipalOauth2UserService;
 import webChat.utils.SubnetUtil;
 
@@ -41,7 +42,7 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             if (request.getRequestURI().startsWith("/actuator")) {
-                                throw new ExceptionController.AccessDeniedException("access denied");
+                                throw new ChatForYouException(ErrorCode.ACCESS_DENIED);
                             } else {
                                 response.sendRedirect("/chatlogin");
                             }

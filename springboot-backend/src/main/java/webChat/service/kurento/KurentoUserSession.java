@@ -359,10 +359,8 @@ public class KurentoUserSession extends UserDto implements Closeable {
       try {
         session.sendMessage(new TextMessage(message.toString()));
       } catch (Exception e) {
-        e.printStackTrace();
-        message.addProperty("id", "ConnectionFail");
-        message.addProperty("data", e.getMessage());
-        this.sendMessage(message);
+        log.error("Failed to send WebSocket message: userId={}, sessionId={}", getUserId(), session.getId(), e);
+        throw new IOException("Failed to send WebSocket message", e);
       }
     }
   }

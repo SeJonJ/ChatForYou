@@ -3,13 +3,14 @@ package webChat.service.game.impl;
 import kr.co.shineware.nlp.komoran.core.Komoran;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.springframework.stereotype.Service;
 import webChat.model.game.AnswerReq;
 import webChat.model.game.GameHint;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
 import webChat.service.game.GameUtilService;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.service.redis.RedisService;
 
 import java.util.ArrayList;
@@ -29,10 +30,10 @@ public class GameUtilServiceImpl implements GameUtilService {
     };
 
     @Override
-    public GameHint getChosungHint(AnswerReq answerReq) throws BadRequestException {
+    public GameHint getChosungHint(AnswerReq answerReq) {
         KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(answerReq.getRoomId(), DataType.CHATROOM, KurentoRoom.class);
         if (Objects.isNull(kurentoRoom)) {
-            throw new BadRequestException("Room not found with ID: " + answerReq.getRoomId());
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
         }
 
         String subject = kurentoRoom.getGameSettingInfo().getCurrentGameSubject();

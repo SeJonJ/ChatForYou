@@ -7,9 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
+import webChat.model.kafka.KafkaServerEvent;
+import webChat.model.kafka.ServerEvent;
 
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
@@ -17,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KafkaTest {
     @MockBean
     private ServletServerContainerFactoryBean webSocketContainer;
+
     @Autowired
     private KafkaProducerTest kafkaProducerTest;
     @Autowired
@@ -30,6 +35,10 @@ public class KafkaTest {
         boolean ok = kafkaConsumerTest.getLatch()
                 .await(10, TimeUnit.SECONDS); // 최대 5초 대기
         assertTrue(ok, "메시지가 소비되지 않았습니다");
+
+        KafkaServerEvent event = assertInstanceOf(KafkaServerEvent.class, kafkaConsumerTest.getReceivedMessage());
+        assertEquals(ServerEvent.SERVER_COOKIE_REQUEST, event.getEventType());
+        assertEquals("test-instance-id", event.getInstanceId());
     }
 
 }

@@ -10,7 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.multipart.MultipartFile;
 import webChat.config.MinioConfig;
-import webChat.controller.ExceptionController;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.utils.StringUtil;
 
 import javax.annotation.PostConstruct;
@@ -63,50 +64,39 @@ public abstract class AbstractFileService {
                         .build());
             }
         } catch (Exception e) {
-            log.error("error Message ::: {}", e.getCause());
-            e.printStackTrace();
+            log.error("MinIO directory cleanup failed: bucket={}, roomId={}", getBucketName(), roomId, e);
         }
     }
 
-    public ResponseEntity<byte[]> getObject(String fileName, String fileDir) throws Exception {
-        // bucket 와 fileDir 을 사용해서 minIO 에 있는 객체 - object - 를 가져온다.
-        InputStream fileData = minioClient.getObject(
+    public ResponseEntity<byte[]> getObject(String fileName, String fileDir) {
+        try (InputStream fileData = minioClient.getObject(
                 GetObjectArgs.builder()
                         .bucket(getBucketName())
                         .object(fileDir)
                         .build()
-        );
+        )) {
+            byte[] bytes = IOUtils.toByteArray(fileData);
 
-        // 이후 다시 byte 배열 형태로 변환한다.
-        // 파일 전송을 위해서는 다시 byte[] 즉, binary 로 변환해서 전달해야햐기 때문
-        byte[] bytes = IOUtils.toByteArray(fileData);
+            HttpHeaders httpHeaders = new HttpHeaders();
+            httpHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
 
-        // 여기는 httpHeader 에 파일 다운로드 요청을 하기 위한내용
-        HttpHeaders httpHeaders = new HttpHeaders();
-        httpHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            ContentDisposition contentDisposition = ContentDisposition.attachment()
+                    .filename(fileName, StandardCharsets.UTF_8)
+                    .build();
+            httpHeaders.setContentDisposition(contentDisposition);
 
-        // 지정된 fileName 으로 파일이 다운로드
-        ContentDisposition contentDisposition = ContentDisposition.attachment()
-                .filename(fileName, StandardCharsets.UTF_8)
-                .build();
-        httpHeaders.setContentDisposition(contentDisposition);
-
-        log.info("HttpHeader : [{}]", httpHeaders);
-
-        // 최종적으로 ResponseEntity 객체를 리턴하는데
-        // --> ResponseEntity 란?
-        // ResponseEntity 는 사용자의 httpRequest 에 대한 응답 테이터를 포함하는 클래스이다.
-        // 단순히 body 에 데이터를 포함하는 것이 아니라, header 와 httpStatus 까지 넣어 줄 수 있다.
-        // 이를 통해서 header 에 따라서 다른 동작을 가능하게 할 수 있다 => 파일 다운로드!!
-
-        // 나는 object가 변환된 byte 데이터, httpHeader 와 HttpStatus 가 포함된다.
-        return new ResponseEntity<>(bytes, httpHeaders, HttpStatus.OK);
+            log.info("HttpHeader : [{}]", httpHeaders);
+            return new ResponseEntity<>(bytes, httpHeaders, HttpStatus.OK);
+        } catch (Exception e) {
+            log.error("MinIO 파일 다운로드 실패: bucket={}, fileDir={}", getBucketName(), fileDir, e);
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     public void uploadFileSizeCheck(MultipartFile file) {
         String extension = StringUtil.getExtension(file);
         if (!allowedFileExtensions.contains(extension)) {
-            throw new ExceptionController.FileExtensionException("file extension exception");
+            throw new ChatForYouException(ErrorCode.FILE_EXTENSION_INVALID);
         }
     }
 
@@ -118,16 +108,20 @@ public abstract class AbstractFileService {
      * @param expiry 만료 시간
      * @param timeUnit 시간 단위
      * @return presigned URL (외부 도메인 기준)
-     * @throws Exception presigned URL 생성 실패 시
      */
-    protected String generatePresignedUrl(String objectPath, int expiry, TimeUnit timeUnit) throws Exception {
-        return minioConfig.getExternalMinioClient().getPresignedObjectUrl(
-                GetPresignedObjectUrlArgs.builder()
-                        .method(Method.GET)
-                        .bucket(getBucketName())
-                        .object(objectPath)
-                        .expiry(expiry, timeUnit)
-                        .build()
-        );
+    protected String generatePresignedUrl(String objectPath, int expiry, TimeUnit timeUnit) {
+        try {
+            return minioConfig.getExternalMinioClient().getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(getBucketName())
+                            .object(objectPath)
+                            .expiry(expiry, timeUnit)
+                            .build()
+            );
+        } catch (Exception e) {
+            log.error("Presigned URL 생성 실패: bucket={}, objectPath={}", getBucketName(), objectPath, e);
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 }

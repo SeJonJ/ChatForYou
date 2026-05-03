@@ -2,7 +2,6 @@ package webChat.service.kurento;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import lombok.extern.slf4j.Slf4j;
 import webChat.model.kurento.KurentoMessageType;
 
 /**
@@ -12,7 +11,6 @@ import webChat.model.kurento.KurentoMessageType;
  * 2. 추가해야하는 파라미터가 있는 경우 아래처럼 생성자 만들어서 사용
  - public KurentoMessageBuilder minioFilePath(String minioFilePath)
  */
-@Slf4j
 public class KurentoMessageBuilder {
     private final JsonObject message;
     private final KurentoMessageType messageType;
@@ -160,6 +158,13 @@ public class KurentoMessageBuilder {
     }
 
     /**
+     * 표준 WebSocket 에러 응답
+     */
+    public static KurentoMessageBuilder websocketError() {
+        return new KurentoMessageBuilder(KurentoMessageType.GENERIC_ERROR);
+    }
+
+    /**
      * 텍스트 오버레이 성공
      */
     public static KurentoMessageBuilder textOverlaySuccess() {
@@ -241,6 +246,25 @@ public class KurentoMessageBuilder {
         return this;
     }
 
+    public KurentoMessageBuilder code(String code) {
+        message.addProperty("code", code);
+        return this;
+    }
+
+    public KurentoMessageBuilder detail(String detail) {
+        if (detail != null) {
+            message.addProperty("detail", detail);
+        }
+        return this;
+    }
+
+    public KurentoMessageBuilder traceId(String traceId) {
+        if (traceId != null) {
+            message.addProperty("traceId", traceId);
+        }
+        return this;
+    }
+
     // 참가자 관련 필드
 
     /**
@@ -308,7 +332,6 @@ public class KurentoMessageBuilder {
      * JsonObject 빌드
      */
     public JsonObject build() {
-        log.debug("Building message: type={}, content={}", messageType, message);
         return message;
     }
 }

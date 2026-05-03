@@ -20,11 +20,10 @@ package webChat.service.kurento;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.Composite;
 import org.kurento.client.Continuation;
 import org.kurento.client.MediaPipeline;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 import webChat.model.room.ChatRoom;
@@ -47,10 +46,8 @@ import java.util.Map;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KurentoRoomManager {
-
-  // 로깅을 위한 객체 생성
-  private final Logger log = LoggerFactory.getLogger(KurentoRoomManager.class);
 
   private final RedisService redisService;
   private final KurentoParticipantService kurentoParticipantService;
@@ -204,8 +201,7 @@ public class KurentoRoomManager {
   
   public void sendParticipantNames(KurentoRoom room, KurentoUserSession user) throws IOException {
 
-    // jsonArray 객체 생성
-    // TODO 추후 DTO 객체로 변경 필요
+    // 기존 시그널링 규격을 유지하기 위해 JsonArray로 참여자 목록을 구성한다.
     final JsonArray participantsArray = new JsonArray();
 
     // participants 의 value 만 return 받아서 => this.getParticipants() for 문 돌림

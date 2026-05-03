@@ -3,26 +3,20 @@ package webChat.utils;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
-import webChat.controller.ExceptionController;
-
-import java.util.Collections;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 
 public class TokenUtils {
 
     /**
      *  google oauth 토큰 검증
      */
-    public static FirebaseToken checkGoogleOAuthToken(String token) throws Exception {
-        if(StringUtil.isNullOrEmpty(token)) throw new ExceptionController.NotExistTokenException("token is null or empty");
+    public static FirebaseToken checkGoogleOAuthToken(String token) {
+        if(StringUtil.isNullOrEmpty(token)) throw new ChatForYouException(ErrorCode.TOKEN_NOT_FOUND);
         try{
             return FirebaseAuth.getInstance().verifyIdToken(token);
         }catch (FirebaseAuthException firebaseAuthException){
-            throw new ExceptionController.TokenExpiredException("");
+            throw new ChatForYouException(ErrorCode.TOKEN_EXPIRED);
         }
-    }
-
-    // TODO 토큰 체크 필요 :: 혼자서 expired 체크가 된다??
-    private boolean isTokenExpired(FirebaseToken decodedToken) {
-        return false;
     }
 }

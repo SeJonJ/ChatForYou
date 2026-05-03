@@ -5,9 +5,7 @@ import com.google.common.hash.Hashing;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -44,9 +42,8 @@ public abstract class InstanceProvider {
     private final RedisService redisService;
     private ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    @Autowired
     @Lazy
-    private CookieCheckEvent cookieCheckEvent;
+    private final CookieCheckEvent cookieCheckEvent;
 
     private String instanceId;
     private boolean isShutdown = false;
@@ -215,7 +212,7 @@ public abstract class InstanceProvider {
     /**
      * 쿠키 요청 이벤트 처리
      */
-    private void handleCookieRequest(String requesterId) throws BadRequestException {
+    private void handleCookieRequest(String requesterId) {
         // 내가 쿠키를 가지고 있다면 응답
         String myCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId, DataType.INSTANCE_COOKIE, String.class);
         if (myCookie != null) {
@@ -270,7 +267,7 @@ public abstract class InstanceProvider {
      * @param roomId 방 ID
      * @return 최적 서버 ID, 서버가 없으면 null
      */
-    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) throws BadRequestException {
+    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) {
         if (hashRing.isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
@@ -390,8 +387,9 @@ public abstract class InstanceProvider {
     }
 
     /**
-     * TODO 추후 failoverService 에서 상세하게 구현 후 사용(auto scale 대응)
-     * 해시 링 상태 확인 (디버깅용)
+     * 현재 해시 링과 활성 서버 집합만 기준으로 라우팅 상태를 빠르게 점검한다.
+     * 추후 auto scale 시점에는 failoverService 기준의 상세 상태 점검으로 확장 필요
+     *
      * @return 해시 링이 정상 상태인지 여부
      */
     public boolean isHealthy() {

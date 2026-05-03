@@ -6,7 +6,7 @@ plugins {
 	id 'java'
 }
 
-version = '1.0.54'
+version = '1.0.55'
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -24,6 +24,7 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
 //	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter'
 	// 스프링 부트 모니터링을 위한 엔트포인트 활성화
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -154,5 +155,32 @@ processResources {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	// 기본 test/build 경로에서는 외부 인프라 의존 테스트를 제외한다.
+	// 예: 별도 Python API, 실제 운영 URL, 외부 네트워크에 직접 접근하는 테스트
+	//
+	// 이렇게 분리해 두면:
+	// 1) 로컬 개발자가 build/test를 안정적으로 반복할 수 있고
+	// 2) Docker build 및 배포 파이프라인이 외부 환경 때문에 흔들리지 않으며
+	// 3) 필요할 때만 externalTest 태스크로 명시 실행할 수 있다.
+	useJUnitPlatform {
+		excludeTags 'external'
+	}
+}
+
+tasks.register('externalTest', Test) {
+	group = 'verification'
+	description = '외부 서버/네트워크 등 환경 의존 테스트만 별도로 실행합니다.'
+
+	// ExternalTest 어노테이션이 내부적으로 @Tag("external")를 사용하므로
+	// 여기서는 해당 태그만 골라서 실행한다.
+	useJUnitPlatform {
+		includeTags 'external'
+	}
+
+	// 기본 test 태스크와 테스트 클래스 출력을 공유하되,
+	// 실행 대상만 태그로 분리한다.
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+
+	shouldRunAfter tasks.named('test')
 }

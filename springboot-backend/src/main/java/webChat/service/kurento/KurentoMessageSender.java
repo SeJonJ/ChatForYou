@@ -3,39 +3,49 @@ package webChat.service.kurento;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.UUID;
 
 /**
  * Kurento WebRTC 메시지 전송을 위한 클래스
  */
 @Component
-@Slf4j
 @RequiredArgsConstructor
+@Slf4j
 public class KurentoMessageSender {
+    public static final String HANDLED_WS_ERROR_DETAIL = "__ws_error_already_sent__";
+    private static final String WS_TRACE_ID_ATTRIBUTE = "wsTraceId";
+
     private final KurentoParticipantService participantService;
 
     // 에러 메시지 (브로드캐스트)
 
     /**
-     * 에러 메시지 브로드캐스트 후 BadRequestException 던지기
+     * 에러 메시지를 브로드캐스트한 뒤 표준 비즈니스 예외를 발생시킨다.
      *
      * @param roomId 방 ID
      * @param builder 메시지 빌더
      * @param exceptionMessage 예외 메시지 (영문)
-     * @throws BadRequestException 항상 던짐
+     * @throws ChatForYouException 항상 던짐
      */
     public void broadcastErrorAndThrow(String roomId,
                                        KurentoMessageBuilder builder,
-                                       String exceptionMessage) throws BadRequestException {
+                                       ErrorCode errorCode,
+                                       String exceptionMessage) {
         JsonObject message = builder.build();
         this.broadcastToRoom(roomId, message);
-        log.warn("Broadcasting error to room {}: {}", roomId, exceptionMessage);
-        throw new BadRequestException(exceptionMessage);
+        log.warn("Broadcasting error to room {}: code={}, message={}",
+                roomId, errorCode.getCode(), exceptionMessage);
+        throw new ChatForYouException(errorCode, HANDLED_WS_ERROR_DETAIL);
     }
 
     // 성공 메시지 (브로드캐스트)
@@ -100,6 +110,28 @@ public class KurentoMessageSender {
         }
     }
 
+    public void sendStandardErrorToUser(KurentoUserSession user, ErrorCode errorCode, String detail) {
+        if (user == null) {
+            return;
+        }
+        sendErrorToUser(user, buildStandardErrorBuilder(errorCode, detail, resolveTraceId(user.getSession())));
+    }
+
+    public void sendStandardErrorToSession(WebSocketSession session, ErrorCode errorCode, String detail) {
+        if (session == null) {
+            return;
+        }
+        try {
+            JsonObject message = buildStandardErrorBuilder(errorCode, detail, resolveTraceId(session)).build();
+            synchronized (session) {
+                session.sendMessage(new TextMessage(message.toString()));
+            }
+            log.error("Sending standard error to session {}: {}", session.getId(), message);
+        } catch (IOException e) {
+            log.error("Failed to send standard error to session {}: {}", session.getId(), e.getMessage());
+        }
+    }
+
     /**
      * 방의 모든 참가자에게 메시지 브로드캐스트
      * @param roomId 방 ID
@@ -121,5 +153,36 @@ public class KurentoMessageSender {
         } catch (Exception e) {
             log.error("Failed to broadcast message to room {}: {}", roomId, e.getMessage());
         }
+    }
+
+    private KurentoMessageBuilder buildStandardErrorBuilder(ErrorCode errorCode, String detail, String traceId) {
+        return KurentoMessageBuilder.websocketError()
+                .code(errorCode.getCode())
+                .error(errorCode.name())
+                .message(errorCode.getMessage())
+                .detail(detail)
+                .traceId(traceId);
+    }
+
+    private String resolveTraceId(WebSocketSession session) {
+        if (session != null) {
+            Object traceId = session.getAttributes().get(WS_TRACE_ID_ATTRIBUTE);
+            if (traceId instanceof String existingTraceId && !existingTraceId.isBlank()) {
+                return existingTraceId;
+            }
+
+            String mdcTraceId = MDC.get("traceId");
+            if (mdcTraceId != null && !mdcTraceId.isBlank()) {
+                session.getAttributes().put(WS_TRACE_ID_ATTRIBUTE, mdcTraceId);
+                return mdcTraceId;
+            }
+
+            String generatedTraceId = "ws-" + UUID.randomUUID();
+            session.getAttributes().put(WS_TRACE_ID_ATTRIBUTE, generatedTraceId);
+            return generatedTraceId;
+        }
+
+        String traceId = MDC.get("traceId");
+        return traceId != null ? traceId : "ws-" + UUID.randomUUID();
     }
 }

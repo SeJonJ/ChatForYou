@@ -9,13 +9,20 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import webChat.model.game.GameSubjects;
 import webChat.model.game.GameTitles;
+import webChat.support.ExternalTest;
 import webChat.utils.HttpUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
-
+/**
+ * 로컬 Python 게임 API가 실제로 떠 있어야만 통과하는 외부 연동 테스트.
+ *
+ * <p>기본 build/test 경로에서는 제외하고, 필요할 때만
+ * {@code ./gradlew externalTest}로 수동 실행한다.</p>
+ */
+@ExternalTest
 @SpringBootTest
 @TestPropertySource(locations = "/application.properties")
 @Slf4j

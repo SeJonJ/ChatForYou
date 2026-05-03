@@ -1,13 +1,13 @@
 package webChat.service.monitoring.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
-import webChat.controller.ExceptionController;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.model.log.ClientInfo;
 import webChat.service.monitoring.ClientCheckService;
 import webChat.utils.SubnetUtil;
@@ -22,9 +22,8 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ClientCheckServiceImpl implements ClientCheckService {
-
-    private static final Logger log = LoggerFactory.getLogger(ClientCheckServiceImpl.class);
 
     private final String blackListJsonPath = "geodata/firehol_level1.txt";
 
@@ -38,16 +37,17 @@ public class ClientCheckServiceImpl implements ClientCheckService {
         this.blackListJson(blackListJsonPath);
     }
 
+    /**
+     * 클라이언트 IP 또는 서브넷이 블랙리스트에 포함되는지 확인한다.
+     *
+     * @param clientInfo 클라이언트 정보
+     * @return 블랙리스트 포함 여부
+     */
     @Override
     public Boolean checkBlackList(ClientInfo clientInfo) {
         List<String> blackList = blackListJson(blackListJsonPath);
-        log.debug("##########################################");
-        log.debug("clientInfo :::: " + clientInfo.toString());
-        log.debug("##########################################");
-
-        log.debug("##########################################");
-        log.debug("blackList ::: " + blackList.toString());
-        log.debug("##########################################");
+        log.debug("Client blacklist check started: clientInfo={}", clientInfo);
+        log.debug("Loaded blacklist entries: count={}", blackList.size());
 
         boolean isBlack = blackList.stream().anyMatch(black -> {
             return clientInfo.getSubnet().equals(black) || SubnetUtil.isInRange(black, clientInfo.getIpAddr());
@@ -59,7 +59,12 @@ public class ClientCheckServiceImpl implements ClientCheckService {
         return isBlack;
     }
 
-    // CIDR 서브넷 체크 로직을 별도의 메소드로 분리
+    /**
+     * 화이트리스트 IP 또는 CIDR 대역 허용 여부를 확인한다.
+     *
+     * @param ip 확인 대상 IP
+     * @return 허용 여부
+     */
     @Override
     public Boolean checkIsAllowedIp(String ip) {
         if (allowedIpAddresses.contains(ip)) {
@@ -74,13 +79,19 @@ public class ClientCheckServiceImpl implements ClientCheckService {
         return false;
     }
 
+    /**
+     * 클래스패스의 블랙리스트 파일을 읽어 캐시한다.
+     *
+     * @param path 블랙리스트 파일 경로
+     * @return 블랙리스트 엔트리 목록
+     */
     @Cacheable("blackList")
     public List<String> blackListJson(String path) {
         try {
             // classpath 로 blackList txt 파일 가져오기
             ClassPathResource blackList = new ClassPathResource(path);
 
-            log.debug("blackList URI :: " + blackList.getURI());
+            log.debug("Loading blacklist resource: uri={}", blackList.getURI());
 
             try (InputStream inputStream = blackList.getInputStream()) {
                 return new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
@@ -89,8 +100,8 @@ public class ClientCheckServiceImpl implements ClientCheckService {
             }
 
         } catch (Exception e) {
-            log.error("error path :: " + path);
-            throw new ExceptionController.ResourceNotFoundException("there is No BlackList file");
+            log.error("블랙리스트 파일 조회 실패: path={}", path, e);
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND, "there is No BlackList file");
         }
     }
 }

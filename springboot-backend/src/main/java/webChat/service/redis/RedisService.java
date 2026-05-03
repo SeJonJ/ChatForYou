@@ -3,7 +3,6 @@ package webChat.service.redis;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.dengliming.redismodule.redisearch.index.Document;
 import lombok.NonNull;
-import org.apache.coyote.BadRequestException;
 import webChat.model.login.GoogleOAuth;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
@@ -47,11 +46,11 @@ public interface RedisService {
 
     Set<String> getKeysByPattern(String pattern);
 
-    List<KurentoRoom> getChatRoomListForDelete(int searchCount) throws BadRequestException;
+    List<KurentoRoom> getChatRoomListForDelete(int searchCount);
 
     void saveChatRoom(ChatRoom chatRoom);
 
-    <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz) throws BadRequestException;
+    <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz);
 
     Map<Object, Object> getAllChatRoomData(String roomId);
 
@@ -79,7 +78,7 @@ public interface RedisService {
 
     void saveInstanceCookieMapping(String currentInstanceId, String cookie);
 
-    Map<String, String> getAllInstanceCookies() throws BadRequestException;
+    Map<String, String> getAllInstanceCookies();
     void insertGoogleOauthToken(OauthRedis oauthRedis, long time);
     void deleteLoginInfo(long idx);
     void insertQRSession(QRSession qrSession);

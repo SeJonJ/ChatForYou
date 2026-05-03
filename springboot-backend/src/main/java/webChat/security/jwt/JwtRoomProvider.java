@@ -8,7 +8,8 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import webChat.controller.ExceptionController;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.security.jwt.core.JwtCoreProvider;
 import webChat.utils.StringUtil;
 
@@ -38,23 +39,25 @@ public class JwtRoomProvider {
         return jwtCore.create(userId, claims, EXPIRE_MS);
     }
 
-    public void validate(String token, String roomId) throws ExceptionController.InvalidRoomAccessException {
+    public void validate(String token, String roomId) {
         try {
             if (StringUtil.isNullOrEmpty(token)) {
-                throw new ExceptionController.InvalidRoomAccessException("Invalid access");
+                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
             }
             Claims claims = jwtCore.parse(token);
 
             if (!JwtTokenType.ROOM_ACCESS.name().equals(claims.get("type"))) {
-                throw new ExceptionController.InvalidRoomAccessException("Invalid room access info");
+                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
             }
 
             String tokenRoomId = claims.get("roomId", String.class);
             if (!roomId.equals(tokenRoomId)) {
-                throw new ExceptionController.InvalidRoomAccessException("Invalid room access info");
+                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
             }
+        } catch (ChatForYouException e) {
+            throw e;
         } catch (Exception e) {
-            throw new ExceptionController.InvalidRoomAccessException("Invalid access");
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
         }
     }
 }
