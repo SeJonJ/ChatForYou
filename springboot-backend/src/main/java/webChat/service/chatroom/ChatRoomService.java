@@ -133,7 +133,6 @@ public class ChatRoomService {
 
     // 채팅방 비밀번호 조회
     public Map<String, Object> validatePwd(String email, String roomId, String roomPwd) {
-        Map<String, Object> result = new HashMap<>();
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
         if (chatRoom == null) {
             throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
@@ -141,14 +140,27 @@ public class ChatRoomService {
         boolean validPwd = chatRoom.getRoomPwd().equals(roomPwd);
         boolean overUserCnt = chatRoom.getUserCount() + 1 > chatRoom.getMaxUserCnt();
         boolean isValidate = validPwd && !overUserCnt;
+        Map<String, Object> result = new HashMap<>();
         result.put("isValidate", isValidate);
 
         // jwt 토큰 발급
         if (isValidate) {
-            String token = jwtRoomProvider.create(chatRoom.getRoomId(), email);
-            result.put("token", token);
+            result.putAll(createRoomTokenResponse(chatRoom.getRoomId(), email));
         }
         return result;
+    }
+
+    public Map<String, Object> refreshRoomToken(String email, String roomId) {
+        ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        if (chatRoom == null) {
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+        }
+
+        if (!chatRoom.isSecretChk()) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        return createRoomTokenResponse(chatRoom.getRoomId(), email);
     }
 
     // maxUserCnt 에 따른 채팅방 입장 여부
@@ -254,5 +266,11 @@ public class ChatRoomService {
         if(hasRoomName) {
             throw new ChatForYouException(ErrorCode.ROOM_ALREADY_EXISTS);
         }
+    }
+
+    private Map<String, Object> createRoomTokenResponse(String roomId, String email) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("token", jwtRoomProvider.create(roomId, email));
+        return result;
     }
 }

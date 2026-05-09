@@ -148,6 +148,20 @@ public class KurentoMessageBuilder {
         return new KurentoMessageBuilder(KurentoMessageType.EXISTING_PARTICIPANTS);
     }
 
+    /**
+     * 현재 세션 교체 알림
+     */
+    public static KurentoMessageBuilder sessionReplaced() {
+        return new KurentoMessageBuilder(KurentoMessageType.SESSION_REPLACED);
+    }
+
+    /**
+     * peer 세션 교체 알림
+     */
+    public static KurentoMessageBuilder participantSessionReplaced() {
+        return new KurentoMessageBuilder(KurentoMessageType.PARTICIPANT_SESSION_REPLACED);
+    }
+
     // 연결 및 기타
 
     /**

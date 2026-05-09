@@ -1,10 +1,7 @@
 package webChat.security.jwt;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.ExpiredJwtException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -13,7 +10,6 @@ import webChat.exception.ErrorCode;
 import webChat.security.jwt.core.JwtCoreProvider;
 import webChat.utils.StringUtil;
 
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,23 +36,62 @@ public class JwtRoomProvider {
     }
 
     public void validate(String token, String roomId) {
+        validate(token, roomId, null);
+    }
+
+    public void validate(String token, String roomId, String userId) {
         try {
-            if (StringUtil.isNullOrEmpty(token)) {
-                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
-            }
-            Claims claims = jwtCore.parse(token);
-
-            if (!JwtTokenType.ROOM_ACCESS.name().equals(claims.get("type"))) {
-                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
-            }
-
-            String tokenRoomId = claims.get("roomId", String.class);
-            if (!roomId.equals(tokenRoomId)) {
-                throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
-            }
+            Claims claims = parseRequiredClaims(token);
+            validateClaims(claims, roomId, userId);
+        } catch (ExpiredJwtException e) {
+            throw new ChatForYouException(ErrorCode.ROOM_TOKEN_EXPIRED);
         } catch (ChatForYouException e) {
             throw e;
         } catch (Exception e) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+    }
+
+    public void validateRefreshable(String token, String roomId, String userId) {
+        try {
+            Claims claims;
+            try {
+                claims = parseRequiredClaims(token);
+            } catch (ExpiredJwtException e) {
+                claims = e.getClaims();
+            }
+
+            validateClaims(claims, roomId, userId);
+        } catch (ChatForYouException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+    }
+
+    private Claims parseRequiredClaims(String token) {
+        if (StringUtil.isNullOrEmpty(token)) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        return jwtCore.parse(token);
+    }
+
+    private void validateClaims(Claims claims, String roomId, String userId) {
+        if (claims == null) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        if (!JwtTokenType.ROOM_ACCESS.name().equals(claims.get("type"))) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        String tokenRoomId = claims.get("roomId", String.class);
+        if (!roomId.equals(tokenRoomId)) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        if (!StringUtil.isNullOrEmpty(userId) && !userId.equals(claims.getSubject())) {
             throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
         }
     }

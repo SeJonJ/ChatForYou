@@ -112,7 +112,7 @@ public class ChatRoomController {
         }
         // JWT 토큰 검증
         if (chatRoom.isSecretChk()) {
-            jwtRoomProvider.validate(roomToken, chatRoom.getRoomId());
+            jwtRoomProvider.validate(roomToken, chatRoom.getRoomId(), oauthRedis.getEmail());
         }
 
         if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
@@ -181,6 +181,29 @@ public class ChatRoomController {
 
         // room 비밀번호 검증 후 유효하면 room 접근 토큰을 발급한다.
         return ResponseEntity.ok(ChatForYouResponse.ofSuccess(chatRoomService.validatePwd(oauthRedis.getEmail(), roomId, roomPwd)));
+    }
+
+    /**
+     * 만료되었지만 서명과 소유자가 유효한 room token 을 새 토큰으로 교체한다.
+     *
+     * @param roomId 채팅방 ID
+     * @param authorization Firebase 인증 토큰
+     * @param roomToken 기존 room 접근 토큰
+     * @return 새 room 접근 토큰
+     */
+    @PostMapping(value = "/room/token/refresh/{roomId}")
+    public ResponseEntity<ChatForYouResponse> refreshRoomToken(
+            @PathVariable String roomId,
+            @RequestHeader("Authorization") String authorization,
+            @RequestHeader("X-Room-Token") String roomToken) {
+
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = userService.getValidatedOauthUser(token.getEmail());
+
+        jwtRoomProvider.validateRefreshable(roomToken, roomId, oauthRedis.getEmail());
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(
+                chatRoomService.refreshRoomToken(oauthRedis.getEmail(), roomId)
+        ));
     }
 
     /**

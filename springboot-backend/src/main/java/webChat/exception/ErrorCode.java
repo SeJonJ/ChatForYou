@@ -18,6 +18,7 @@ public enum ErrorCode {
     ROOM_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "R002", "이미 존재하는 방 이름입니다."),
     ROOM_DELETE_FAILED(HttpStatus.BAD_REQUEST, "R003", "방을 삭제할 수 없습니다. 사용 중인 방입니다."),
     INVALID_ROOM_ACCESS(HttpStatus.BAD_REQUEST, "R004", "유효하지 않은 방 접근 토큰입니다."),
+    ROOM_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "R005", "방 접근 토큰이 만료되었습니다."),
 
     // Auth
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "A001", "접근 권한이 없습니다."),
@@ -25,6 +26,7 @@ public enum ErrorCode {
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "A003", "토큰이 만료되었습니다."),
     TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "A004", "토큰이 존재하지 않습니다."),
     QR_SESSION_EXPIRED(HttpStatus.BAD_REQUEST, "A005", "QR 세션이 만료되었습니다."),
+    TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "A006", "유효하지 않은 토큰입니다."),
 
     // File
     FILE_EXTENSION_INVALID(HttpStatus.BAD_REQUEST, "F001", "허용되지 않는 파일 형식입니다."),

@@ -39,6 +39,24 @@ public enum KurentoMessageType {
         null
     ),
 
+    /**
+     * duplicate session 으로 현재 세션이 교체됨
+     */
+    SESSION_REPLACED(
+        "sessionReplaced",
+        null,
+        "동일한 계정으로 새 세션이 연결되어 현재 세션이 종료되었습니다."
+    ),
+
+    /**
+     * 같은 사용자의 peer 세션 교체 알림
+     */
+    PARTICIPANT_SESSION_REPLACED(
+        "participantSessionReplaced",
+        null,
+        null
+    ),
+
     // ==========================================
     // 2. 연결 및 기타 메시지
     // ==========================================

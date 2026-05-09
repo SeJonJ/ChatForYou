@@ -16,7 +16,7 @@ import java.util.Collection;
 import java.util.UUID;
 
 /**
- * Kurento WebRTC 메시지 전송을 위한 클래스
+ * Kurento WebRTC 메시지를 전송한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -27,13 +27,12 @@ public class KurentoMessageSender {
 
     private final KurentoParticipantService participantService;
 
-    // 에러 메시지 (브로드캐스트)
-
     /**
      * 에러 메시지를 브로드캐스트한 뒤 표준 비즈니스 예외를 발생시킨다.
      *
      * @param roomId 방 ID
      * @param builder 메시지 빌더
+     * @param errorCode 표준 에러 코드
      * @param exceptionMessage 예외 메시지 (영문)
      * @throws ChatForYouException 항상 던짐
      */
@@ -48,10 +47,8 @@ public class KurentoMessageSender {
         throw new ChatForYouException(errorCode, HANDLED_WS_ERROR_DETAIL);
     }
 
-    // 성공 메시지 (브로드캐스트)
-
     /**
-     * 성공 메시지 브로드캐스트 (방 전체)
+     * 방 전체에 성공 메시지를 브로드캐스트한다.
      *
      * @param roomId 방 ID
      * @param builder 메시지 빌더
@@ -64,7 +61,7 @@ public class KurentoMessageSender {
     }
 
     /**
-     * 에러 메시지 브로드캐스트 (방 전체, 예외 없음)
+     * 방 전체에 에러 메시지를 브로드캐스트한다.
      *
      * @param roomId 방 ID
      * @param builder 메시지 빌더
@@ -75,10 +72,8 @@ public class KurentoMessageSender {
         log.error("Broadcasting error to room {}: {}", roomId, message);
     }
 
-    // 개별 메시지 (특정 유저)
-
     /**
-     * 특정 유저에게 성공 응답 메시지 전송
+     * 특정 유저에게 성공 응답 메시지를 전송한다.
      *
      * @param user 대상 유저
      * @param builder 메시지 빌더
@@ -95,7 +90,7 @@ public class KurentoMessageSender {
     }
 
     /**
-     * 특정 유저에게 에러 메시지 전송
+     * 특정 유저에게 에러 메시지를 전송한다.
      *
      * @param user 대상 유저
      * @param builder 메시지 빌더
@@ -110,6 +105,9 @@ public class KurentoMessageSender {
         }
     }
 
+    /**
+     * 특정 유저에게 표준 에러 응답을 전송한다.
+     */
     public void sendStandardErrorToUser(KurentoUserSession user, ErrorCode errorCode, String detail) {
         if (user == null) {
             return;
@@ -117,6 +115,9 @@ public class KurentoMessageSender {
         sendErrorToUser(user, buildStandardErrorBuilder(errorCode, detail, resolveTraceId(user.getSession())));
     }
 
+    /**
+     * WebSocket 세션에 표준 에러 응답을 전송한다.
+     */
     public void sendStandardErrorToSession(WebSocketSession session, ErrorCode errorCode, String detail) {
         if (session == null) {
             return;
@@ -133,7 +134,8 @@ public class KurentoMessageSender {
     }
 
     /**
-     * 방의 모든 참가자에게 메시지 브로드캐스트
+     * 방의 모든 참가자에게 메시지를 브로드캐스트한다.
+     *
      * @param roomId 방 ID
      * @param message 전송할 메시지
      */
@@ -146,7 +148,7 @@ public class KurentoMessageSender {
                 try {
                     participant.sendMessage(message);
                 } catch (IOException e) {
-                    log.error("Failed to send message to participant {}: {}",
+                    log.warn("Failed to send message to participant {}: {}",
                             participant.getUserId(), e.getMessage());
                 }
             }
@@ -155,6 +157,9 @@ public class KurentoMessageSender {
         }
     }
 
+    /**
+     * WebSocket 표준 에러 payload 를 만드는 빌더를 구성한다.
+     */
     private KurentoMessageBuilder buildStandardErrorBuilder(ErrorCode errorCode, String detail, String traceId) {
         return KurentoMessageBuilder.websocketError()
                 .code(errorCode.getCode())
@@ -164,6 +169,9 @@ public class KurentoMessageSender {
                 .traceId(traceId);
     }
 
+    /**
+     * 세션 attribute 나 MDC 에서 traceId 를 찾고, 없으면 새 값을 만든다.
+     */
     private String resolveTraceId(WebSocketSession session) {
         if (session != null) {
             Object traceId = session.getAttributes().get(WS_TRACE_ID_ATTRIBUTE);
