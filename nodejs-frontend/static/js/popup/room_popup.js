@@ -209,6 +209,10 @@ const RoomPopup = {
                     if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
                         self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
                         redirectToLogin();
+                    } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                            || error?.responseJSON?.code === 'R001') {
+                        sessionStorage.removeItem('roomAccessToken');
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
                     }
                 });
 
@@ -221,6 +225,10 @@ const RoomPopup = {
             if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
                 self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
                 redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
             } else {
                 console.error(error?.responseJSON?.message, 'error');
                 self.showToast(getApiErrorMessage(error.responseJSON, '비밀번호 확인 중 오류가 발생했습니다.'), 'error');
@@ -253,6 +261,10 @@ const RoomPopup = {
                     if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
                         self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
                         redirectToLogin();
+                    } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                            || error?.responseJSON?.code === 'R001') {
+                        sessionStorage.removeItem('roomAccessToken');
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'), 'error');
                     }
                 });
             } else {
@@ -264,6 +276,10 @@ const RoomPopup = {
             if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
                 self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
                 redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'), 'error');
             } else {
                 self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 중 오류가 발생했습니다.'), 'error');
             }

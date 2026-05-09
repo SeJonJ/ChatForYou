@@ -146,13 +146,19 @@ const RoomSettingsPopup = {
             if (isAuthRequiredErrorCode(error.responseJSON?.code)) {
                 self.showToast(getApiErrorMessage(error.responseJSON, '로그인이 필요한 서비스입니다.'));
                 redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 입장 정보가 만료되었습니다. 비밀번호를 다시 확인해주세요.'), 'error');
             } else {
                 self.showToast(getApiErrorMessage(error.responseJSON, '방 정보 로딩 중 오류가 발생했습니다.'), 'error');
             }        
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId;
-        tokenAjax(url, 'GET', true, '', successCallback, errorCallback);
+        tokenAjax(url, 'GET', true, '', successCallback, errorCallback, null, {
+            roomId: self.roomId
+        });
     },
 
     /**
@@ -178,7 +184,16 @@ const RoomSettingsPopup = {
         };
 
         const errorCallback = function (error) {
-            self.showToast(getApiErrorMessage(error.responseJSON, '비밀번호 확인 중 오류가 발생했습니다.'), 'error');
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                self.showToast(getApiErrorMessage(error.responseJSON, '로그인이 필요한 서비스입니다.'), 'error');
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
+            } else {
+                self.showToast(getApiErrorMessage(error.responseJSON, '비밀번호 확인 중 오류가 발생했습니다.'), 'error');
+            }
             $('#configRoomBtn').addClass('disabled').attr('aria-disabled', 'true');
         };
 
@@ -232,7 +247,16 @@ const RoomSettingsPopup = {
         };
 
         const errorCallback = function (error) {
-            self.showToast(getApiErrorMessage(error.responseJSON, '방 설정 저장 중 오류가 발생했습니다.'), 'error');
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                self.showToast(getApiErrorMessage(error.responseJSON, '로그인이 필요한 서비스입니다.'), 'error');
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
+            } else {
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 설정 저장 중 오류가 발생했습니다.'), 'error');
+            }
             console.error(error?.responseJSON?.message, 'error');
             // 로딩 UI 원복
             $btn.prop('disabled', false);
@@ -245,7 +269,9 @@ const RoomSettingsPopup = {
             maxUserCnt: parseInt(maxUserCnt),
             roomPwd: newPwd
         };
-        tokenAjaxToJson(url, 'PUT', true, requestData, successCallback, errorCallback);
+        tokenAjaxToJson(url, 'PUT', true, requestData, successCallback, errorCallback, null, {
+            roomId: self.roomId
+        });
     },
 
     /**
@@ -269,11 +295,22 @@ const RoomSettingsPopup = {
         };
 
         const errorCallback = function (error) {
-            self.showToast(getApiErrorMessage(error.responseJSON, '방 삭제 중 오류가 발생했습니다.'), 'error');
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                self.showToast(getApiErrorMessage(error.responseJSON, '로그인이 필요한 서비스입니다.'), 'error');
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
+            } else {
+                self.showToast(getApiErrorMessage(error.responseJSON, '방 삭제 중 오류가 발생했습니다.'), 'error');
+            }
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId;
-        tokenAjax(url, 'DELETE', true, '', successCallback, errorCallback);
+        tokenAjax(url, 'DELETE', true, '', successCallback, errorCallback, null, {
+            roomId: self.roomId
+        });
     },
 
     /**

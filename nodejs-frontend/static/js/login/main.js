@@ -3,6 +3,7 @@
 
 (function ($) {
     "use strict";
+    let isIdTokenSyncRegistered = false;
 
 
     /*==================================================================
@@ -89,8 +90,7 @@
         alert('해당 기능은 미구현입니다.');
     });
 
-    $('#googleOauth').on('click', function(e) {
-
+    function initializeFirebaseAppIfNeeded() {
         if (!firebase.apps.length) {
             firebase.initializeApp({
                 projectId: window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID,
@@ -100,9 +100,35 @@
         } else {
             firebase.app();
         }
+    }
 
+    function registerIdTokenSync(auth) {
+        if (isIdTokenSyncRegistered) {
+            return;
+        }
+
+        auth.onIdTokenChanged(function(user) {
+            if (!user) {
+                localStorage.removeItem('access_token');
+                return;
+            }
+
+            user.getIdToken()
+                .then(function(idToken) {
+                    localStorage.setItem('access_token', idToken);
+                })
+                .catch(function(error) {
+                    console.error('[Login] ID token sync failed:', error);
+                });
+        });
+        isIdTokenSyncRegistered = true;
+    }
+
+    $('#googleOauth').on('click', function(e) {
+        initializeFirebaseAppIfNeeded();
         const auth = firebase.auth();
         const provider = new firebase.auth.GoogleAuthProvider();
+        registerIdTokenSync(auth);
         auth.signInWithPopup(provider)
             .then(function (result) {
                 const user = result.user;
@@ -131,7 +157,7 @@
                             localStorage.setItem('nickname', data.email.split('@')[0]);
                             window.location.href = window.__CONFIG__.BASE_URL + '/';
                         } else {
-                            alert('로그인에 실패하였습니다 !!!');
+                            showApiErrorToast('로그인에 실패하였습니다.');
                         }
                     };
                     const errorCallback = function(error) {

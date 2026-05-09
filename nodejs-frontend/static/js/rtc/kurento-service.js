@@ -80,6 +80,8 @@ const wsMessageHandlers = {
     existingParticipants: (msg) => onExistingParticipants(msg),
     newParticipantArrived: (msg) => onNewParticipant(msg),
     participantLeft: (msg) => onParticipantLeft(msg),
+    participantSessionReplaced: (msg) => onParticipantSessionReplaced(msg),
+    sessionReplaced: (msg) => onSessionReplaced(msg),
 
     // ==========================================
     // 2. WebRTC 연결 관련
@@ -94,11 +96,16 @@ const wsMessageHandlers = {
         }
     },
     connectionFailed: (msg) => {
-        $('#connectionFailModal').modal('show');
-        $('#reconnectButton').off('click').on('click', () => {
-            clearConnectedSession();
-            leaveRoom('error');
-            window.location.reload();
+        showConnectionFailModal({
+            title: '연결 실패',
+            message: '서버와의 연결 불안정으로 인해 연결이 종료되었습니다.\n방에 재입장하여 다시 연결해주시기 바랍니다.',
+            dismissible: true,
+            onConfirm: () => {
+                leaveRoom('error');
+                setTimeout(function () {
+                    window.location.reload();
+                }, 20);
+            }
         });
     },
 
@@ -179,8 +186,106 @@ function clearConnectedSession() {
 
 // WebSocket 지연 생성: 새로고침 시 autoplay 정책 우회
 let ws = null;
+let roomTeardownStarted = false;
+let forcedSessionExitInProgress = false;
+let suppressWebSocketCloseWarning = false;
+
+function formatModalMessage(message) {
+    return (message || '').replace(/\n/g, '<br>');
+}
+
+function showConnectionFailModal(options) {
+    const modal = $('#connectionFailModal');
+    const title = options?.title || '연결 실패';
+    const message = options?.message || '';
+    const dismissible = options?.dismissible !== false;
+
+    modal.attr('data-backdrop', dismissible ? true : 'static');
+    modal.attr('data-keyboard', dismissible ? true : false);
+    modal.find('.modal-title').text(title);
+    modal.find('.modal-body p').html(formatModalMessage(message));
+    modal.find('.modal-header .close').toggle(dismissible);
+    $('#reconnectButton')
+        .text(options?.confirmText || '확인')
+        .off('click')
+        .on('click', function () {
+            if (typeof options?.onConfirm === 'function') {
+                options.onConfirm();
+            }
+        });
+    modal.modal('show');
+}
+
+function closeWebSocketConnection() {
+    if (!ws) {
+        return;
+    }
+
+    const currentSocket = ws;
+    ws = null;
+    if (currentSocket.readyState === WebSocket.OPEN || currentSocket.readyState === WebSocket.CONNECTING) {
+        currentSocket.close();
+    }
+}
+
+function disposeParticipantEntry(participantId) {
+    const participant = participants[participantId];
+    if (!participant) {
+        return;
+    }
+
+    if (typeof recording !== 'undefined' && recording.audioMixer) {
+        recording.removeParticipantAudio(participantId);
+    }
+
+    participant.dispose();
+    if (participants[participantId] === participant) {
+        delete participants[participantId];
+    }
+}
+
+function teardownRoomSession(options) {
+    if (roomTeardownStarted) {
+        return;
+    }
+
+    roomTeardownStarted = true;
+    forcedSessionExitInProgress = options?.forced === true;
+
+    if (options?.sendLeaveRoom) {
+        sendMessageToServer({
+            event: 'LEAVE_ROOM',
+            roomId: roomId,
+            senderId: userId
+        });
+    }
+
+    Object.keys(participants).forEach(function (participantId) {
+        disposeParticipantEntry(participantId);
+    });
+    participants = {};
+
+    if (window._cleanupDummyVideo) {
+        window._cleanupDummyVideo();
+    }
+
+    if (options?.clearRoomToken !== false) {
+        sessionStorage.removeItem('roomAccessToken');
+    }
+
+    if (options?.clearRoomCookie) {
+        setCookie('room-id', '', -1);
+    }
+
+    clearConnectedSession();
+    suppressWebSocketCloseWarning = true;
+    closeWebSocketConnection();
+}
 
 function connectWebSocket() {
+    roomTeardownStarted = false;
+    forcedSessionExitInProgress = false;
+    suppressWebSocketCloseWarning = false;
     ws = new WebSocket(window.__CONFIG__.API_BASE_URL.replace(/^http/, 'ws') + '/signal');
 
     ws.onopen = function () {
@@ -192,6 +297,9 @@ function connectWebSocket() {
     };
 
     ws.onclose = function (event) {
+        if (suppressWebSocketCloseWarning) {
+            return;
+        }
         console.warn('[WebSocket] 연결 종료:', event.code, event.reason);
     };
 
@@ -835,34 +943,17 @@ function receiveVideo(sender) {
 }
 
 const leftUserfunc = function() {
-    // 서버로 연결 종료 메시지 전달
-    sendMessageToServer({
-        event: 'LEAVE_ROOM',
-        roomId: roomId,
-        senderId: userId
+    teardownRoomSession({
+        sendLeaveRoom: true,
+        clearRoomToken: false
     });
-
-    // 진행 중인 모든 연결을 종료
-    for (let key in participants) {
-        if (participants.hasOwnProperty(key)) {
-            participants[key].dispose();
-        }
-    }
-
-    // 더미 비디오 캐시 정리 및 canvas interval 포함)
-    if (window._cleanupDummyVideo) {
-        window._cleanupDummyVideo();
-    }
-
-    // WebSocket 연결을 종료합니다.
-    if (ws) ws.close();
-
-    // session storage 제거
-    clearConnectedSession();
 };
 
 // 웹 종료 or 새로고침 시 이벤트
 window.onbeforeunload = function () {
+    if (roomTeardownStarted || forcedSessionExitInProgress) {
+        return;
+    }
     leaveRoom();
 };
 
@@ -876,6 +967,10 @@ $('#button-leave').on('click', function(){
 });
 
 function leaveRoom(type) {
+    if (roomTeardownStarted || forcedSessionExitInProgress) {
+        return;
+    }
+
     if(type !== 'error'){ // type 이 error 이 아닐 경우에만 퇴장 메시지 전송
         sendDataChannelMessage(" 님이 떠나셨습니다ㅠㅠ");
     }
@@ -897,23 +992,13 @@ function onParticipantLeft(request) {
     }
 
     try {
-        // 1. 먼저 AudioMixer에서 제거 (참가자가 여전히 존재할 때)
-        if (typeof recording !== 'undefined' && recording.audioMixer) {
-            recording.removeParticipantAudio(request.name);
-            console.log('[WebRTC:Participant] AudioMixer 제거:', request.name);
-        }
-
-        // 2. 짧은 딜레이 후 participant 정리
-        // onaddstream이나 다른 이벤트 핸들러가 완료될 시간을 줌
+        // 짧은 딜레이 후 participant 정리
         setTimeout(function() {
             try {
-                // 재연결로 새 participant가 생성된 경우, 기존 것만 정리하고 map에서 삭제하지 않음
                 if (participants[request.name] === participant) {
-                    participant.dispose();
-                    delete participants[request.name];
+                    disposeParticipantEntry(request.name);
                     console.log('[WebRTC:Participant] 정리 완료:', request.name);
                 } else if (participants[request.name]) {
-                    // 새 participant가 이미 교체됨 → 기존 participant만 dispose
                     participant.dispose();
                     console.log('[WebRTC:Participant] 기존 참가자 정리 (재연결 감지):', request.name);
                 }
@@ -924,6 +1009,34 @@ function onParticipantLeft(request) {
     } catch (error) {
         console.error('[WebRTC:Participant] 제거 중 에러:', error);
     }
+}
+
+function onParticipantSessionReplaced(request) {
+    const replacedParticipant = request.data;
+    if (!replacedParticipant || !replacedParticipant.userId) {
+        return;
+    }
+
+    console.log('[WebRTC:Participant] 세션 교체:', replacedParticipant.userId);
+    disposeParticipantEntry(replacedParticipant.userId);
+    receiveVideo(replacedParticipant);
+}
+
+function onSessionReplaced(request) {
+    teardownRoomSession({
+        forced: true,
+        clearRoomToken: true,
+        clearRoomCookie: true
+    });
+
+    showConnectionFailModal({
+        title: '세션 종료',
+        message: request?.message || '동일한 계정으로 새 세션이 연결되어 현재 세션이 종료되었습니다.',
+        dismissible: false,
+        onConfirm: function () {
+            window.location.replace(window.__CONFIG__.BASE_URL + '/roomlist.html');
+        }
+    });
 }
 
 function sendMessageToServer(message) {
@@ -937,7 +1050,12 @@ function sendMessageToServer(message) {
 
 // 메시지를 데이터 채널을 통해 전송하는 함수
 function sendDataChannelMessage(message){
-    if (participants[userId].rtcPeer.dataChannel.readyState === 'open') {
+    if (roomTeardownStarted || forcedSessionExitInProgress) {
+        return;
+    }
+
+    if (participants[userId] && participants[userId].rtcPeer && participants[userId].rtcPeer.dataChannel
+            && participants[userId].rtcPeer.dataChannel.readyState === 'open') {
         dataChannel.sendMessage(message);
     } else {
         console.warn("Data channel is not open. Cannot send message.");

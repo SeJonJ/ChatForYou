@@ -205,7 +205,17 @@ const roomList = {
           }
         }, function(error) {
           console.error('방 정보 로딩 실패:', error);
-        }
+          if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+            redirectToLogin();
+          } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                  || error?.responseJSON?.code === 'R001') {
+            sessionStorage.removeItem('roomAccessToken');
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'));
+          } else {
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '방 정보를 불러오지 못했습니다.'));
+          }
+        }, null, { roomId: self.roomId }
       );
     });
     // 비밀번호 확인 모달 닫힐 때 입력값 및 안내 초기화

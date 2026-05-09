@@ -65,8 +65,8 @@ const QRScan = {
         console.log('백엔드 인증 시작...');
         // Firebase 토큰 가져오기
         user.getIdToken().then((idToken) => {
-            console.log('idToken : ' + idToken);        
-        
+            console.log('idToken : ' + idToken);
+
             // 폼 데이터 생성
             const requestData = {
                 sessionId: self.sessionId,
@@ -77,13 +77,13 @@ const QRScan = {
                 emailVerified: user.emailVerified,
                 photo: user.photoURL || ''
             };
-            
-            
+
+
             console.log('백엔드 API 호출:', {
                 sessionId: self.sessionId,
                 email: user.email
             });
-            
+
             // 백엔드 API 호출
             ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(response) {
                 const { result, data } = response || {};
@@ -91,14 +91,14 @@ const QRScan = {
                 if (result === 'SUCCESS' && data) {
                     console.log('백엔드 인증 성공');
                     self.showSpinner(false);
-                    
+
                     // Firebase 로그아웃
                     setTimeout(() => {
                         firebase.auth().signOut();
                         self.showSuccess('✅ 로그인 성공! \n이 창을 닫으셔도 됩니다.');
                         // Firebase UI 및 안내 문구 숨김
                         $('#firebaseui-auth-container').hide();
-                        $('#instructions').hide(); 
+                        $('#instructions').hide();
                     }, 2000);
                 } else {
                     console.error('백엔드 인증 실패:', response);
@@ -110,8 +110,13 @@ const QRScan = {
             }, function() {
                 self.showSpinner(false);
             });
-            
+
             return false; // 리다이렉트 방지
+        }).catch(function(error) {
+            // Firebase ID 토큰 조회 실패 시 스피너 해제 및 오류 표시
+            console.error('[QR] Firebase ID 토큰 조회 실패:', error);
+            self.showSpinner(false);
+            self.showError('Google 로그인 토큰을 확인하지 못했습니다. 다시 시도해주세요.');
         });
         
     },
