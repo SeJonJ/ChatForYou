@@ -20,12 +20,10 @@ import webChat.service.routing.fixture.CookieCheckEventFixture;
 import webChat.service.redis.RedisService;
 import webChat.utils.HttpUtil;
 
-import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,24 +47,20 @@ class CookieCheckEventLocalModeTest {
     private ApplicationContext applicationContext;
 
     @Test
-    @DisplayName("collectOwnCookieAsync 는 cookie.check.domain 이 비어 있으면 HTTP 호출 없이 local cookie 를 저장한다")
-    void collectOwnCookieAsync_whenCookieCheckDomainBlank_savesLocalCookieWithoutHttpCall() throws Exception {
+    @DisplayName("collectOwnCookie 는 cookie.check.domain 이 비어 있으면 HTTP 호출 없이 local cookie 를 저장한다")
+    void collectOwnCookie_whenCookieCheckDomainBlank_savesLocalCookieWithoutHttpCall() throws Exception {
         // given
         String instanceId = CookieCheckEventFixture.LOCAL_INSTANCE_ID;
         ReflectionTestUtils.setField(cookieCheckEvent, "cookieCheckDomain", "");
         given(instanceProvider.getInstanceId()).willReturn(instanceId);
-        given(instanceProvider.getActiveServers()).willReturn(Set.of(instanceId));
         given(redisService.getRedisDataByDataType(
                 RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId,
                 DataType.INSTANCE_COOKIE,
                 String.class
         )).willReturn(null);
-        doNothing().when(instanceProvider).initInstanceId();
-        doNothing().when(instanceProvider).initInstanceProviderEvent();
-
         try (MockedStatic<HttpUtil> httpUtil = mockStatic(HttpUtil.class)) {
             // when
-            cookieCheckEvent.collectOwnCookieAsync();
+            cookieCheckEvent.collectOwnCookie();
 
             // then
             httpUtil.verifyNoInteractions();

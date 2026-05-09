@@ -7,13 +7,10 @@ import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
@@ -68,19 +65,12 @@ public class CookieCheckEvent {
 
     /**
      * 현재 인스턴스의 sessionAffinity 쿠키를 수집하거나 로컬 대체 쿠키를 초기화한다.
+     * 호출 순서는 RoutingBootstrapCoordinator 가 관리한다.
+     * 이 메서드는 listener 준비 확인 이후에만 실행된다는 전제에서 쿠키 수집 자체에만 집중한다.
      *
      * @throws InterruptedException Kafka consumer 준비 대기 또는 retry sleep 중 인터럽트가 발생한 경우
      */
-    @EventListener(WebServerInitializedEvent.class)
-    @Async("taskExecutor")
-    public void collectOwnCookieAsync() throws InterruptedException {
-        instanceProvider.initInstanceId();
-        // Kafka consumer 준비 대기
-        waitKafkaConsumerReady();
-
-        log.info("=== 인스턴스 제공 이벤트 init 시작 ===");
-        instanceProvider.initInstanceProviderEvent();
-
+    public void collectOwnCookie() throws InterruptedException {
         log.info("=== 최적화 쿠키 수집 시작 ===");
 
         // 로컬환경인 경우 쿠키 탐색 무시
@@ -106,13 +96,6 @@ public class CookieCheckEvent {
 
         // Phase 3: 개선된 Fallback
         handleFallback();
-    }
-
-    private void waitKafkaConsumerReady() throws InterruptedException {
-        for (int i = 0; i < 20; i++) {
-            if (instanceProvider != null && !instanceProvider.getActiveServers().isEmpty()) break;
-            Thread.sleep(500);
-        }
     }
 
     /**
