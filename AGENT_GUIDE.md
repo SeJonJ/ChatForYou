@@ -283,7 +283,10 @@ Agent-specific startup order, runtime paths, and tool ecosystems are defined onl
 2. Do not commit or push. The user handles all Git writes.
    - Commit message recommendations must follow `docs/git_commit_convention.md`
    - Split recommendations by area (frontend / backend / infra / agent / docs / security)
-3. Keep comments minimal and focused on WHY, not narration.
+3. Keep comments and JavaDoc minimal and focused on WHY, not narration.
+   - Prefer short plain-text JavaDoc over HTML tags such as `<p>`, `<ol>`, and `<li>`
+   - For methods, explain what the method does in one line and add why only when the ordering or intent is not obvious
+   - Do not restate the code line-by-line
 4. Follow the Output Contract for design and analysis responses.
 5. Perform a second self-review before final delivery.
 6. Confirm the base plan file under `plan_docs/00-base_plan/YYYY/MM/` before implementation work.
@@ -295,11 +298,15 @@ Agent-specific startup order, runtime paths, and tool ecosystems are defined onl
 2. If a component mentioned by the design is excluded from scope, explain why and get user confirmation.
 3. Do not change code during design-only or analysis-only work unless the user explicitly asks for implementation.
 4. After implementation, run the relevant module build or tests to verify integrity.
-5. Before implementation is treated as complete, run `backend-convention-checker` or `frontend-convention-checker` for every changed component in scope.
-6. Update `springboot-backend/plan_docs/*.md` and `nodejs-frontend/plan_docs/*.md` TODO checkboxes only after the corresponding validation actually ran.
-7. Remove temporary exception handling, debug traces, and placeholder implementation notes before final delivery, or report them explicitly as remaining risks.
-8. Do not edit `chatforyou-desktop/src` directly. Apply shared web changes in `nodejs-frontend` first, then use the sync workflow required by `docs/chatforyou_desktop.md`.
-9. Use `chatforyou_v2` as the PR base branch.
+5. **[Post-Phase 03 — MANDATORY per task]** After every task that reaches or passes Phase 03, run the following checks for each modified component before the task is considered done:
+   - **Node.js (Frontend)**: Run syntax check against changed files (e.g., `node --check <file>` or the project lint script).
+   - **Spring Boot (Backend)**: Run build test (`./gradlew clean build`).
+   A task is **not complete** until all applicable checks pass. If a check fails, fix the issue and re-run before reporting completion.
+6. Before implementation is treated as complete, run `backend-convention-checker` or `frontend-convention-checker` for every changed component in scope.
+7. Update `springboot-backend/plan_docs/*.md` and `nodejs-frontend/plan_docs/*.md` TODO checkboxes only after the corresponding validation actually ran.
+8. Remove temporary exception handling, debug traces, and placeholder implementation notes before final delivery, or report them explicitly as remaining risks.
+9. Do not edit `chatforyou-desktop/src` directly. Apply shared web changes in `nodejs-frontend` first, then use the sync workflow required by `docs/chatforyou_desktop.md`.
+10. Use `chatforyou_v2` as the PR base branch.
 
 ## 9. RECOMMENDED Rules
 
@@ -329,11 +336,12 @@ Agent-specific startup order, runtime paths, and tool ecosystems are defined onl
 2. No mandatory rule was violated.
 3. Backend, Frontend, and Desktop impact were reviewed.
 4. Implementation work includes build or test evidence.
-5. Convention validation was executed for each changed component.
-6. The relevant implementation-guide checklist is updated to match the current validation state.
-7. Unfinished cleanup or placeholder implementation notes are either resolved or reported as a remaining risk.
-8. The result was reported using the Output Contract.
-9. No commit or push was performed.
+5. Post-Phase 03 per-task validation passed: Node.js syntax check and/or Spring Boot build test executed for each modified component.
+6. Convention validation was executed for each changed component.
+7. The relevant implementation-guide checklist is updated to match the current validation state.
+8. Unfinished cleanup or placeholder implementation notes are either resolved or reported as a remaining risk.
+9. The result was reported using the Output Contract.
+10. No commit or push was performed.
 
 ## 12. Appendix
 
@@ -341,7 +349,7 @@ Quick checklist:
 - Before start: check `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
 - Before implementation: re-read `AGENT_GUIDE.md` and the relevant `docs/*.md`
 - During work: review component impact and conventions
-- Before finish: run build/tests, run convention validation, update implementation-guide checklists, self-review, and verify the Output Contract
+- Before finish: run build/tests, **run Post-Phase 03 checks** (Node.js syntax check + Spring Boot `./gradlew clean build`), run convention validation, update implementation-guide checklists, self-review, and verify the Output Contract
 
 Common rules must be maintained in `AGENT_GUIDE.md`.
 `CODEX.md`, `CLAUDE.md`, `GEMINI.md` and similar wrappers must stay thin and define only agent-specific startup differences.

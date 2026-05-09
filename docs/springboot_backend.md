@@ -90,21 +90,105 @@ public class Example { }
 - `@Autowired` 필드 주입 금지
 
 ### 5. 예외 처리
-- **전역 예외**: `@ControllerAdvice` + `@ExceptionHandler` 방식
-- **커스텀 예외**: `RuntimeException` 상속, `ExceptionController` 내부 static class로 정의
+- **전역 예외**: `@RestControllerAdvice` + `@ExceptionHandler` 방식 — `GlobalExceptionHandler` 단일 클래스로 통합
+- **커스텀 예외**: `ChatForYouException` (`RuntimeException` 상속) + `ErrorCode` enum 조합
+- **응답 포맷**: `ErrorResponse` (Builder 패턴, `@JsonInclude(NON_NULL)`) 사용 — 스택 트레이스 응답 노출 금지
 - 비즈니스 로직에서 `try-catch` 남용 금지 — 예외는 위로 전파
 
-```java
-@ControllerAdvice
-public class ExceptionController {
-    @ExceptionHandler(UnauthorizedException.class)
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public String unauthorizedException(Exception e) { ... }
+**패키지 구조:**
+```
+webChat/
+├── controller/GlobalExceptionHandler.java  # @RestControllerAdvice 전역 핸들러
+├── exception/
+│   ├── ChatForYouException.java            # 프로젝트 공통 커스텀 예외
+│   └── ErrorCode.java                      # 에러 코드 enum (HttpStatus + code + message)
+└── model/response/common/
+    └── ErrorResponse.java                  # 에러 응답 DTO
+```
 
-    public static class UnauthorizedException extends RuntimeException {
-        public UnauthorizedException(String message) { super(message); }
+**ErrorCode — HttpStatus와 코드·메시지를 함께 보유하는 enum:**
+```java
+@Getter
+@RequiredArgsConstructor
+public enum ErrorCode {
+    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "R001", "해당 채팅방을 찾을 수 없습니다."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "A002", "인증이 필요합니다.");
+
+    private final HttpStatus status;
+    private final String code;
+    private final String message;
+}
+```
+
+**ChatForYouException — ErrorCode를 필드로 보유하는 커스텀 예외:**
+```java
+@Getter
+public class ChatForYouException extends RuntimeException {
+    private final ErrorCode errorCode;
+    private final String detail;
+
+    public ChatForYouException(ErrorCode errorCode) {
+        super(errorCode.getMessage());
+        this.errorCode = errorCode;
+        this.detail = null;
+    }
+
+    public ChatForYouException(ErrorCode errorCode, String detail) {
+        super(errorCode.getMessage());
+        this.errorCode = errorCode;
+        this.detail = detail;
     }
 }
+```
+
+**GlobalExceptionHandler — 전역 핸들러:**
+```java
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ChatForYouException.class)
+    public ResponseEntity<ErrorResponse> handleChatForYouException(ChatForYouException e) {
+        final ErrorCode errorCode = e.getErrorCode();
+        log.warn("비즈니스 예외 발생: code={}, message={}", errorCode.getCode(), e.getMessage());
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(buildErrorResponse(errorCode, e.getDetail(), null));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
+        // 필드 오류 목록을 ErrorResponse.FieldError 리스트로 변환
+        List<ErrorResponse.FieldError> fieldErrors = e.getBindingResult().getFieldErrors().stream()
+                .map(fe -> ErrorResponse.FieldError.builder()
+                        .field(fe.getField())
+                        .value(String.valueOf(fe.getRejectedValue()))
+                        .reason(fe.getDefaultMessage())
+                        .build())
+                .collect(Collectors.toList());
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+                .body(buildErrorResponse(ErrorCode.INVALID_INPUT_VALUE, null, fieldErrors));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleException(Exception e) {
+        // 스택 트레이스는 로그에만 기록, 응답에 노출 금지
+        log.error("시스템 예외 발생: {}", e.getMessage(), e);
+        return ResponseEntity
+                .status(ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
+                .body(buildErrorResponse(ErrorCode.INTERNAL_SERVER_ERROR, null, null));
+    }
+}
+```
+
+**서비스 레이어에서의 예외 발생 패턴:**
+```java
+// 비즈니스 예외 — ErrorCode만 전달
+throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+
+// 상세 컨텍스트가 필요한 경우 detail 추가
+throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND, "roomId=" + roomId);
 ```
 
 ### 6. 로깅 규칙
@@ -126,13 +210,21 @@ log.error(">>>>>>> " + e.getMessage());             // Bad (문자열 연산 금
 
 ### 7. 주석 규칙
 - **인라인 주석**: WHY가 명확한 한 줄만 허용 (WHAT 설명 금지)
-- **JavaDoc**: 모든 메서드에 작성, 메서드의 기능(간단하게), `@param` / `@return` 사용
+- **JavaDoc**: 메서드에 작성하되 짧은 평문 우선. 메서드가 무엇을 하는지 1줄로 적고, 순서나 의도가 중요한 경우에만 WHY를 1~2줄 추가
+- **태그 사용**: `<p>`, `<ol>`, `<li>` 같은 HTML 태그형 JavaDoc은 지양. 단계 설명이 필요하면 평문으로 간단히 작성
+- **파라미터/반환값**: `@param`, `@return`은 의미가 있는 경우만 추가. 단순히 이름을 반복하는 설명은 금지
 - **TODO 주석**: 리팩토링 예정 코드에만 허용, 담당자와 이유 명시
 
 ```java
 // Good: 이유가 담긴 주석
 // WebRTC offer/answer 교환 전 ICE candidate 수집 완료 대기
 private void waitForIceGathering() { ... }
+
+/**
+ * 라우팅 bootstrap 순서를 실행한다.
+ * listener 준비 이후에만 announce 를 진행하는 이유는 startup race 를 줄이기 위해서다.
+ */
+public void bootstrapRoutingLifecycle() { ... }
 
 // Bad: 코드 그대로 설명
 // 채팅방 생성 메서드

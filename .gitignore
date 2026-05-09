@@ -124,6 +124,7 @@ scripts/.logs/
 # ========================================
 # Spring Boot Backend 설정
 # ========================================
+.gradle/
 springboot-backend/.gradle/
 springboot-backend/build/
 springboot-backend/out/
@@ -171,6 +172,8 @@ figma-plugin
 CLAUDE.local.md
 settings.local.json
 .claude/agent-memory/
+springboot-backend/.claude
+nodejs-frontend/.claude
 
 ## gemini 관련
 .gemini/
