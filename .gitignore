@@ -204,6 +204,8 @@ GEMINI.md
 .codex/state_*.sqlite-wal
 .codex/tmp/
 .codex/.tmp/
+.codex/skills/.system
+.codex/config.toml
 
 # 테스트 결과물
 test-results/
@@ -226,3 +228,8 @@ plan_docs/05**
 
 springboot-backend/plan_docs/*
 nodejs-frontend/plan_docs/*
+
+# ========================================
+# 로컬 전용 에이전트 설정 (커밋 금지)
+# ========================================
+.local/
