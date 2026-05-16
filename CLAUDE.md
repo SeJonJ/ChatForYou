@@ -1,25 +1,33 @@
 # CLAUDE.md
 
-이 문서는 Claude 전용 실행 차이만 정의하는 thin wrapper다.
-공통 규칙, workflow, output contract는 반드시 `AGENT_GUIDE.md`를 단일 기준으로 따른다.
+This document is a thin wrapper that defines Claude-specific execution overrides only.
+All common rules, workflow, and output contracts are governed solely by `AGENT_GUIDE.md`.
+
+## Mandatory Read (required at session start)
+
+Before responding to any request, read the following files in order. Do not skip.
+
+1. `AGENT_GUIDE.md` — single source of truth for common rules, workflow, and output contract
+2. `.local/local_agent_guide.md` — local-only configuration (read if it exists)
 
 ## Start Order
 1. `AGENT_GUIDE.md`
-2. 관련 `plan_docs/00-base_plan/YYYY/MM/[기능]_plan.md`
-3. 관련 컴포넌트 기준 문서
+2. `.local/local_agent_guide.md` (if it exists)
+3. Relevant `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
+4. Relevant component convention docs
    - `docs/springboot_backend.md`
    - `docs/nodejs_frontend.md`
    - `docs/chatforyou_desktop.md`
    - `docs/git_commit_convention.md`
-4. Claude runtime assets
+5. Claude runtime assets
    - `.claude/agents/*`
    - `.claude/skills/*`
 
 ## Claude-Specific Rules
-- Claude는 이 프로젝트의 Claude runtime asset 생태계를 사용해 설계, 구현, 검증 흐름을 조율한다.
-- 설계 또는 분석 작업에서는 기존 `plan_docs`와의 정합성 점검을 우선한다.
-- 구현 전 관련 컴포넌트 기준 문서와 Claude skill/agent 지침을 함께 확인한다.
-- `.claude/*` 경로는 Claude runtime 자산이므로, 사용자가 명시적으로 요청한 경우를 제외하고 수정하지 않는다.
+- Use the Claude runtime asset ecosystem to coordinate design, implementation, and verification flows.
+- For design or analysis tasks, verify consistency with existing `plan_docs` first.
+- Before implementation, review relevant component convention docs and Claude skill/agent guidelines.
+- Do not modify `.claude/*` paths unless the user explicitly requests it — they are Claude runtime assets.
 
 ## Skill routing
 

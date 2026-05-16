@@ -1,5 +1,19 @@
 # AGENT_GUIDE.md
 
+## Prerequisites
+
+Before starting any task, check for local configuration:
+
+**If `.local/local_agent_guide.md` exists:**
+1. Read it immediately.
+2. It may activate additional context sources (e.g., Obsidian vault knowledge base).
+3. Use those sources to enrich your response before proceeding with the standard workflow.
+
+**If it does not exist:**
+Proceed with the standard workflow below.
+
+---
+
 ## 1. Project Overview
 
 ChatForYou v2 is a WebRTC-based video conferencing and gaming platform with three main components:
@@ -105,6 +119,23 @@ All agents in the `chatforyou-dev-team` must strictly adhere to the following 6-
 | **05** | **Expert Review** | Holistic review from a 5-year full-stack expert (Backend/Frontend/Infra) perspective: code quality, design patterns, Spring Boot & Node.js best practices, security, performance, infra/deploy concerns, and convention compliance | `plan_docs/05-expert-review/[feature].md` | Scored review report with prioritized action items |
 | **06** | **Report** | Final completion report, Lessons Learned, future tasks | `plan_docs/06-report/[feature].md` | Final report & Executive Summary |
 
+### 6.1.1 Phase 00 — Vault Scan Procedure
+
+Before writing the base plan, scan the Obsidian vault for all prior knowledge
+related to the feature. This prevents repeating past decisions and surfaces
+known risks before planning begins.
+
+1. Read `wiki/index.md` to identify relevant notes
+2. Search across all note types for the feature topic:
+   - `[BRAINSTORM]` — prior ideation and direction
+   - `[SPEC]` — prior design decisions (avoid duplication)
+   - `[TECH]` — technology choices and rationale
+   - `[BUG]` — known issues related to the feature area
+   - `[POSTMORTEM]` — past incidents to avoid repeating
+3. Read relevant notes found (1–5 files maximum)
+4. Summarize findings under `## 0. Prior Knowledge` in the base plan
+5. If no relevant notes exist, omit the section and proceed
+
 ### 6.2 External Consultant Protocol
 
 When a user requests **"External Expert Review"** or **"Consultant Validation"**, the agent must execute the following process:
@@ -119,6 +150,14 @@ When a user requests **"External Expert Review"** or **"Consultant Validation"**
 #### [Phase 00: Base Plan Template]
 ```markdown
 # [Base Plan] {Feature Name}
+## 0. Prior Knowledge (Vault Scan)
+| Type | Note | Key Takeaway |
+|------|------|--------------|
+| BRAINSTORM | — | — |
+| SPEC | — | — |
+| TECH | — | — |
+| BUG | — | — |
+| POSTMORTEM | — | — |
 ## 1. Summary (Goal & Scope)
 ## 2. Impact Analysis (Critical)
 - [Backend]: ...
@@ -308,6 +347,16 @@ Agent-specific startup order, runtime paths, and tool ecosystems are defined onl
 9. Do not edit `chatforyou-desktop/src` directly. Apply shared web changes in `nodejs-frontend` first, then use the sync workflow required by `docs/chatforyou_desktop.md`.
 10. Use `chatforyou_v2` as the PR base branch.
 
+### 8.3 Coding Behavior Principles
+
+These principles apply as default behavior where §8.1 and §8.2 do not specify otherwise.
+Project-specific mandatory rules (§8.1, §8.2) always take precedence when they conflict.
+
+1. **Think Before Coding**: State assumptions explicitly before implementing. If multiple interpretations exist, surface them — don't pick silently. If something is unclear, stop and ask before writing any code.
+2. **Simplicity First**: Write the minimum code that solves the problem. No features beyond what was asked, no abstractions for single-use code, no configurability that wasn't requested. If 50 lines suffice, don't write 200.
+3. **Surgical Changes**: Touch only what the request requires. Don't improve adjacent code, comments, or formatting unless asked. Match existing style. If you notice unrelated dead code, mention it — don't delete it. Remove only imports/variables/functions that *your* changes made unused.
+4. **Goal-Driven Execution**: For multi-step tasks, state a brief plan with a verifiable check per step before starting (e.g., `1. [Step] → verify: [check]`). Loop until each check passes.
+
 ## 9. RECOMMENDED Rules
 
 1. Compare design and analysis output against practical industry references when it helps clarify trade-offs.
@@ -346,6 +395,7 @@ Agent-specific startup order, runtime paths, and tool ecosystems are defined onl
 ## 12. Appendix
 
 Quick checklist:
+- Before start: §8.3 — state assumptions, confirm scope is minimal, define success criteria
 - Before start: check `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
 - Before implementation: re-read `AGENT_GUIDE.md` and the relevant `docs/*.md`
 - During work: review component impact and conventions
