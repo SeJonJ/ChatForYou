@@ -49,7 +49,7 @@ Key routing rules:
 - Code review, check the diff, "look at my changes" → invoke /review
 - Visual polish, design audit, "this looks off" → invoke /design-review
 - Developer experience audit, try onboarding → invoke /devex-review
-- Ship, deploy, create a PR, "send it" → invoke /ship
+- Ship, deploy, create a PR, "send it" → invoke /chatforyou-ship
 - Merge + deploy + verify → invoke /land-and-deploy
 - Configure deployment → invoke /setup-deploy
 - Post-deploy monitoring → invoke /canary

@@ -1,5 +1,5 @@
 ---
-name: ship
+name: chatforyou-ship
 description: 기능/버그 개발 완료 후 chatforyou_v2 브랜치에 버전 태그와 함께 배포. Electron 빌드 GitHub Action 트리거 포함.
 type: rigid
 ---
