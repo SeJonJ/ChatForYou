@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import webChat.model.redis.DataType;
@@ -27,8 +26,16 @@ public class RoutingServiceImpl implements RoutingService {
     private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
 
+    /**
+     * 채팅방 생성 직후 라우팅 쿠키와 roomId 쿠키를 설정한다.
+     *
+     * @param request 현재 요청
+     * @param response 현재 응답
+     * @param roomId 채팅방 ID
+     * @param selectedInstanceId 선택된 인스턴스 ID
+     */
     @Override
-    public void setRoutingInfo(HttpServletRequest request, HttpServletResponse response, String roomId, String selectedInstanceId) throws BadRequestException {
+    public void setRoutingInfo(HttpServletRequest request, HttpServletResponse response, String roomId, String selectedInstanceId) {
         // 1. roomId 기준 roomRoutingInfo 객체 조회
         String myInstanceId = instanceProvider.getInstanceId();
         RoomRoutingInfo roomRoutingInfo = redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
@@ -58,6 +65,14 @@ public class RoutingServiceImpl implements RoutingService {
         }
     }
 
+    /**
+     * 이미 계산된 nginx 쿠키 기준으로 라우팅 쿠키를 재설정한다.
+     *
+     * @param response 현재 응답
+     * @param roomId 채팅방 ID
+     * @param nginxCookie nginx sticky 쿠키 값
+     * @param redirectCount 현재 리다이렉트 횟수
+     */
     @Override
     public void setRoutingInfo(HttpServletResponse response, String roomId, String nginxCookie, int redirectCount) {
         this.setServerCookie(response, nginxCookie);
@@ -65,17 +80,35 @@ public class RoutingServiceImpl implements RoutingService {
         this.setRoomRedirectCookie(response, redirectCount, 60);
     }
 
+    /**
+     * 요청 쿠키에서 현재 리다이렉트 횟수를 조회한다.
+     *
+     * @param request 현재 요청
+     * @return 리다이렉트 횟수
+     */
     @Override
     public int getRedirectCount(HttpServletRequest request){
         String roomRedirectCount = this.getCookie(request, ROOM_REDIRECT_COUNT);
         return StringUtil.isNullOrEmpty(roomRedirectCount) ? 0 : Integer.parseInt(roomRedirectCount);
     }
 
+    /**
+     * roomId 기준 라우팅 정보를 조회한다.
+     *
+     * @param roomId 채팅방 ID
+     * @return 라우팅 정보
+     */
     @Override
-    public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) throws BadRequestException {
+    public RoomRoutingInfo getRoomRoutingInfoByRoomId(String roomId) {
          return redisService.getRedisDataByDataType(RedisKeyPrefix.ROOM_ROUTING_PREFIX.getPrefix() + roomId, DataType.ROOM_ROUTING, RoomRoutingInfo.class);
     }
 
+    /**
+     * 현재 요청에서 nginx sticky 쿠키를 조회한다.
+     *
+     * @param request 현재 요청
+     * @return nginx 쿠키 값 또는 현재 인스턴스 ID
+     */
     @Override
     public String getNginxCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
@@ -96,6 +129,13 @@ public class RoutingServiceImpl implements RoutingService {
         return instanceProvider.getInstanceId();
     }
 
+    /**
+     * 요청에서 지정한 라우팅 쿠키 값을 조회한다.
+     *
+     * @param request 현재 요청
+     * @param routingCookie 조회 대상 쿠키 타입
+     * @return 쿠키 값
+     */
     @Override
     public String getCookie(HttpServletRequest request, RoutingCookie routingCookie) {
         Cookie[] cookies = request.getCookies();

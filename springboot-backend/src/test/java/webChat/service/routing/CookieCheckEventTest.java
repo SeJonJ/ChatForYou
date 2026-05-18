@@ -11,18 +11,25 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import webChat.service.redis.RedisService;
+import webChat.support.ExternalTest;
 import webChat.utils.HttpUtil;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 실제 배포 URL의 쿠키 응답 형식을 점검하는 외부 연동 테스트.
+ *
+ * <p>대상 서버 상태, 네트워크, 인증서 환경에 따라 결과가 달라질 수 있으므로
+ * 기본 test/build 파이프라인에서는 제외한다.</p>
+ *
+ * <p>운영 또는 스테이징 환경 점검이 필요할 때만
+ * {@code ./gradlew externalTest}로 명시 실행한다.</p>
+ */
+@ExternalTest
 @SpringBootTest
 @TestPropertySource(locations = "/application.properties")
 @Slf4j
 public class CookieCheckEventTest {
-    @Autowired
-    private CookieCheckEvent cookieCheckEvent;
-    @Autowired
-    private RoutingService routingService;
     @Autowired
     private RedisService redisService;
     @Autowired

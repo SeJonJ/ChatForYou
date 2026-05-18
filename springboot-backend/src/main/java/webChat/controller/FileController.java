@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import webChat.entity.DownloadLog;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.model.file.FileDto;
 import webChat.model.login.OauthRedis;
 import webChat.service.file.impl.MinioFileService;
@@ -27,13 +29,19 @@ public class FileController {
     private final UserService userService;
     private final DownloadLogService downloadLogService;
 
-    // 프론트에서 ajax 를 통해 /upload 로 MultipartFile 형태로 파일과 roomId 를 전달받는다.
-    // 전달받은 file 를 uploadFile 메서드를 통해 업로드한다.
+    /**
+     * 채팅방 파일을 업로드한다.
+     *
+     * @param file 업로드 대상 파일
+     * @param roomId 채팅방 ID
+     * @param authorization Firebase 인증 토큰
+     * @return 업로드된 파일 메타데이터
+     */
     @PostMapping("/upload")
     public FileDto uploadFile(
             @RequestPart("file") MultipartFile file,
             @RequestParam("roomId") String roomId,
-            @RequestHeader("Authorization") String authorization) throws Exception {
+            @RequestHeader("Authorization") String authorization) {
 
         // token 확인
         FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
@@ -43,12 +51,20 @@ public class FileController {
         FileDto uploadFile = minioFileService.uploadFile(file, roomId);
         log.debug("최종 upload Data {}", uploadFile);
 
-        // fileReq 객체 리턴
         return uploadFile;
     }
 
-    // get 으로 요청이 오면 아래 download 메서드를 실행한다.
-    // fileName 과 파라미터로 넘어온 fileDir 을 getObject 메서드에 매개변수로 넣는다.
+    /**
+     * 일반 파일 또는 녹화 파일을 다운로드한다.
+     *
+     * @param request 클라이언트 요청
+     * @param roomId 채팅방 ID
+     * @param bucket 다운로드 대상 버킷 유형
+     * @param fileName 파일명
+     * @param filePath 파일 경로
+     * @param authorization Firebase 인증 토큰
+     * @return 다운로드 응답
+     */
     @PostMapping("/download")
     public ResponseEntity<byte[]> download(
             HttpServletRequest request,
@@ -56,7 +72,7 @@ public class FileController {
             @RequestParam("bucket") String bucket,
             @RequestParam("fileName") String fileName,
             @RequestParam("filePath") String filePath,
-            @RequestHeader("Authorization") String authorization) throws Exception {
+            @RequestHeader("Authorization") String authorization) {
         log.debug("fileDir : fileName [{} : {}]", filePath, fileName);
 
         // token 확인
@@ -72,12 +88,9 @@ public class FileController {
         try{
             downloadType = DownloadLog.DownloadType.valueOf(bucket.toUpperCase());
         } catch (IllegalArgumentException e){
-            // TODO #104 에서 수정 예정
-            throw new ExceptionController.UnauthorizedException("Invalid bucket name");
+            throw new ChatForYouException(ErrorCode.UNAUTHORIZED);
         }
 
-
-        // 변환된 byte, httpHeader 와 HttpStatus 가 포함된 ResponseEntity 객체를 return 한다.
         ResponseEntity<byte[]> fileData = null;
         try {
             if(DownloadLog.DownloadType.FILE.equals(downloadType)){
@@ -94,8 +107,9 @@ public class FileController {
                     )
             );
 
+        } catch (ChatForYouException e) {
+            throw e;
         } catch (Exception e) {
-            // TODO #104 에서 수정 예정
             downloadLogService.saveDownloadLog(
                     DownloadLog.of(
                             oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
@@ -103,7 +117,7 @@ public class FileController {
                             filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.FAIL
                     )
             );
-            throw new ExceptionController.InternalServerError(e.getMessage());
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         return fileData;

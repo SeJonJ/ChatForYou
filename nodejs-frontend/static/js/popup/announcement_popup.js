@@ -81,15 +81,16 @@ const AnnouncementPopup = {
       }
       
       // 사용자 동의 API 호출
-      if (window.__CONFIG__ && window.__CONFIG__.API_BASE_URL) {
-        fetch(window.__CONFIG__.API_BASE_URL + "/user_agree", { method: 'GET' })
-          .then(response => { 
-            console.info("user agree!!"); 
-          })
-          .catch(error => {
-            console.error("Error in user agree API:", error);
-          });
-      }
+      // TODO: 향후 사용자 동의 API 연동 예정
+      // if (window.__CONFIG__ && window.__CONFIG__.API_BASE_URL) {
+      //   fetchJson(window.__CONFIG__.API_BASE_URL + "/user_agree", { method: 'GET' }, '이용약관 동의 처리에 실패했습니다.')
+      //     .then(() => { 
+      //       console.info("user agree!!"); 
+      //     })
+      //     .catch(error => {
+      //       console.error("Error in user agree API:", error);
+      //     });
+      // }
       
       // modal 닫기
       $('#announcementModal').modal('hide');

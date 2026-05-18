@@ -1,0 +1,4 @@
+interface:
+  display_name: "ChatForYou Dev Team"
+  short_description: "Run the 5-agent feature delivery workflow"
+  default_prompt: "Use $chatforyou-dev-team to coordinate a major ChatForYou feature from planning through implementation review."

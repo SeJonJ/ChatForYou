@@ -13,10 +13,11 @@ const roomList = {
   },
   loadRoomList: function() {
     const self = this;
-    ajax(window.__CONFIG__.API_BASE_URL + '/chat/room/list', 'GET', true, '', function(list) {
+    ajax(window.__CONFIG__.API_BASE_URL + '/chat/room/list', 'GET', true, '', function(response) {
+      const { data } = response || {};
       const $tbody = $('#roomTableBody');
       $tbody.empty();
-      self.renderRoomList(list);
+      self.renderRoomList(data || []);
     }, function(err) {
       $('#roomTableBody').html('<tr><td colspan="5">방 목록을 불러오지 못했습니다.</td></tr>');
     });
@@ -58,14 +59,33 @@ const roomList = {
   initSse: function() {
     const self = this;
     const eventSource = new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events');
+    let hasShownConnectionError = false;
+
+    function parseEventData(event, eventName) {
+      try {
+        hasShownConnectionError = false;
+        return JSON.parse(event.data);
+      } catch (error) {
+        console.error(`[RoomList][SSE] ${eventName} JSON parse failed:`, error, event.data);
+        showApiErrorToast('실시간 방 목록 데이터 처리 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.');
+        return null;
+      }
+    }
 
     eventSource.addEventListener('roomCreated', function(event) {
-      const newRoom = JSON.parse(event.data);
+      const newRoom = parseEventData(event, 'roomCreated');
+      if (!newRoom) {
+        return;
+      }
       self.addRoomToTable(newRoom, true);
     });
 
     eventSource.addEventListener('roomDeleted', function(event) {
-      const { roomId } = JSON.parse(event.data);
+      const deletedRoom = parseEventData(event, 'roomDeleted');
+      if (!deletedRoom) {
+        return;
+      }
+      const { roomId } = deletedRoom;
       $('#roomTableBody')
           .find(`[data-room-id='${roomId}']`)
           .closest('tr')
@@ -77,25 +97,42 @@ const roomList = {
     });
 
     eventSource.addEventListener("changeUserCnt", function (event) {
-      const { roomId, userCount, maxUserCnt } = JSON.parse(event.data);
+      const userCountEvent = parseEventData(event, 'changeUserCnt');
+      if (!userCountEvent) {
+        return;
+      }
+      const { roomId, userCount, maxUserCnt } = userCountEvent;
 
       const $row = $('#roomTableBody')
-          .find(`[data-id='${roomId}'], [data-roomid='${roomId}']`)
+          .find(`[data-room-id='${roomId}']`)
           .closest('tr');
 
       $row.find('span.room-user-count').text(`${userCount}/${maxUserCnt}`);
     });
 
     eventSource.addEventListener("changeRoomSetting", function (event) {
-      const { roomId, roomName, userCount, maxUserCnt } = JSON.parse(event.data);
+      const roomSettingEvent = parseEventData(event, 'changeRoomSetting');
+      if (!roomSettingEvent) {
+        return;
+      }
+      const { roomId, roomName, userCount, maxUserCnt } = roomSettingEvent;
 
       const $row = $('#roomTableBody')
-          .find(`[data-room-id='${chatRoomId}']`)
+          .find(`[data-room-id='${roomId}']`)
           .closest('tr');
 
       $row.find('span.room-user-count').text(`${userCount}/${maxUserCnt}`);
       $row.find('.enterRoomBtn, .directEnterBtn').text(roomName);
     });
+
+    eventSource.onerror = function(error) {
+      console.error('[RoomList][SSE] room-events connection error:', error);
+      if (hasShownConnectionError) {
+        return;
+      }
+      hasShownConnectionError = true;
+      showApiErrorToast('실시간 방 목록 연결이 일시적으로 불안정합니다. 브라우저가 자동으로 다시 연결을 시도합니다.');
+    };
 
     window.addEventListener("beforeunload", () => {
       eventSource.close();
@@ -122,11 +159,13 @@ const roomList = {
     let data = {
       "isVisitedToday": sessionStorage.getItem("isVisitedToday") === 'true' ? 'true' : 'false'
     };
-    let successCallback = function(res){
-      if(res.result === 'success'){
-        $('#visitorCount').text('방문자 수 : ' + res.data);
+    let successCallback = function(response){
+      const { result, data: visitorCount, message } = response || {};
+      // 방문자 수 응답은 표준 wrapper의 SUCCESS + data 값으로 처리한다.
+      if(result === 'SUCCESS'){
+        $('#visitorCount').text('방문자 수 : ' + visitorCount);
       } else {
-        console.error("Error ajax data: ", res.message);
+        console.error("Error ajax data: ", message);
       }
     };
     let errorCallback = function(error){
@@ -137,7 +176,7 @@ const roomList = {
         sessionStorage.setItem('isVisitedToday', 'true');
       }
     };
-    ajax(url, 'GET', '', data, successCallback, errorCallback, completeCallback);
+    ajax(url, 'GET', true, data, successCallback, errorCallback, completeCallback);
   },
   initModals: function() {
     const self = this;
@@ -155,19 +194,29 @@ const roomList = {
     // roomConfigModal 열릴 때 현재 방 정보로 input 초기화 및 기존 비밀번호 저장
     $('#roomConfigModal').on('show.bs.modal', function () {
       if (!self.roomId) return;
-      $.ajax({
-        url: window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId,
-        type: 'GET',
-        success: function(res) {
-          if (res && res.data) {
-            $('#configRoomName').val(res.data.roomName);
-            $('#configMaxUserCnt').val(res.data.maxUserCnt);
-            $('#configRoomPwd').val(res.data.roomPwd).prop('readonly', true);
+      tokenAjax(window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId, 'GET', true, '', function(response) {
+          const { data } = response || {};
+          if (data) {
+            $('#configRoomName').val(data.roomName);
+            $('#configMaxUserCnt').val(data.maxUserCnt);
+            $('#configRoomPwd').val(data.roomPwd).prop('readonly', true);
             $('#changePwdCheckbox').prop('checked', false);
-            self.originPwd = res.data.roomPwd || '';
+            self.originPwd = data.roomPwd || '';
           }
-        }
-      });
+        }, function(error) {
+          console.error('방 정보 로딩 실패:', error);
+          if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+            redirectToLogin();
+          } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                  || error?.responseJSON?.code === 'R001') {
+            sessionStorage.removeItem('roomAccessToken');
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'));
+          } else {
+            showWarningToast(getApiErrorMessage(error?.responseJSON, '방 정보를 불러오지 못했습니다.'));
+          }
+        }, null, { roomId: self.roomId }
+      );
     });
     // 비밀번호 확인 모달 닫힐 때 입력값 및 안내 초기화
     $('#validatePwdModal').on('hidden.bs.modal', function () {
@@ -180,7 +229,7 @@ const roomList = {
     // 문자 채팅 누를 시 disabled 풀림
     let $maxUserCnt = $("#modalMaxUserCnt");
     let $msgType = $("#modalMsgType");
-    $msgType.change(function () {
+    $msgType.on('change', function () {
       if ($msgType.is(':checked')) {
         $maxUserCnt.attr('disabled', false);
       }
@@ -194,14 +243,17 @@ const roomList = {
       $('#announcementModal').modal('hide');
     }
     $('#announcementModal').on('hide.bs.modal', function (event) {
-      if (document.getElementById('dontShowAgain').checked) {
+      const dontShowAgainEl = document.getElementById('dontShowAgain');
+      if (dontShowAgainEl && dontShowAgainEl.checked) {
         sessionStorage.setItem('hideAnnouncement', 'true');
       }
     });
-    $("#agreeBtn").click(function(){
+    // 이용약관 동의는 방문자 수 갱신과 별도 API 호출이 함께 일어나므로 한 곳에서 처리한다.
+    $("#agreeBtn").on('click', function(){
       self.checkVisitor();
-      fetch(window.__CONFIG__.API_BASE_URL + "/user_agree", { method: 'GET' })
-        .then(response => { console.info("user agree!!") });
+      fetchJson(window.__CONFIG__.API_BASE_URL + "/user_agree", { method: 'GET' }, '이용약관 동의 처리에 실패했습니다.')
+        .then(() => { console.info("user agree!!") })
+        .catch(error => { console.error("Error in user agree API:", error); });
       $('#announcementModal').modal('hide');
     });
   }

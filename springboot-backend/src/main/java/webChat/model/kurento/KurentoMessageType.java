@@ -1,14 +1,10 @@
 package webChat.model.kurento;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import webChat.model.record.RecordingStatus;
 
 /**
  * Kurento WebRTC 메시지 타입 정의
  */
-@Getter
-@RequiredArgsConstructor
 public enum KurentoMessageType {
 
 
@@ -43,6 +39,24 @@ public enum KurentoMessageType {
         null
     ),
 
+    /**
+     * duplicate session 으로 현재 세션이 교체됨
+     */
+    SESSION_REPLACED(
+        "sessionReplaced",
+        null,
+        "동일한 계정으로 새 세션이 연결되어 현재 세션이 종료되었습니다."
+    ),
+
+    /**
+     * 같은 사용자의 peer 세션 교체 알림
+     */
+    PARTICIPANT_SESSION_REPLACED(
+        "participantSessionReplaced",
+        null,
+        null
+    ),
+
     // ==========================================
     // 2. 연결 및 기타 메시지
     // ==========================================
@@ -54,6 +68,15 @@ public enum KurentoMessageType {
         "connectionFailed",
         null,
         "connection error"
+    ),
+
+    /**
+     * 표준 WebSocket 에러 응답
+     */
+    GENERIC_ERROR(
+        "error",
+        null,
+        null
     ),
 
     /**
@@ -199,7 +222,7 @@ public enum KurentoMessageType {
     ),
 
     // ==========================================
-    // TODO 서버 연결 관련(개발 예정)
+    // 4. 서버 연결 관련 메시지
     // ==========================================
 
     /**
@@ -223,4 +246,22 @@ public enum KurentoMessageType {
     private final String messageId;
     private final RecordingStatus status;
     private final String defaultMessage;
+
+    KurentoMessageType(String messageId, RecordingStatus status, String defaultMessage) {
+        this.messageId = messageId;
+        this.status = status;
+        this.defaultMessage = defaultMessage;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public RecordingStatus getStatus() {
+        return status;
+    }
+
+    public String getDefaultMessage() {
+        return defaultMessage;
+    }
 }

@@ -2,12 +2,11 @@ package webChat.service.routing;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -29,6 +28,7 @@ import java.util.concurrent.*;
 @Slf4j
 @RequiredArgsConstructor
 public abstract class InstanceProvider {
+    public static final String SERVER_LIFECYCLE_LISTENER_ID = "serverLifecycleListener";
     // 서버당 가상 노드 수
     private final int DEFAULT_VIRTUAL_NODES = 150;
     // Thread-safe 해시 링
@@ -44,14 +44,31 @@ public abstract class InstanceProvider {
     private final RedisService redisService;
     private ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    @Autowired
     @Lazy
-    private CookieCheckEvent cookieCheckEvent;
+    private final CookieCheckEvent cookieCheckEvent;
 
     private String instanceId;
     private boolean isShutdown = false;
+    private volatile boolean localRoutingStateInitialized = false;
+    private volatile boolean clusterPresenceAnnounced = false;
 
+    /**
+     * Kafka listener 보다 먼저 instance identity 를 준비한다.
+     */
+    @PostConstruct
+    protected void initializeInstanceIdentity() {
+        initInstanceId();
+    }
+
+    /**
+     * 현재 애플리케이션 프로세스를 클러스터에서 식별할 instanceId 를 한 번만 생성한다.
+     * 이후 Kafka lifecycle 이벤트 비교, Redis heartbeat key, room routing 로그의 기준 키로 재사용된다.
+     */
     public void initInstanceId() {
+        if (!StringUtil.isNullOrEmpty(instanceId)) {
+            return;
+        }
+
         // 1. instanceId 생성
         String podName = System.getenv("POD_NAME");
         if(podName == null){
@@ -67,26 +84,49 @@ public abstract class InstanceProvider {
         log.info("===== My Instance ID [{}] :: now initialized and announced to cluster =====", instanceId);
     }
 
-    public void initInstanceProviderEvent() {
-        log.debug("Initializing Consistent Hash Router with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
+    /**
+     * 부팅 초기에 외부 파드와 통신하기 전에 "내 로컬 상태"를 먼저 준비한다.
+     * 자기 자신을 hash ring 에 등록하고 heartbeat 를 시작한다.
+     * discovery/start 보다 먼저 실행하는 이유는 startup 초기에 자기 자신의 routing 상태를 먼저 안정화하기 위해서다.
+     */
+    public synchronized void initializeLocalRoutingState() {
+        if (localRoutingStateInitialized) {
+            return;
+        }
 
-        // 2. 자신을 해시 링에 먼저 추가 (부팅 시 즉시 사용 가능하도록)
+        log.debug("Initializing local routing state with {} virtual nodes per server", DEFAULT_VIRTUAL_NODES);
+
         addServer(instanceId);
-
-        // 3. Discovery 요청 발행 (기존 서버들에게 자신의 존재를 알림)
-        publishServerEvent(ServerEvent.SERVER_DISCOVERY_REQUEST, instanceId);
-
-        // 4. Kafka를 통해 다른 서버들에게 자신의 시작을 알림
-        // 이때 약간의 지연 후 정식 시작 알림 (다른 서버들의 응답을 받을 시간 확보)
-        CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
-                .execute(() -> publishServerEvent(ServerEvent.SERVER_STARTED, instanceId));
-
-        // 5. heartbeat 시작
         startHeartbeat();
+        localRoutingStateInitialized = true;
     }
 
     /**
-     * 서버 이벤트를 Kafka에 발행
+     * 로컬 상태가 준비된 뒤에만 외부 파드에게 자신의 기동 사실을 알린다.
+     * 먼저 discovery 요청을 보내고, 잠시 뒤 started 이벤트를 보내는 클러스터 합류 절차를 담당한다.
+     */
+    public synchronized void announceClusterPresence() {
+        if (clusterPresenceAnnounced || isShutdown) {
+            return;
+        }
+
+        publishServerEvent(ServerEvent.SERVER_DISCOVERY_REQUEST, instanceId);
+        clusterPresenceAnnounced = true;
+
+        // discovery 응답이 먼저 모일 시간을 조금 주고 started 이벤트를 알린다.
+        CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
+                .execute(() -> {
+                    if (isShutdown || !clusterPresenceAnnounced) {
+                        log.debug("Skipping delayed SERVER_STARTED publish for shutdown/stale instance {}", instanceId);
+                        return;
+                    }
+                    publishServerEvent(ServerEvent.SERVER_STARTED, instanceId);
+                });
+    }
+
+    /**
+     * 서버 lifecycle 이벤트를 Kafka 에 발행한다.
+     * 누가 클러스터에 들어오고 나가는지, 누가 쿠키 응답을 대신 전달하는지 공유하는 공통 채널이다.
      */
     private void publishServerEvent(ServerEvent eventType, String instanceId) {
         try {
@@ -120,30 +160,42 @@ public abstract class InstanceProvider {
      */
     public synchronized void shutdown() {
         // 종료 시 다른 서버들에게 알림
-        publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
+        if (!StringUtil.isNullOrEmpty(instanceId)) {
+            publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);
+            // 현재 서버의 roomcount 초기화
+            redisService.delInstanceInfo(instanceId);
+        } else {
+            log.warn("Instance shutdown without initialized instanceId - skip SERVER_STOPPED publish");
+        }
 
-        // 현재 서버의 roomcount 초기화
-        redisService.delInstanceInfo(instanceId);
+        isShutdown = true;
 
         // Heartbeat 정리
         if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown()) {
             heartbeatScheduler.shutdown();
         }
-        isShutdown = true;
 
         log.debug("Instance {} shutdown announced to cluster", instanceId);
     }
 
     /**
-     * Kafka에서 서버 이벤트 수신
+     * Kafka 에서 전달된 서버 lifecycle 이벤트를 처리한다.
+     * membership 이벤트는 hash ring 에 반영하고, cookie 관련 이벤트는 CookieCheckEvent 로 위임한다.
+     * startup race 를 줄이기 위해 진입 직후 instanceId 초기화 여부를 먼저 확인한다.
      */
     @KafkaListener(
+            id = SERVER_LIFECYCLE_LISTENER_ID,
             topics = KafkaTopic.SERVER_LIFECYCLE_EVENTS,
             containerFactory = "kafkaServerEventListenerContainerFactory",
             groupId = "server-lifecycle-group-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
     )
     public void handleServerEvent(ConsumerRecord<String, KafkaEvent> record) {
         try {
+            if (StringUtil.isNullOrEmpty(instanceId)) {
+                log.warn("Lifecycle event received before instanceId initialization");
+                return;
+            }
+
             KafkaServerEvent event = (KafkaServerEvent) record.value();
             if (StringUtil.isNullOrEmpty(event.getInstanceId()) || event.getEventType() == null) {
                 log.warn("=== Received event from server with null or empty instance ID: {}", event);
@@ -215,7 +267,7 @@ public abstract class InstanceProvider {
     /**
      * 쿠키 요청 이벤트 처리
      */
-    private void handleCookieRequest(String requesterId) throws BadRequestException {
+    private void handleCookieRequest(String requesterId) {
         // 내가 쿠키를 가지고 있다면 응답
         String myCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId, DataType.INSTANCE_COOKIE, String.class);
         if (myCookie != null) {
@@ -270,7 +322,7 @@ public abstract class InstanceProvider {
      * @param roomId 방 ID
      * @return 최적 서버 ID, 서버가 없으면 null
      */
-    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) throws BadRequestException {
+    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) {
         if (hashRing.isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
@@ -390,8 +442,9 @@ public abstract class InstanceProvider {
     }
 
     /**
-     * TODO 추후 failoverService 에서 상세하게 구현 후 사용(auto scale 대응)
-     * 해시 링 상태 확인 (디버깅용)
+     * 현재 해시 링과 활성 서버 집합만 기준으로 라우팅 상태를 빠르게 점검한다.
+     * 추후 auto scale 시점에는 failoverService 기준의 상세 상태 점검으로 확장 필요
+     *
      * @return 해시 링이 정상 상태인지 여부
      */
     public boolean isHealthy() {

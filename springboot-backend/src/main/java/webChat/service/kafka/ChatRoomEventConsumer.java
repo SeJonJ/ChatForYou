@@ -2,7 +2,6 @@ package webChat.service.kafka;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -26,7 +25,7 @@ public class ChatRoomEventConsumer {
             containerFactory = "kafkaRoomEventListenerContainerFactory",
             groupId = "room-event-group-#{T(java.util.UUID).randomUUID().toString().split(\"-\")[0]}" // 인스턴스별 고유 groupId
     )
-    public void listen(ConsumerRecord<String, KafkaEvent> record) throws BadRequestException {
+    public void listen(ConsumerRecord<String, KafkaEvent> record) {
         KafkaRoomEvent event = (KafkaRoomEvent) record.value();
         RoomEvent eventKey = event.getRoomEvent();
         String roomId = event.getRoomId();

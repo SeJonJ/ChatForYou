@@ -3,10 +3,11 @@ package webChat.utils;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import java.util.Base64;
 import java.util.Date;
 
@@ -25,7 +26,7 @@ public class JwtUtil {
      * @param user 사용자 정보
      * @return JWT 토큰
      */
-    public String generateToken(String key, String user) throws BadRequestException {
+    public String generateToken(String key, String user) {
         try {
             // Base64로 인코딩된 키들을 디코딩
             String decodedKey = new String(Base64.getDecoder().decode(key));
@@ -42,7 +43,7 @@ public class JwtUtil {
                         .compact();
             } else {
                 log.error("키가 일치하지 않습니다. 입력된 키: {}, 설정된 키: {}", decodedKey, decodedTokenSecretKey);
-                throw new BadRequestException("Invalid token secret key");
+                throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
             }
         } catch (IllegalArgumentException e) {
             log.error("Base64 디코딩 실패: {}", e.getMessage());

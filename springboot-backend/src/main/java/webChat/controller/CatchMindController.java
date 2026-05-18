@@ -1,82 +1,101 @@
 package webChat.controller;
 
-import io.lettuce.core.dynamic.annotation.Param;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.BadRequestException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.model.game.*;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.service.game.CatchMindService;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/chatforyou/api/catchmind")
+@Slf4j
 public class CatchMindController {
 
     private final CatchMindService catchMindService;
 
-    private static final Logger log = LoggerFactory.getLogger(CatchMindController.class);
-
+    /**
+     * CatchMind 대주제 목록을 조회한다.
+     *
+     * @param roomId 채팅방 ID
+     * @return 게임 대주제 목록
+     */
     @GetMapping(value = "/titles", produces = "application/json; charset=UTF-8")
-    public GameTitles getGameTitles(@RequestParam("roomId") String roomId) throws Exception {
-        log.info(">>>>>>> Successfully Get Game Titles!! <<<<<<<");
+    public ResponseEntity<ChatForYouResponse> getGameTitles(@RequestParam("roomId") String roomId) {
+        log.info("CatchMind 제목 조회 요청: roomId={}", roomId);
         if (catchMindService.chkAlreadyPlayedGame(roomId)) {
-            throw new ExceptionController.AlreadyPlayedGameException("already played game");
+            throw new ChatForYouException(ErrorCode.GAME_ALREADY_PLAYED);
         }
-        return catchMindService.getTitles();
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(catchMindService.getTitles()));
     }
 
+    /**
+     * 선택한 대주제에 맞는 소주제 목록을 조회한다.
+     *
+     * @param roomId 채팅방 ID
+     * @param gameSubjects 선택한 대주제 정보
+     * @return 게임 소주제 목록
+     */
     @PostMapping(value = "/subjects", produces = "application/json; charset=UTF-8")
-    public GameSubjects getGameSubjects(@RequestParam("roomId") String roomId, @RequestBody GameSubjects gameSubjects) throws Exception {
-        log.info(">>>>>>> Successfully Get Game Subjects!! <<<<<<<");
+    public ResponseEntity<ChatForYouResponse> getGameSubjects(@RequestParam("roomId") String roomId, @Valid @RequestBody GameSubjects gameSubjects) {
+        log.info("CatchMind 주제 조회 요청: roomId={}", roomId);
         gameSubjects = catchMindService.getSubjects(roomId, gameSubjects);
-        return gameSubjects;
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(gameSubjects));
     }
 
+    /**
+     * 게임 시작 전 서버 기준 라운드 정보를 저장한다.
+     *
+     * @param gameSettingInfo 게임 설정 정보
+     * @return 저장된 게임 설정 정보
+     */
     @PostMapping(value = "/game_setting", produces = "application/json; charset=UTF-8")
-    public Map<String, String> initGameEnv(
-            @RequestBody GameSettingInfo gameSettingInfo) {
+    public ResponseEntity<ChatForYouResponse> initGameEnv(
+            @Valid @RequestBody GameSettingInfo gameSettingInfo) {
         catchMindService.setGameSettingInfo(gameSettingInfo);
-        Map<String, String> result = new ConcurrentHashMap<>();
-        result.put("result", "success");
-        log.info(">>>>>>> GameSetting Success!! <<<<<<<");
-        return result;
+        log.info("CatchMind 게임 설정 완료: roomId={}", gameSettingInfo.getRoomId());
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(gameSettingInfo));
     }
 
+    /**
+     * 제출된 정답 후보를 서버 기준 정답과 비교한다.
+     *
+     * @param answerReq 정답 확인 요청
+     * @return 정답 판별 결과
+     */
     @PostMapping(value = "/check_answer", produces = "application/json; charset=UTF-8")
     public ResponseEntity<ChatForYouResponse> checkAnswer(
-            @RequestBody AnswerReq answerReq) throws Exception {
+            @Valid @RequestBody AnswerReq answerReq) {
         AnswerResp resp = catchMindService.checkAnswer(answerReq);
-
-        return ResponseEntity.ok(ChatForYouResponse.builder()
-                .result("success")
-                .data(resp)
-                .build());
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(resp));
     }
 
+    /**
+     * 게임 진행 중 사용자 상태와 점수를 갱신한다.
+     *
+     * @param gameStatusRequest 게임 상태 변경 요청
+     * @return 갱신된 사용자 정보
+     */
     @PostMapping(value = "/update_game_status", produces = "application/json; charset=UTF-8")
-    public Map<String, String> updateGameStatus(
-            @RequestBody GameStatusRequest gameStatusRequest) throws BadRequestException {
-        Map<String, String> result = new ConcurrentHashMap<>();
+    public ResponseEntity<ChatForYouResponse> updateGameStatus(
+            @Valid @RequestBody GameStatusRequest gameStatusRequest) {
         CatchMindUserDto catchMindUser = catchMindService.updateUser(gameStatusRequest.getGameStatus(), gameStatusRequest.getRoomId(), gameStatusRequest.getUserId());
-        result.put("result", "success");
-        result.put("nickName", catchMindUser.getNickName());
-        return result;
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(catchMindUser));
     }
 
+    /**
+     * 최종 게임 결과를 조회한다.
+     *
+     * @param roomId 채팅방 ID
+     * @return 최종 게임 결과
+     */
     @GetMapping(value = "/game_result", produces = "application/json; charset=UTF-8")
-    public Map<String, Object> gameResult(@RequestParam("roomId") String roomId) throws BadRequestException, ExceptionController.SyncGameRound {
-        Map<String, Object> result = new ConcurrentHashMap<>();
-
-        result.put("result", "success");
-        result.put("message", "Game has successfully concluded");
-        result.put("gameResult", catchMindService.getGameResult(roomId));
-
-        return result;
+    public ResponseEntity<ChatForYouResponse> gameResult(@RequestParam("roomId") String roomId) {
+        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(catchMindService.getGameResult(roomId)));
     }
 }

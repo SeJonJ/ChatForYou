@@ -3,6 +3,7 @@
 
 (function ($) {
     "use strict";
+    let isIdTokenSyncRegistered = false;
 
 
     /*==================================================================
@@ -21,15 +22,15 @@
   
     /*==================================================================
     [ Validate ]*/
-    var input = $('.validate-input .input100');
+    const input = $('.validate-input .input100');
 
     $('.validate-form').on('submit',function(){
-        var check = true;
+        let check = true;
 
-        for(var i=0; i<input.length; i++) {
-            if(validate(input[i]) == false){
+        for (let i = 0; i < input.length; i++) {
+            if (validate(input[i]) === false) {
                 showValidate(input[i]);
-                check=false;
+                check = false;
             }
         }
 
@@ -44,35 +45,35 @@
     });
 
     function validate (input) {
-        if($(input).attr('type') == 'email' || $(input).attr('name') == 'email') {
-            if($(input).val().trim().match(/^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{1,5}|[0-9]{1,3})(\]?)$/) == null) {
+        if ($(input).attr('type') === 'email' || $(input).attr('name') === 'email') {
+            if ($(input).val().trim().match(/^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{1,5}|[0-9]{1,3})(\]?)$/) == null) {
                 return false;
             }
         }
         else {
-            if($(input).val().trim() == ''){
+            if ($(input).val().trim() === '') {
                 return false;
             }
         }
     }
 
     function showValidate(input) {
-        var thisAlert = $(input).parent();
+        const thisAlert = $(input).parent();
 
         $(thisAlert).addClass('alert-validate');
     }
 
     function hideValidate(input) {
-        var thisAlert = $(input).parent();
+        const thisAlert = $(input).parent();
 
         $(thisAlert).removeClass('alert-validate');
     }
     
     /*==================================================================
     [ Show pass ]*/
-    var showPass = 0;
+    let showPass = 0;
     $('.btn-show-pass').on('click', function(){
-        if(showPass == 0) {
+        if (showPass === 0) {
             $(this).next('input').attr('type','text');
             $(this).addClass('active');
             showPass = 1;
@@ -89,8 +90,7 @@
         alert('해당 기능은 미구현입니다.');
     });
 
-    $('#googleOauth').on('click', function(e) {
-
+    function initializeFirebaseAppIfNeeded() {
         if (!firebase.apps.length) {
             firebase.initializeApp({
                 projectId: window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID,
@@ -100,45 +100,80 @@
         } else {
             firebase.app();
         }
+    }
 
-        var auth = firebase.auth();
-        var provider = new firebase.auth.GoogleAuthProvider();
+    function registerIdTokenSync(auth) {
+        if (isIdTokenSyncRegistered) {
+            return;
+        }
+
+        auth.onIdTokenChanged(function(user) {
+            if (!user) {
+                localStorage.removeItem('access_token');
+                return;
+            }
+
+            user.getIdToken()
+                .then(function(idToken) {
+                    localStorage.setItem('access_token', idToken);
+                })
+                .catch(function(error) {
+                    console.error('[Login] ID token sync failed:', error);
+                });
+        });
+        isIdTokenSyncRegistered = true;
+    }
+
+    $('#googleOauth').on('click', function(e) {
+        initializeFirebaseAppIfNeeded();
+        const auth = firebase.auth();
+        const provider = new firebase.auth.GoogleAuthProvider();
+        registerIdTokenSync(auth);
         auth.signInWithPopup(provider)
             .then(function (result) {
-                var user = result.user;
+                const user = result.user;
                 console.log('user : ' + user);
                 user.getIdToken().then((idToken) => {
                     console.log('idToken : ' + idToken);
-                    var refreshToken = user.refreshToken;
+                    const refreshToken = user.refreshToken;
                     console.log('refresh Token : ' + refreshToken);
 
-                    var requestData = {};
-                    // requestData setting
-                    requestData.accessToken = idToken;
-                    requestData.refreshToken = refreshToken;
-                    requestData.name = user.displayName;
-                    requestData.email = user.email;
-                    requestData.emailVerified = user.emailVerified;
-                    requestData.photo = user.photoURL;
+                    const requestData = {
+                        accessToken: idToken,
+                        refreshToken: refreshToken,
+                        name: user.displayName,
+                        email: user.email,
+                        emailVerified: user.emailVerified,
+                        photo: user.photoURL
+                    };
 
-                    var successCallback = function(result) {
-                        if (result.data.emailVerified) {
-                            localStorage.setItem('access_token', result.data.accessToken);
-                            localStorage.setItem('refresh_token', result.data.refreshToken);
-                            localStorage.setItem('email', result.data.email);
-                            localStorage.setItem('type', result.data.type);
-                            localStorage.setItem('nickname', result.data.email.split('@')[0]);
+                    const successCallback = function(response) {
+                        const { data } = response || {};
+                        if (data?.emailVerified) {
+                            localStorage.setItem('access_token', data.accessToken);
+                            localStorage.setItem('refresh_token', data.refreshToken);
+                            localStorage.setItem('email', data.email);
+                            localStorage.setItem('type', data.type);
+                            localStorage.setItem('nickname', data.email.split('@')[0]);
                             window.location.href = window.__CONFIG__.BASE_URL + '/';
                         } else {
-                            alert('로그인에 실패하였습니다 !!!');
+                            showApiErrorToast('로그인에 실패하였습니다.');
                         }
                     };
-                    var errorCallback = function(error) {
+                    const errorCallback = function(error) {
                         console.error(error);
+                        handleApiError(error);
                     };
                     const url = window.__CONFIG__.API_BASE_URL + '/login/googleOauth';
                     ajax(url, 'POST', true, requestData, successCallback, errorCallback);
-                })
+                }).catch(function(error) {
+                    console.error('[Login] Firebase ID 토큰 조회 실패:', error);
+                    showApiErrorToast('Google 로그인 토큰을 확인하지 못했습니다. 다시 시도해주세요.');
+                });
+            })
+            .catch(function(error) {
+                console.error('[Login] Google OAuth 팝업 로그인 실패:', error);
+                showApiErrorToast('Google 로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
             });
     });
 

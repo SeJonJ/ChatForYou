@@ -20,6 +20,11 @@ public class FirebaseConfig {
 
     @PostConstruct
     public void initializeFirebase() throws IOException {
+        if (!FirebaseApp.getApps().isEmpty()) {
+            log.info("Firebase 기본 앱이 이미 초기화되어 재사용합니다.");
+            return;
+        }
+
         GoogleCredentials credentials;
 
         // 1단계: GOOGLE_APPLICATION_CREDENTIALS 환경변수 확인
@@ -62,11 +67,11 @@ public class FirebaseConfig {
                 try {
                     File file = new File(path);
                     if (file.exists()) {
-                        log.info("Firebase JSON 파일 발견: " + path);
+                        log.info("Firebase JSON 파일 발견: {}", path);
                         return GoogleCredentials.fromStream(new FileInputStream(file));
                     }
                 } catch (IOException e) {
-                    log.info("파일 읽기 실패: " + path);
+                    log.info("파일 읽기 실패: {}", path);
                 }
             }
 

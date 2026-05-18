@@ -1,6 +1,5 @@
 package webChat.service.game;
 
-import org.apache.coyote.BadRequestException;
 import webChat.model.game.AnswerReq;
 import webChat.model.game.GameHint;
 
@@ -10,7 +9,7 @@ public interface GameUtilService {
      * @param answerReq
      * @return
      */
-    GameHint getChosungHint(AnswerReq answerReq) throws BadRequestException;
+    GameHint getChosungHint(AnswerReq answerReq);
 
     /**
      * 정답 비교

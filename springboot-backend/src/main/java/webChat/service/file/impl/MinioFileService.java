@@ -59,8 +59,7 @@ public class MinioFileService extends AbstractFileService {
                     .build();
 
         } catch (Exception e) {
-            log.error("fileUploadException {}", e.getMessage());
-            e.printStackTrace();
+            log.error("MinIO file upload failed: roomId={}, fileName={}", roomId, originFileName, e);
 
             return new FileDto().builder()
                     .status(FileDto.Status.FAIL)

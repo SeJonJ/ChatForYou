@@ -39,6 +39,14 @@ nodejs-frontend/src/static/
 | 프론트 버그 추적 | `error-debugging:debugger` agent |
 | 프론트 코드 컨벤션 검증 | `frontend-convention-checker` agent (`.claude/agents/frontend-convention-checker.md`) |
 
+### 선택적 스킬 호출 (기능 맥락에 따라)
+
+| 조건 | 사용 스킬 |
+|------|---------|
+| UI 컴포넌트 설계·디자인 시스템 기준 정리 시 | `bkit:phase-5-design-system` |
+| 백엔드 API와 프론트 UI 연동 구현 시 | `bkit:phase-6-ui-integration` |
+| 실제 브라우저에서 UI·기능 동작 검증이 필요할 때 | `gstack:browse` |
+
 ---
 
 ## 개발 기준 (docs/nodejs_frontend.md 준수)
@@ -68,11 +76,22 @@ nodejs-frontend/src/static/
 ## 워크플로우
 
 ```
-1. 팀 리더로부터 배분된 파일 소유권 확인
-2. nodejs-frontend/ 관련 코드 분석 및 개발
-3. 개발 완료 후 frontend-convention-checker로 컨벤션 검증
-4. SCSS 수정 시 npm run sass 실행 필요 (에러 발생 시 반드시 알림)
-5. 결과를 팀 리더에게 보고
+1. 팀 리더로부터 분석 요약 수신 (컨벤션 기준 + 영향 파일 목록 + 기존 가이드 경로 포함)
+
+2. nodejs-frontend/plan_docs/[기능명].md 작성 또는 병합 (MANDATORY)
+   - 포함 항목:
+     a. 신규/수정 파일 목록 (신규 생성 / 수정 / 삭제 구분)
+     b. 신규 함수의 완전한 JavaScript 코드 (JSDoc 포함, 조각이 아닌 전체 함수)
+     c. 수정 함수별 Before/After 전체 함수 코드 (error 콜백 조각이 아닌 함수 전체)
+     d. HTML/View 변경 사항 (스크립트 로드 순서, DOM 구조, 이벤트 바인딩 위치 등)
+     e. 체크박스 형식 개발 기능 목록
+     f. 테스트 시나리오 개요 (HTTP / WebSocket / Electron 환경별)
+     g. 코드 컨벤션 체크리스트
+
+3. nodejs-frontend/ 관련 코드 분석 및 개발
+4. 개발 완료 후 frontend-convention-checker로 컨벤션 검증
+5. SCSS 수정 시 npm run sass 실행 필요 (에러 발생 시 반드시 알림)
+6. 결과를 팀 리더에게 보고
 ```
 
 ---

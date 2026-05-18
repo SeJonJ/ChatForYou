@@ -7,17 +7,25 @@ const QRLogin = {
     sessionId: null,
     timerInterval: null,
     pollingInterval: null,
-    $cancelBtn: $('#cancelBtn'),
-    $retryBtn: $('#retryBtn'),
-    $statusMessage: $('#status-message'),
-    $instructions: $('#instructions'),
-    $initialSpinner: $('#initial-spinner'),
-    $qrCode: $('#qr-code'),
-    $qrCodeArea: $('#qr-code-area'),
-    $qrCodeImage: $('#qr-code-image'),
+    $cancelBtn: null,
+    $retryBtn: null,
+    $statusMessage: null,
+    $instructions: null,
+    $initialSpinner: null,
+    $qrCode: null,
+    $qrCodeArea: null,
+    $qrCodeImage: null,
     init: function() {
         console.log('[QR Login] 초기화 시작...');
         let self = this;
+        self.$cancelBtn = $('#cancelBtn');
+        self.$retryBtn = $('#retryBtn');
+        self.$statusMessage = $('#status-message');
+        self.$instructions = $('#instructions');
+        self.$initialSpinner = $('#initial-spinner');
+        self.$qrCode = $('#qr-code');
+        self.$qrCodeArea = $('#qr-code-area');
+        self.$qrCodeImage = $('#qr-code-image');
         self.initClickEvents();
         self.initQRLogin();
     },
@@ -25,12 +33,13 @@ const QRLogin = {
         let self = this;
         console.log('[QR Login] 세션 생성 시작...');
         let url = window.__CONFIG__.API_BASE_URL + '/login/qr/create';
-        ajax(url, 'GET', true, '', function(result) {
-            console.log('[QR Login] 세션 생성 성공:', result);
-            self.sessionId = result.data.sessionId;
+        ajax(url, 'GET', true, '', function(response) {
+            const { data } = response || {};
+            console.log('[QR Login] 세션 생성 성공:', response);
+            self.sessionId = data.sessionId;
             
-            const {qrUrl} = result.data;
-            const {qrImage} = result.data;
+            const {qrUrl} = data;
+            const {qrImage} = data;
 
             console.log('[QR Login] 세션 생성 성공:', self.sessionId);
             console.log('[QR Login] QR 데이터:', qrUrl);
@@ -99,23 +108,26 @@ const QRLogin = {
             console.log('[QR Login] 폴링 중지');
         }
     },
-    /*
-    * 상태 확인
+    /**
+    * QR 인증 세션 상태를 조회해 로그인 완료 여부를 반영한다.
+    * @returns {Promise<void>}
     */
-    checkStatus: async function() {
+    checkStatus: function() {
         let self = QRLogin;
         self.pollingCount++;
         if (self.pollingCount > 100) {
             self.stopPolling();
             self.updateStatus('시간이 초과되었습니다. 다시 시도해주세요.', 'error');
             self.showRetryButton();
+            return;
         }
 
-        let url = window.__CONFIG__.API_BASE_URL + '/login/qr/status/' + self.sessionId;
-        await ajax(url, 'GET', false, '', function(resp) {
-            console.log('[QR Login] 상태 확인 성공:', resp);
-            if (resp.result === 'success' && resp.data) {
-                const { status, userData } = resp.data;
+        const url = window.__CONFIG__.API_BASE_URL + '/login/qr/status/' + self.sessionId;
+        ajax(url, 'GET', false, '', function(response) {
+            const { result, data } = response || {};
+            console.log('[QR Login] 상태 확인 성공:', response);
+            if (result === 'SUCCESS' && data) {
+                const { status, userData } = data;
                 
                 console.log(`[QR Login] 폴링 ${self.pollingCount}회: status=${status}`);
                 
@@ -150,7 +162,7 @@ const QRLogin = {
                 }
                 // status === 'pending'인 경우는 계속 폴링
             } else {
-                console.warn('[QR Login] 상태 확인 실패:', resp.error);
+                console.warn('[QR Login] 상태 확인 실패:', response);
             }
         }, function(error) {
             console.error('[QR Login] 상태 확인 실패:', error);

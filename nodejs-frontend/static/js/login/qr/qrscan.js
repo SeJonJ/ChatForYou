@@ -1,10 +1,11 @@
 const QRScan = {
     isInit: false,
     sessionId: null,
-    $statusMessage: $('#status-message'),
+    $statusMessage: null,
     init: function() {
         console.log('[QR Scan] 초기화 시작...');
         let self = this;
+        self.$statusMessage = $('#status-message');
         self.initSessionId();
         self.initFirebase();
     },
@@ -41,8 +42,8 @@ const QRScan = {
                      }
                  }
              ],
-             callbacks: {
-                 signInSuccessWithAuthResult: async (authResult) => {
+            callbacks: {
+                 signInSuccessWithAuthResult: (authResult) => {
                      console.log('Firebase 로그인 성공:', authResult.user.email);
                      const {user} = authResult;
                      self.authenticateSession(user);
@@ -50,7 +51,7 @@ const QRScan = {
                  },
                  signInFailure: (error) => {
                      console.error('Firebase 로그인 실패:', error);
-                     showError('로그인에 실패했습니다. 다시 시도해주세요.');
+                     self.showError('로그인에 실패했습니다. 다시 시도해주세요.');
                  }
              },
              signInFlow: 'popup', // 팝업 방식 (모바일 친화적)
@@ -64,8 +65,8 @@ const QRScan = {
         console.log('백엔드 인증 시작...');
         // Firebase 토큰 가져오기
         user.getIdToken().then((idToken) => {
-            console.log('idToken : ' + idToken);        
-        
+            console.log('idToken : ' + idToken);
+
             // 폼 데이터 생성
             const requestData = {
                 sessionId: self.sessionId,
@@ -76,40 +77,46 @@ const QRScan = {
                 emailVerified: user.emailVerified,
                 photo: user.photoURL || ''
             };
-            
-            
+
+
             console.log('백엔드 API 호출:', {
                 sessionId: self.sessionId,
                 email: user.email
             });
-            
+
             // 백엔드 API 호출
-            ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(result) {
-                console.log('백엔드 인증 성공:', result);
-                if (result.result && result.data) {
+            ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(response) {
+                const { result, data } = response || {};
+                console.log('백엔드 인증 성공:', response);
+                if (result === 'SUCCESS' && data) {
                     console.log('백엔드 인증 성공');
                     self.showSpinner(false);
-                    
+
                     // Firebase 로그아웃
                     setTimeout(() => {
                         firebase.auth().signOut();
                         self.showSuccess('✅ 로그인 성공! \n이 창을 닫으셔도 됩니다.');
                         // Firebase UI 및 안내 문구 숨김
                         $('#firebaseui-auth-container').hide();
-                        $('#instructions').hide(); 
+                        $('#instructions').hide();
                     }, 2000);
                 } else {
-                    console.error('백엔드 인증 실패:', result);
-                    self.showError('인증 실패: ' + (result.message || '알 수 없는 오류'));
+                    console.error('백엔드 인증 실패:', response);
+                    self.showError('인증 실패: ' + (response?.message || '알 수 없는 오류'));
                 }
             }, function(error) {
                 console.error('백엔드 인증 실패:', error);
-                self.showError('인증 중 오류가 발생했습니다.\n네트워크 연결을 확인하세요.');
+                self.showError(getApiErrorMessage(error?.responseJSON, '인증 중 오류가 발생했습니다.\n네트워크 연결을 확인하세요.'));
             }, function() {
                 self.showSpinner(false);
             });
-            
+
             return false; // 리다이렉트 방지
+        }).catch(function(error) {
+            // Firebase ID 토큰 조회 실패 시 스피너 해제 및 오류 표시
+            console.error('[QR] Firebase ID 토큰 조회 실패:', error);
+            self.showSpinner(false);
+            self.showError('Google 로그인 토큰을 확인하지 못했습니다. 다시 시도해주세요.');
         });
         
     },

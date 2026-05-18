@@ -23,7 +23,16 @@ class SpeechRecognitionManager {
     constructor() {
         this.recognition = null;
         this.isRecognizing = false;
+        this.isStarting = false;
         this.isEnabled = false;
+        this.manualStopRequested = false;
+        this.restartTimer = null;
+        this.pendingRestartDelay = null;
+        this.pendingRestartReason = null;
+        this.lastError = null;
+        this.canManualRetry = true;
+        this.isElectronBlocked = false;
+        this.electronErrorToastShown = false;
         this.lastTranscript = '';
         this.debounceTimer = null;
         this.errorRetryCount = 0;
@@ -111,6 +120,7 @@ class SpeechRecognitionManager {
         this.recognition.onstart = () => {
             console.debug('음성 인식 시작');
             this.isRecognizing = true;
+            this.isStarting = false;
             this.errorRetryCount = 0;
             this.updateUI('recording');
         };
@@ -124,14 +134,23 @@ class SpeechRecognitionManager {
         this.recognition.onend = () => {
             console.debug('음성 인식 종료');
             this.isRecognizing = false;
-            this.updateUI('stopped');
-            
-            // 자동 재시작 (활성화 상태일 때)
-            if (this.isEnabled) {
-                setTimeout(() => {
-                    this.startRecognition();
-                }, 100);
+            this.isStarting = false;
+
+            if (this.manualStopRequested) {
+                this.manualStopRequested = false;
+                this.clearPendingRestart();
+                this.updateUI('stopped');
+                return;
             }
+
+            const restartDelay = this.consumePendingRestartDelay();
+            if (this.isEnabled && restartDelay !== null) {
+                this.updateUI('stopped');
+                this.scheduleRestart(restartDelay, this.pendingRestartReason || 'auto-restart');
+                return;
+            }
+
+            this.updateUI(this.isElectronBlocked ? 'unsupported' : 'stopped');
         };
         
         // 에러 처리
@@ -353,23 +372,24 @@ class SpeechRecognitionManager {
      */
     handleRecognitionError(event) {
         this.performanceMetrics.errorCount++;
+        this.lastError = event.error;
         console.error('음성 인식 에러:', event.error);
         
         switch (event.error) {
             case 'no-speech':
                 console.log('음성이 감지되지 않았습니다.');
-                // 자동 재시작 (no-speech는 정상적인 상황)
-                if (this.isEnabled) {
-                    setTimeout(() => this.startRecognition(), 500);
-                }
+                this.pendingRestartReason = 'no-speech';
+                this.queueRestartAfterEnd(500);
                 break;
             case 'audio-capture':
                 console.error('오디오 캡처 실패 - 마이크 연결 확인 필요');
+                this.canManualRetry = true;
                 this.updateUI('error');
                 this.showUserFriendlyError('마이크에 접근할 수 없습니다. 마이크 연결을 확인해주세요.');
                 break;
             case 'not-allowed':
                 console.error('마이크 권한이 거부되었습니다.');
+                this.canManualRetry = true;
                 this.updateUI('permission-denied');
                 this.showUserFriendlyError('마이크 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.');
                 break;
@@ -379,15 +399,18 @@ class SpeechRecognitionManager {
                 break;
             case 'service-not-allowed':
                 console.error('음성 인식 서비스 사용 불가');
-                this.updateUI('error');
-                this.showUserFriendlyError('음성 인식 서비스를 사용할 수 없습니다.');
+                if (this.isElectronEnvironment()) {
+                    this.blockRecognitionForElectron('service-not-allowed');
+                } else {
+                    this.canManualRetry = true;
+                    this.updateUI('error');
+                    this.showUserFriendlyError('음성 인식 서비스를 사용할 수 없습니다.');
+                }
                 break;
             case 'bad-grammar':
                 console.error('문법 오류');
-                // 문법 오류는 무시하고 재시작
-                if (this.isEnabled) {
-                    setTimeout(() => this.startRecognition(), 100);
-                }
+                this.pendingRestartReason = 'bad-grammar';
+                this.queueRestartAfterEnd(100);
                 break;
             default:
                 console.error('알 수 없는 오류:', event.error);
@@ -415,11 +438,8 @@ class SpeechRecognitionManager {
         
         if (this.errorRetryCount < this.maxRetryCount) {
             console.log(`알 수 없는 에러 재시도 (${this.errorRetryCount}/${this.maxRetryCount})`);
-            setTimeout(() => {
-                if (this.isEnabled) {
-                    this.startRecognition();
-                }
-            }, 1000 * this.errorRetryCount);
+            this.pendingRestartReason = errorType || 'unknown';
+            this.queueRestartAfterEnd(1000 * this.errorRetryCount);
         } else {
             console.error('최대 재시도 횟수 초과 - 음성 인식 중단');
             this.stop();
@@ -432,15 +452,17 @@ class SpeechRecognitionManager {
      * 네트워크 에러 처리 및 재시도
      */
     handleNetworkError() {
+        if (this.isElectronEnvironment()) {
+            this.blockRecognitionForElectron('network');
+            return;
+        }
+
         this.errorRetryCount++;
         
         if (this.errorRetryCount < this.maxRetryCount) {
             console.log(`네트워크 오류 재시도 (${this.errorRetryCount}/${this.maxRetryCount})`);
-            setTimeout(() => {
-                if (this.isEnabled) {
-                    this.startRecognition();
-                }
-            }, 2000 * this.errorRetryCount); // 점진적 지연
+            this.pendingRestartReason = 'network';
+            this.queueRestartAfterEnd(2000 * this.errorRetryCount); // 점진적 지연
         } else {
             console.error('최대 재시도 횟수 초과. 음성 인식을 중단합니다.');
             this.stop();
@@ -456,14 +478,24 @@ class SpeechRecognitionManager {
             console.error('음성 인식이 초기화되지 않았습니다.');
             return false;
         }
+
+        if (this.isElectronBlocked) {
+            console.warn('Electron 차단 상태를 해제하고 수동 재시도를 수행합니다.');
+            this.isElectronBlocked = false;
+            this.canManualRetry = true;
+            this.electronErrorToastShown = false;
+        }
         
-        if (this.isRecognizing) {
+        if (this.isRecognizing || this.isStarting) {
             console.log('이미 음성 인식이 실행 중입니다.');
             return true;
         }
         
         try {
             this.isEnabled = true;
+            this.manualStopRequested = false;
+            this.lastError = null;
+            this.canManualRetry = true;
             this.startRecognition();
             return true;
         } catch (error) {
@@ -476,20 +508,33 @@ class SpeechRecognitionManager {
      * 실제 음성 인식 시작
      */
     startRecognition() {
-        if (this.recognition && !this.isRecognizing) {
+        if (this.recognition && !this.isRecognizing && !this.isStarting) {
             try {
+                this.clearRestartTimer();
+                this.isStarting = true;
                 this.recognition.start();
             } catch (error) {
+                this.isStarting = false;
+                if (error && error.name === 'InvalidStateError') {
+                    console.debug('recognition.start() 중복 호출 무시');
+                    return false;
+                }
                 console.error('recognition.start() 실패:', error);
+                return false;
             }
         }
+        return true;
     }
     
     /**
      * 음성 인식 중지 (최적화됨)
      */
     stop() {
+        const wasEnabled = this.isEnabled;
         this.isEnabled = false;
+        this.manualStopRequested = true;
+        this.clearPendingRestart();
+        this.isStarting = false;
         
         if (this.recognition && this.isRecognizing) {
             try {
@@ -502,12 +547,15 @@ class SpeechRecognitionManager {
         // 리소스 정리
         this.cleanup();
         this.updateUI('stopped');
+        return wasEnabled;
     }
     
     /**
      * 리소스 정리
      */
     cleanup() {
+        this.clearPendingRestart();
+
         // 디바운스 타이머 클리어
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
@@ -587,7 +635,8 @@ class SpeechRecognitionManager {
         // 언어 설정 변경 시 음성 인식 재시작
         if (newConfig.language && this.recognition) {
             this.recognition.lang = newConfig.language;
-            if (this.isEnabled) {
+            const shouldRestart = this.isEnabled;
+            if (shouldRestart) {
                 this.stop();
                 setTimeout(() => this.start(), 100);
             }
@@ -649,7 +698,11 @@ class SpeechRecognitionManager {
             detail: {
                 status: status,
                 isEnabled: this.isEnabled,
-                isRecognizing: this.isRecognizing
+                isRecognizing: this.isRecognizing,
+                isStarting: this.isStarting,
+                lastError: this.lastError,
+                canManualRetry: this.canManualRetry,
+                isElectronBlocked: this.isElectronBlocked
             }
         });
         document.dispatchEvent(event);
@@ -663,8 +716,82 @@ class SpeechRecognitionManager {
             isSupported: this.checkBrowserSupport(),
             isEnabled: this.isEnabled,
             isRecognizing: this.isRecognizing,
-            language: this.config.language
+            isStarting: this.isStarting,
+            language: this.config.language,
+            lastError: this.lastError,
+            canManualRetry: this.canManualRetry,
+            isElectronBlocked: this.isElectronBlocked
         };
+    }
+
+    isElectronEnvironment() {
+        return typeof isElectron === 'function' && isElectron();
+    }
+
+    queueRestartAfterEnd(delay) {
+        if (!this.isEnabled || this.manualStopRequested || this.isElectronBlocked) {
+            return;
+        }
+
+        if (this.pendingRestartDelay === null || delay > this.pendingRestartDelay) {
+            this.pendingRestartDelay = delay;
+        }
+    }
+
+    consumePendingRestartDelay() {
+        const delay = this.pendingRestartDelay;
+        this.pendingRestartDelay = null;
+        return delay;
+    }
+
+    scheduleRestart(delay, reason) {
+        if (!this.isEnabled || this.manualStopRequested || this.isElectronBlocked) {
+            return;
+        }
+
+        this.clearRestartTimer();
+        this.restartTimer = setTimeout(() => {
+            this.restartTimer = null;
+            this.pendingRestartReason = null;
+            if (this.isEnabled && !this.isRecognizing && !this.isStarting) {
+                this.startRecognition();
+            }
+        }, delay);
+
+        console.debug('음성 인식 재시작 예약:', reason, delay);
+    }
+
+    clearRestartTimer() {
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
+    }
+
+    clearPendingRestart() {
+        this.pendingRestartDelay = null;
+        this.pendingRestartReason = null;
+        this.clearRestartTimer();
+    }
+
+    blockRecognitionForElectron(errorType) {
+        this.lastError = errorType;
+        this.isEnabled = false;
+        this.isStarting = false;
+        this.canManualRetry = true;
+        this.isElectronBlocked = true;
+        this.clearPendingRestart();
+        this.updateUI('unsupported');
+        this.showElectronBlockedMessage();
+    }
+
+    showElectronBlockedMessage() {
+        if (this.electronErrorToastShown) {
+            return;
+        }
+
+        this.electronErrorToastShown = true;
+        this.showUserFriendlyError('Electron 환경에서 음성 인식이 불안정하여 중단되었습니다. 텍스트 입력을 사용하거나 자막 버튼으로 다시 시도해주세요.');
     }
 }
 
@@ -689,8 +816,7 @@ function startSpeechRecognition() {
 
 function stopSpeechRecognition() {
     if (speechRecognitionManager) {
-        speechRecognitionManager.stop();
-        return true;
+        return speechRecognitionManager.stop();
     }
     return false;
 }
@@ -706,7 +832,15 @@ function getSpeechRecognitionStatus() {
     if (speechRecognitionManager) {
         return speechRecognitionManager.getStatus();
     }
-    return { isSupported: false, isEnabled: false, isRecognizing: false };
+    return {
+        isSupported: false,
+        isEnabled: false,
+        isRecognizing: false,
+        isStarting: false,
+        lastError: null,
+        canManualRetry: false,
+        isElectronBlocked: false
+    };
 }
 
 // 추가 유틸리티 함수들
@@ -766,7 +900,7 @@ function restartSpeechRecognition() {
         
         // 잠시 대기 후 재시작
         setTimeout(() => {
-            if (wasEnabled) {
+            if (wasEnabled && !speechRecognitionManager.isElectronBlocked) {
                 speechRecognitionManager.start();
             }
         }, 500);
@@ -848,7 +982,7 @@ function handleRecordingStart() {
 }
 
 function handleRecordingStop() {
-    if (speechRecognitionManager) {
+    if (speechRecognitionManager && !speechRecognitionManager.isElectronBlocked) {
         speechRecognitionManager.start();
     }
 }

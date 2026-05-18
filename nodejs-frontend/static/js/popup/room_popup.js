@@ -111,13 +111,13 @@ const RoomPopup = {
             };
 
             let errorCallback = function(err) {
-                if(err.responseJSON?.code === '40042'){
-                    self.showToast('이미 존재하는 방입니다. \n 다른 방 이름을 입력해주세요.');
-                } else if (['40050', '40051', '40052'].includes(err.responseJSON?.code)) {
-                    self.showToast('로그인이 필요한 서비스입니다.');
-                    window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                if (err.responseJSON?.code === 'R002') {
+                    self.showToast(getApiErrorMessage(err.responseJSON, '이미 존재하는 방입니다. \n 다른 방 이름을 입력해주세요.'));
+                } else if (isAuthRequiredErrorCode(err.responseJSON?.code)) {
+                    self.showToast(getApiErrorMessage(err.responseJSON, '로그인이 필요한 서비스입니다.'));
+                    redirectToLogin();
                 } else {
-                    self.showToast('방 생성에 실패했습니다. \n 잠시뒤에 다시 시도해주세요.');
+                    self.showToast(getApiErrorMessage(err.responseJSON, '방 생성에 실패했습니다. \n 잠시뒤에 다시 시도해주세요.'));
                 }
                 console.error(err.responseText, 'error');
                 // 로딩 UI 원복
@@ -179,8 +179,10 @@ const RoomPopup = {
         }
 
         return true;
-    },    /**
-     * 방 입장 처리 (비밀방)
+    },
+    /**
+     * 비밀방 비밀번호를 검증한 뒤 입장 토큰을 저장한다.
+     * @returns {void}
      */
     enterSecretRoom: function() {
         const self = this;
@@ -191,9 +193,10 @@ const RoomPopup = {
             return;
         }
 
-        let successCallback = function(result) {
-            if (result?.data?.isValidate === true) {
-                var roomToken = result.data.token;
+        let successCallback = function(response) {
+            const { data } = response || {};
+            if (data?.isValidate === true) {
+                const roomToken = data.token;
                 sessionStorage.setItem('roomAccessToken', roomToken);
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
                 $('#enterRoomModal').modal('hide');
@@ -203,24 +206,32 @@ const RoomPopup = {
                     console.log('tokenCheck');
                     location.href = url;
                 }, function(error){
-                    if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
-                        self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                    if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                        redirectToLogin();
+                    } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                            || error?.responseJSON?.code === 'R001') {
+                        sessionStorage.removeItem('roomAccessToken');
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
                     }
                 });
-                
+
             } else {
                 self.showToast('비밀번호가 일치하지 않습니다.', 'error');
             }
         };
 
         let errorCallback = function(error) {
-            if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
-                self.showToast('로그인이 필요한 서비스입니다.');
-                window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 만료되었습니다. 다시 확인해주세요.'), 'error');
             } else {
-                console.error(error.responseJSON.message, 'error');
-                self.showToast('비밀번호 확인 중 오류가 발생했습니다.', 'error');
+                console.error(error?.responseJSON?.message, 'error');
+                self.showToast(getApiErrorMessage(error.responseJSON, '비밀번호 확인 중 오류가 발생했습니다.'), 'error');
             } 
         };
 
@@ -230,13 +241,16 @@ const RoomPopup = {
     },
 
     /**
-     * 방 인원 수 체크 후 입장 (일반방)
+     * 일반방 인원 수를 확인한 뒤 입장 가능한 경우에만 이동한다.
+     * @returns {void}
      */
     enterRoom: function() {
         const self = this;
         
-        let successCallback = function(result) {
-            if (result?.data && result?.result === 'success') {
+        let successCallback = function(response) {
+            const { result, data } = response || {};
+            // 방 입장 가능 여부는 표준 응답의 SUCCESS + boolean data 조합으로 판단한다.
+            if (result === 'SUCCESS' && data === true) {
                 self.showToast('방에 정상적으로 입장했습니다!', 'success');
 
                 let url = window.__CONFIG__.BASE_URL + '/room/kurentoroom.html?roomId=' + self.roomId;
@@ -244,9 +258,13 @@ const RoomPopup = {
                     console.log('tokenCheck');
                     location.href = url;
                 }, function(error){
-                    if (error?.responseJSON && ['40050', '40051', '40052'].includes(error.responseJSON.code)) {
-                        self.showToast('로그인이 필요한 서비스입니다.');
-                        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+                    if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                        redirectToLogin();
+                    } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                            || error?.responseJSON?.code === 'R001') {
+                        sessionStorage.removeItem('roomAccessToken');
+                        self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'), 'error');
                     }
                 });
             } else {
@@ -255,16 +273,22 @@ const RoomPopup = {
         };
 
         let errorCallback = function(error) {
-            if (error.responseJSON && error.responseJSON.message) {
-                self.showToast(error.responseJSON.message, 'error');
+            if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
+                self.showToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                redirectToLogin();
+            } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
+                    || error?.responseJSON?.code === 'R001') {
+                sessionStorage.removeItem('roomAccessToken');
+                self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'), 'error');
             } else {
-                self.showToast('방 입장 중 오류가 발생했습니다.', 'error');
+                self.showToast(getApiErrorMessage(error?.responseJSON, '방 입장 중 오류가 발생했습니다.'), 'error');
             }
         };
 
         const url = window.__CONFIG__.API_BASE_URL + '/chat/room/chkUserCnt/' + self.roomId;
         tokenAjax(url, 'GET', true, '', successCallback, errorCallback);
-    },    /**
+    },
+    /**
      * 토스트 메시지 표시
      */
     showToast: function(message, type) {

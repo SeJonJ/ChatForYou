@@ -1,7 +1,7 @@
 ---
 name: "frontend-convention-checker"
 description: "Use this agent when a logical chunk of frontend code has been written or modified and you need to verify it against the nodejs_frontend.md code conventions. Specifically, use this agent at the 'code convention' checklist step in any PLAN file to automatically detect changed files via git diff, validate them against project coding standards, update the PLAN file checklist, and report violations with fix guidance.\\n\\n<example>\\nContext: The user has just finished implementing a new feature for the Node.js frontend and wants to verify code conventions before committing.\\nuser: \"채팅 파일 공유 기능 개발이 완료됐어. 컨벤션 체크 해줘\"\\nassistant: \"git diff를 기반으로 변경된 프론트엔드 파일을 확인하고 frontend-convention-checker 에이전트를 실행할게요.\"\\n<commentary>\\nSince frontend code was written, use the Agent tool to launch the frontend-convention-checker to validate against nodejs_frontend.md conventions and update the PLAN file checklist.\\n</commentary>\\nassistant: \"Now let me use the Agent tool to launch the frontend-convention-checker agent to validate the changed files.\"\\n</example>\\n\\n<example>\\nContext: The assistant has finished writing a significant chunk of frontend code as part of a PLAN file task and has reached the code convention checklist step.\\nuser: \"PLAN 파일의 코드 컨벤션 단계야. 확인해줘\"\\nassistant: \"frontend-convention-checker 에이전트를 사용해서 코드 컨벤션을 확인할게요.\"\\n<commentary>\\nThe user is at the code convention step of the PLAN file. Use the Agent tool to launch the frontend-convention-checker agent.\\n</commentary>\\nassistant: \"Now let me use the Agent tool to launch the frontend-convention-checker agent to check the PLAN file's code convention step.\"\\n</example>\\n\\n<example>\\nContext: A developer has made changes across multiple frontend files and asks for a full convention check before finalizing.\\nuser: \"변경된 파일들 컨벤션 위반 없는지 확인해줘\"\\nassistant: \"Agent 도구를 사용해서 frontend-convention-checker를 실행할게요.\"\\n<commentary>\\nCode changes were made to frontend files. Use the Agent tool to launch the frontend-convention-checker to review git diff and validate conventions.\\n</commentary>\\nassistant: \"Now let me use the Agent tool to launch the frontend-convention-checker agent to review all changed files.\"\\n</example>"
-model: sonnet
+model: haiku
 color: blue
 memory: project
 ---
@@ -19,7 +19,7 @@ You are an expert frontend code convention auditor for the ChatForYou_v2 project
    - Check against every rule in `docs/nodejs_frontend.md`
    - Record each violation with: file path, line number (if applicable), rule violated, specific offending code snippet
 
-4. **Update PLAN File Checklist**: Find the relevant PLAN file (search for `*_plan.md` in the project root or appropriate subdirectory). Locate the code convention checklist item and update it:
+4. **Update PLAN File Checklist**: Find the relevant implementation guide file (search for `*.md` in `nodejs-frontend/plan_docs/`). Locate the code convention checklist item and update it:
    - If all conventions pass: mark as `✅ 코드 컨벤션 검증 완료`
    - If violations found: mark as `❌ 코드 컨벤션 위반 발견 (N건)`
 

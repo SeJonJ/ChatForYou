@@ -15,6 +15,7 @@ const catchMind = {
     title: '', // 선택된 대주제
     subject: '', // 선택된 주제
     nickName: '', // 게임 닉네임
+    currentGameLeader: '', // 현재 라운드 진행자 닉네임
     isGameLeader: false, // 게임 진행자 여부
     isGameParticipant: false, // 게임 참여자 여부
     isGameStart: false, // 게임 시작 여부
@@ -39,6 +40,10 @@ const catchMind = {
     synth: null,
     wrongAnswerCount: 0, // 오답 횟수 (3회 이상 시 텍스트 입력 표시)
     isCheckingAnswer: false, // 정답 확인 중복 호출 방지
+    roundResolved: false, // 현재 라운드 승리 확정 여부
+    roundTransitionPending: false, // 서버 authoritative 라운드 종료 확인 대기 여부
+    roundTransitionRetryTimer: null, // 라운드 종료 재시도 타이머
+    roundTransitionContext: null, // 대기 중인 라운드 종료 정보
     alreadyPlayedGame: false, // 게임 이미 진행되었는지 여부
     init: function () {
         this.canvas = document.getElementById('mycanvas');
@@ -263,7 +268,8 @@ const catchMind = {
 
                 let url = window.__CONFIG__.API_BASE_URL + `/catchmind/titles?roomId=${roomId}`;
 
-                let successCallback = function (data) {
+                let successCallback = function (response) {
+                    const { data } = response || {};
                     let titles = data.titles;
                     // 배열 순회
                     $.each(titles, function (index, title) {
@@ -289,7 +295,7 @@ const catchMind = {
                     self.preventGameEvent();
                     let result = data?.responseJSON;
                     console.error("error :: ", result);
-                    alert(result.message);
+                    self.showToast(result?.message || '게임 제목을 불러오지 못했습니다.');
                     spinnerOpt.stop();
                     return false;
                 };
@@ -315,7 +321,8 @@ const catchMind = {
                 "title": self.title
             }
 
-            let successCallback = function (data) {
+            let successCallback = function (response) {
+                const { data } = response || {};
                 $subjectButtonContainer.empty();
                 let subjects = data.subjects;
                 // 배열 순회
@@ -363,13 +370,13 @@ const catchMind = {
             if (self.isGameParticipant) {
                 // 참여자: title은 DataChannel로 수신됨, subject는 서버만 알고 있음
                 if (!self.title) {
-                    alert("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
+                    self.showToast("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
                     return;
                 }
             } else {
                 // 리더: title + subject 모두 선택 필수
                 if (!self.title || !self.subject) {
-                    alert("게임 주제를 선정 후 시작하실 수 있습니다!");
+                    self.showToast("게임 주제를 선정 후 시작하실 수 있습니다!");
                     return;
                 }
             }
@@ -383,7 +390,7 @@ const catchMind = {
 
                 let $nickName = $('#nickName_ld').val();
                 if (!$nickName) {
-                    alert("게임 닉네임은 필수값입니다!");
+                    self.showToast("게임 닉네임은 필수값입니다!");
                     return;
                 }
 
@@ -461,17 +468,17 @@ const catchMind = {
         // game start btn
         $('#startBtn').off('click').on('click', function () {
             if(self.gameReadyUser === 1 ) {
-                alert("혼자서는 게임 진행이 불가능해요!");
+                self.showToast("혼자서는 게임 진행이 불가능해요!");
                 return;
             }
             if (self.isGameParticipant) {
                 if (!self.title) {
-                    alert("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
+                    self.showToast("게임 정보를 수신하지 못했습니다. 잠시 후 다시 시도해주세요.");
                     return;
                 }
             } else {
                 if (!self.title || !self.subject) {
-                    alert("게임 주제를 선정 후 시작하실 수 있습니다!");
+                    self.showToast("게임 주제를 선정 후 시작하실 수 있습니다!");
                     return;
                 }
             }
@@ -495,8 +502,10 @@ const catchMind = {
                 data.totalGameRound = self.totalGameRound;
             }
 
-            ajaxToJson(url, 'POST', '', data, function(resp) {
+            ajaxToJson(url, 'POST', true, data, function(resp) {
                 // 성공 시에만 게임 시작
+                self.resetRoundResolutionState();
+                self.currentGameLeader = self.nickName;
                 self.isGameStart = true;
                 self.isGameLeader = true;
                 self.isTimeRemain = true;
@@ -567,6 +576,7 @@ const catchMind = {
         let self = this;
         // 자막 음성인식과 충돌 방지 — 게임 음성인식 전에 자막 정지
         let subtitleWasActive = (typeof stopSpeechRecognition === 'function') && stopSpeechRecognition();
+        let subtitleStatusBeforeRestore = null;
 
         if (!self.recognition) {
             $('#quickAnswerContainer').show();
@@ -586,6 +596,7 @@ const catchMind = {
         let collectedAlternatives = [];
         let hasError = false;
         let isTimedOut = false;
+        let shouldOpenQuickAnswerImmediately = false;
 
         try {
             self.recognition.start();
@@ -653,6 +664,9 @@ const catchMind = {
             hasError = true;
 
             console.log('음성 인식 에러:', event.error);
+            subtitleStatusBeforeRestore = (typeof getSpeechRecognitionStatus === 'function')
+                ? getSpeechRecognitionStatus()
+                : null;
 
             let errorMessage = '';
             switch(event.error) {
@@ -666,7 +680,12 @@ const catchMind = {
                     errorMessage = '마이크 사용 권한이 거부되었습니다.';
                     break;
                 case 'network':
-                    errorMessage = '네트워크 오류가 발생했습니다.';
+                    if (typeof isElectron === 'function' && isElectron()) {
+                        shouldOpenQuickAnswerImmediately = true;
+                        errorMessage = 'Electron 환경에서 음성 인식이 불안정합니다. 텍스트로 바로 입력해주세요.';
+                    } else {
+                        errorMessage = '네트워크 오류가 발생했습니다.';
+                    }
                     break;
                 default:
                     errorMessage = '음성 인식 중 오류가 발생했습니다.';
@@ -680,7 +699,14 @@ const catchMind = {
             clearTimeout(safetyTimeout);
 
             // 자막 음성인식 복원
-            if (subtitleWasActive && typeof startSpeechRecognition === 'function') {
+            if (!subtitleStatusBeforeRestore && typeof getSpeechRecognitionStatus === 'function') {
+                subtitleStatusBeforeRestore = getSpeechRecognitionStatus();
+            }
+            if (
+                subtitleWasActive &&
+                typeof startSpeechRecognition === 'function' &&
+                (!subtitleStatusBeforeRestore || (!subtitleStatusBeforeRestore.isElectronBlocked && subtitleStatusBeforeRestore.canManualRetry !== false))
+            ) {
                 startSpeechRecognition();
             }
 
@@ -690,8 +716,12 @@ const catchMind = {
             } else {
                 // 음성 감지 실패 (에러/타임아웃/무음)
                 $('#answerBtn').attr('disabled', false);
-                self.wrongAnswerCount++;
-                self.showQuickAnswerIfNeeded();
+                if (shouldOpenQuickAnswerImmediately) {
+                    self.showQuickAnswerInput();
+                } else {
+                    self.wrongAnswerCount++;
+                    self.showQuickAnswerIfNeeded();
+                }
             }
         };
     },
@@ -778,6 +808,8 @@ const catchMind = {
         return this.gameReadyUser === this.gameUserCount;
     },
     participantGameStartEvent: function () { // 참여자의 게임 시작 이벤트
+        this.resetRoundResolutionState();
+        this.isGameStart = true;
         $('#subjectModal').modal('hide');
         $('#catchMindCanvas').modal('show');
 
@@ -789,8 +821,11 @@ const catchMind = {
     checkAnswer: function (answers) {
         let self = this;
         if (!answers || answers.length === 0) return;
+        if (self.roundTransitionPending) return;
+        if (self.roundResolved || !self.isGameStart) return;
         if (self.isCheckingAnswer) return;
         self.isCheckingAnswer = true;
+        const requestRound = self.currentGameRound;
 
         let requestData = {
             "roomId": roomId,
@@ -798,16 +833,28 @@ const catchMind = {
             "answers": answers
         };
 
-        let successCallback = function (resp) {
+        let successCallback = function (response) {
             self.isCheckingAnswer = false;
-            let data = resp.data;
+            if (!self.isSameRound(requestRound)) {
+                return;
+            }
+            const { data } = response || {};
 
             if (data.isCorrect) {
                 // 정답 처리
                 let nickName = data.catchMindUser.nickName;
+                if (nickName !== self.nickName) {
+                    self.handleNewWinnerEvent(nickName, nickName === self.currentGameLeader, requestRound);
+                    return;
+                }
+                if (!self.resolveRound(nickName)) {
+                    $('#answerBtn').attr('disabled', true);
+                    return;
+                }
                 let gameWinner = {
                     "gameEvent": "newWinner",
-                    "winner": nickName
+                    "winner": nickName,
+                    "round": requestRound
                 };
                 dataChannel.sendMessage(gameWinner, 'gameEvent');
                 $('#answerBtn').attr('disabled', true);
@@ -822,24 +869,27 @@ const catchMind = {
 
         let errorCallback = function (error) {
             self.isCheckingAnswer = false;
+            if (!self.isSameRound(requestRound)) {
+                return;
+            }
             console.log('check_answer error:', error.responseText);
             $('#answerBtn').attr('disabled', false);
         };
 
         ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/check_answer',
-                   'POST', '', requestData, successCallback, errorCallback);
+                   'POST', true, requestData, successCallback, errorCallback);
     },
     speakWinner: function (winnerName, isTimeout) {
 
         if (winnerName !== '') {
-            var speakText = isTimeout
+            const speakText = isTimeout
                 ? "누구도 정답을 맞추지 못해 " + winnerName + "님이 승리했습니다"
                 : winnerName + "님이 정답을 맞췄습니다";
 
             this.showToast(speakText);
 
             // SpeechSynthesisUtterance 객체 생성
-            var utterThis = new SpeechSynthesisUtterance(speakText);
+            const utterThis = new SpeechSynthesisUtterance(speakText);
 
             // 음성이 끝났을 때 실행할 콜백 함수
             utterThis.onend = function (event) {
@@ -852,7 +902,7 @@ const catchMind = {
             };
 
             // 한국어 음성 우선, 없으면 브라우저 기본 음성 사용
-            var voices = this.synth.getVoices();
+            const voices = this.synth.getVoices();
             utterThis.voice = voices.find(function(v) { return v.lang.startsWith('ko'); }) || voices[0] || null;
 
             // 음성 속도와 피치 설정 (선택 사항)
@@ -943,12 +993,99 @@ const catchMind = {
     // 3회 이상 오답 시 텍스트 입력 표시
     showQuickAnswerIfNeeded: function () {
         if (this.wrongAnswerCount >= 3 && !isMobile()) {
+            this.showQuickAnswerInput();
+        }
+    },
+    showQuickAnswerInput: function () {
+        if (!isMobile()) {
             $('#quickAnswerContainer').show();
             $('#answerBtn').hide();
         }
     },
-    resetGameRound: async function (winner) {
+    resetRoundResolutionState: function () {
+        this.roundResolved = false;
+        this.isCheckingAnswer = false;
+        this.timeLeft = this.totalTime;
+        this.leaveRoundTransitionPending();
+    },
+    isSameRound: function (round) {
+        return parseInt(round, 10) === this.currentGameRound;
+    },
+    enterRoundTransitionPending: function (type, round, extraContext) {
+        if (round !== undefined && round !== null && !this.isSameRound(round)) {
+            return;
+        }
+
+        this.roundTransitionPending = true;
+        this.roundTransitionContext = $.extend({
+            type: type,
+            round: round
+        }, extraContext);
+        this.isCheckingAnswer = false;
+        this.drawing = false;
+        $('#answerBtn').attr('disabled', true);
+        $('#quickAnswerInput').prop('disabled', true);
+        $('#clearCanvasBtn').prop('disabled', true);
+    },
+    leaveRoundTransitionPending: function () {
+        clearTimeout(this.roundTransitionRetryTimer);
+        this.roundTransitionRetryTimer = null;
+        this.roundTransitionPending = false;
+        this.roundTransitionContext = null;
+        $('#quickAnswerInput').prop('disabled', false);
+        if (this.isGameStart && !this.roundResolved) {
+            $('#answerBtn').attr('disabled', false);
+            if (this.isGameLeader && this.maxClearCount > 0) {
+                $('#clearCanvasBtn').prop('disabled', false);
+            }
+        }
+    },
+    scheduleRoundTransitionRetry: function (callback, delay) {
+        clearTimeout(this.roundTransitionRetryTimer);
+        this.roundTransitionRetryTimer = setTimeout(callback, delay);
+    },
+    getWinnerInfoFromGameResult: function (result) {
+        const winnerId = result?.currentRoundWinnerId;
+        return {
+            winnerId: winnerId,
+            winnerNickName: this.findGameUserNickName(winnerId),
+            isTimeout: !!winnerId && winnerId === result?.currentGameLeader
+        };
+    },
+    resolveRound: function (winner) {
+        if (this.roundResolved) {
+            return false;
+        }
+
+        this.roundResolved = true;
+        this.isGameStart = false;
+        this.isTimeRemain = false;
+        this.isCheckingAnswer = false;
+        this.drawing = false;
+        clearInterval(this.timerId);
+        this.resetTimer();
+        return true;
+    },
+    handleNewWinnerEvent: function (winner, isTimeout, round) {
+        if (round !== undefined && round !== null && !this.isSameRound(round)) {
+            return;
+        }
+
+        if (!this.resolveRound(winner)) {
+            return;
+        }
+
+        this.speakWinner(winner, isTimeout);
+        this.resetGameRound(winner);
+    },
+    /**
+     * 한 라운드를 종료하고 다음 라운드 또는 최종 결과 화면으로 흐름을 전환한다.
+     * @param {string} winner
+     */
+    resetGameRound: function (winner) {
         let self = this;
+        self.resolveRound(winner);
+        self.leaveRoundTransitionPending();
         // 텍스트 입력 숨김 + 오답 카운트 초기화 + 초성 힌트 초기화
         $('#quickAnswerContainer').hide();
         $('#answerBtn').show();
@@ -958,95 +1095,233 @@ const catchMind = {
         self.isCheckingAnswer = false;
         // 캔버스 초기화
         self.clearCanvas();
-        $('#catchMindCanvas').modal('hide');
+        // 최종 결과 조회가 필요 없는 경우 공통 라운드 초기화는 여기서 처리한다.
+        const finishResetGameRound = function (targetRound) {
+            self.isGameReady = false;
+            self.title = '';
+            self.subject = '';
+            self.showRoundSubject(true);
 
-        if (self.currentGameRound === self.totalGameRound) {
-            let url = window.__CONFIG__.API_BASE_URL +`/catchmind/game_result?roomId=${roomId}`;
-            try {
-                let data = await ajaxToJsonPromise(url, 'GET');
-                if (data.result === 'SyncGameRound') {
-                    console.log(data.message);
-                    self.currentGameRound = data.currentGameRound;
-                } else {
-                    let gameResult = data.gameResult;
-                    self.displayGameResults(gameResult);
-                    // self.preventGameEvent();
-                    return;
-                }
-            } catch (error) {
-                console.error("An error occurred:", error);
-                // 예외처리 필요
-                return;
+            self.maxClearCount = 3;
+
+            $('#progress-container').empty();
+
+            if (winner === self.nickName) {
+                self.isGameLeader = true;
+                self.isGameParticipant = false;
+                self.currentGameLeader = self.nickName;
+
+                $('#gameSubject').addClass('show active');
+                $('#gameTip').removeClass('show active');
+
+                $('#gameSubject-tab').show();
+                $('#gameSubject-tab').tab('show');
+
+                $('#nickName_ld').val(self.nickName);
+                $('#nickName_ld').attr('disabled', true);
+
+                $('#startBtn').removeAttr('hidden');
+                $('#maxClearCount').text("캔버스 초기화 기회 : " + self.maxClearCount);
+
+                $("#loadingIndicator").hide();
+                $('#startBtn').show();
+            } else {
+                self.isGameLeader = false;
+                self.isGameParticipant = true;
+                self.currentGameLeader = winner;
+
+                $('#gameSubject-tab').hide();
+                $('#gameTip-tab').tab('show');
+                $('#gameSubject').removeClass('show active');
+                $('#gameTip').addClass('show active');
+
+                $('#startBtn').hide();
+                $('#readyUser').hide();
+                $('#maxClearCount').text("진행자의 캔버스 초기화 기회 : " + self.maxClearCount);
+
+                $("#loadingIndicator").show();
+                $('#loadingUser').removeAttr('hidden');
+                $('#loadingUser').text('승리자의 주제 선택을 기다리는 중...!! : ' + self.gameReadyUser + "/" + self.gameUserCount);
             }
+
+            if (targetRound !== undefined && targetRound !== null) {
+                self.currentGameRound = parseInt(targetRound, 10);
+            } else {
+                self.currentGameRound += 1;
+            }
+            $('#roundIndicator').text(self.currentGameRound + '/' + self.totalGameRound).show();
+            $('#subjectModal').modal('show');
+        };
+
+        // 마지막 라운드에서는 서버 기준 최종 순위를 먼저 동기화한 뒤 다음 화면을 연다.
+        if (self.currentGameRound === self.totalGameRound) {
+            self.enterRoundTransitionPending('gameResult', self.currentGameRound, {
+                winner: winner,
+                retryCount: 0
+            });
+            self.requestGameResultWithRetry(self.currentGameRound, finishResetGameRound);
+            return;
         }
 
-        // 게임 상태 초기화
-        self.isGameStart = false;
-        self.isGameReady = false;
-        self.drawing = false;
-        self.isTimeRemain = false;
-        self.title = '';
-        self.subject = '';
-        // self.gameReadyUser = 0; // 게임 준비 상태인 유저 수 초기화
-        self.showRoundSubject(true);
-
-        // 최대 캔버스 클리어 횟수 재설정
-        self.maxClearCount = 3;
-
-        // TODO 타이머 이벤트 초기화
-        $('#progress-container').empty();
-        self.resetTimer();
-
-        if (winner === self.nickName) {
-            self.isGameLeader = true;
-            self.isGameParticipant = false;
-
-            $('#gameSubject').addClass('show active');  // 주제 선택 탭 내용 숨김
-            $('#gameTip').removeClass('show active')
-
-            $('#gameSubject-tab').show();
-            $('#gameSubject-tab').tab('show');
-
-            $('#nickName_ld').val(self.nickName);
-            $('#nickName_ld').attr('disabled', true);
-
-            $('#startBtn').removeAttr('hidden');
-            // $('#startBtn').attr('disabled', false);
-
-            // 캔버스 클리어 후 이벤트
-            $('#maxClearCount').text("캔버스 초기화 기회 : " + self.maxClearCount);
-
-            $("#loadingIndicator").hide();
-            $('#startBtn').show();
-
-        } else {
-            self.isGameLeader = false;
-            self.isGameParticipant = true;
-
-            $('#gameSubject-tab').hide(); // 주제 선택 탭 숨김
-            $('#gameTip-tab').tab('show'); // 게임 방법 & 팁 탭을 활성화
-
-            // 게임 방법 & 팁 탭을 기본적으로 표시
-            $('#gameSubject').removeClass('show active');  // 주제 선택 탭 내용 숨김
-            $('#gameTip').addClass('show active');
-
-            $('#startBtn').hide();
-            $('#readyUser').hide();
-
-            // 캔버스 클리어후 이벤트
-            $('#maxClearCount').text("진행자의 캔버스 초기화 기회 : " + this.maxClearCount);
-
-            $("#loadingIndicator").show();
-            $('#loadingUser').removeAttr('hidden');
-            $('#loadingUser').text('승리자의 주제 선택을 기다리는 중...!! : ' + this.gameReadyUser + "/" + this.gameUserCount);
-        }
-
-        self.currentGameRound += 1; // 게임 라운드 추가
-        $('#roundIndicator').text(self.currentGameRound + '/' + self.totalGameRound).show();
-        $('#subjectModal').modal('show');
+        $('#catchMindCanvas').modal('hide');
+        finishResetGameRound();
     },
     newRoundSubject: function (data) {
         this.title = data.title;
+    },
+    requestGameResultWithRetry: function (resultRound, syncCallback) {
+        let self = this;
+        let url = window.__CONFIG__.API_BASE_URL + `/catchmind/game_result?roomId=${roomId}`;
+
+        ajaxToJsonPromise(url, 'GET')
+            .then(function (response) {
+                const result = response?.data;
+                if (!self.isSameRound(resultRound) || !self.roundTransitionPending) {
+                    return;
+                }
+
+                if (result?.syncNeeded) {
+                    const retryCount = (self.roundTransitionContext?.retryCount || 0) + 1;
+                    if (self.roundTransitionContext) {
+                        self.roundTransitionContext.retryCount = retryCount;
+                    }
+
+                    if (retryCount === 1) {
+                        self.showToast('최종 결과를 다시 불러오는 중입니다.');
+                    }
+                    self.scheduleRoundTransitionRetry(function () {
+                        self.requestGameResultWithRetry(resultRound, syncCallback);
+                    }, Math.min(2000 * retryCount, 5000));
+                    return;
+                }
+
+                self.leaveRoundTransitionPending();
+                $('#catchMindCanvas').modal('hide');
+                self.displayGameResults(result?.gameResult);
+            })
+            .catch(function (error) {
+                if (!self.isSameRound(resultRound) || !self.roundTransitionPending) {
+                    return;
+                }
+
+                const retryCount = (self.roundTransitionContext?.retryCount || 0) + 1;
+                if (self.roundTransitionContext) {
+                    self.roundTransitionContext.retryCount = retryCount;
+                }
+
+                console.error('[CatchMind] game_result 조회 실패:', error);
+                if (retryCount === 1) {
+                    self.showToast(getApiErrorMessage(error?.responseJSON, '최종 게임 결과를 확인하는 중입니다. 잠시 후 다시 시도합니다.'));
+                }
+                self.scheduleRoundTransitionRetry(function () {
+                    self.requestGameResultWithRetry(resultRound, syncCallback);
+                }, Math.min(2000 * retryCount, 5000));
+            });
+    },
+    recoverRoundTransition: function (timerRound, retryCount) {
+        let self = this;
+        let url = window.__CONFIG__.API_BASE_URL + `/catchmind/game_result?roomId=${roomId}`;
+
+        ajaxToJsonPromise(url, 'GET')
+            .then(function (response) {
+                const result = response?.data;
+                if (!self.isSameRound(timerRound) || !self.roundTransitionPending) {
+                    return;
+                }
+
+                if (result?.gameCompleted && result?.gameResult) {
+                    const winnerInfo = self.getWinnerInfoFromGameResult(result);
+                    self.leaveRoundTransitionPending();
+                    if (!self.resolveRound(winnerInfo.winnerNickName)) {
+                        return;
+                    }
+                    $('#catchMindCanvas').modal('hide');
+                    if (winnerInfo.winnerNickName) {
+                        self.speakWinner(winnerInfo.winnerNickName, winnerInfo.isTimeout);
+                    }
+                    self.displayGameResults(result.gameResult);
+                    return;
+                }
+
+                if (result?.syncNeeded && result?.currentRoundWinnerId) {
+                    const winnerInfo = self.getWinnerInfoFromGameResult(result);
+                    self.leaveRoundTransitionPending();
+                    self.handleNewWinnerEvent(winnerInfo.winnerNickName, winnerInfo.isTimeout, timerRound);
+                    return;
+                }
+
+                const nextRetryCount = retryCount + 1;
+                if (nextRetryCount === 1) {
+                    self.showToast('서버 상태를 다시 확인하고 있습니다.');
+                }
+
+                self.scheduleRoundTransitionRetry(function () {
+                    self.requestTimeoutWinner(timerRound, nextRetryCount);
+                }, Math.min(1500 * nextRetryCount, 5000));
+            })
+            .catch(function (error) {
+                if (!self.isSameRound(timerRound) || !self.roundTransitionPending) {
+                    return;
+                }
+
+                const nextRetryCount = retryCount + 1;
+                console.error('[CatchMind] 라운드 종료 상태 재동기화 실패:', error);
+                if (nextRetryCount === 1) {
+                    self.showToast(getApiErrorMessage(error?.responseJSON, '서버 상태를 다시 확인하고 있습니다.'));
+                }
+                self.scheduleRoundTransitionRetry(function () {
+                    self.recoverRoundTransition(timerRound, nextRetryCount);
+                }, Math.min(2000 * nextRetryCount, 5000));
+            });
+    },
+    requestTimeoutWinner: function (timerRound, retryCount) {
+        let self = this;
+        const timeoutData = {
+            gameStatus: "TIMEOUT",
+            roomId: roomId,
+            userId: self.nickName
+        };
+
+        ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/update_game_status', 'POST', true, timeoutData, function(response) {
+            const { data } = response || {};
+            if (!self.isSameRound(timerRound) || self.roundResolved || !self.isGameStart) {
+                return;
+            }
+            if (data.nickName !== self.nickName) {
+                self.handleNewWinnerEvent(data.nickName, false, timerRound);
+                return;
+            }
+            if (!self.resolveRound(data.nickName)) {
+                return;
+            }
+            let gameWinner = { "gameEvent": "newWinner", "winner": data.nickName, "timeout": true, "round": timerRound };
+            dataChannel.sendMessage(gameWinner, 'gameEvent');
+            self.speakWinner(data.nickName, true);
+            self.resetGameRound(data.nickName);
+        }, function(error) {
+            if (!self.isSameRound(timerRound) || self.roundResolved || !self.isGameStart) {
+                return;
+            }
+
+            const nextRetryCount = (retryCount || 0) + 1;
+            if (self.roundTransitionContext) {
+                self.roundTransitionContext.retryCount = nextRetryCount;
+            }
+
+            console.error('[CatchMind] update_game_status timeout 처리 실패:', error);
+            if (nextRetryCount === 1) {
+                self.showToast(getApiErrorMessage(error?.responseJSON, '라운드 종료 상태를 확인하는 중입니다. 잠시 후 다시 시도합니다.'));
+            }
+
+            if (nextRetryCount > self.maxRoundRecoveryAttempts) {
+                self.recoverRoundTransition(timerRound, 0);
+                return;
+            }
+
+            self.scheduleRoundTransitionRetry(function () {
+                self.requestTimeoutWinner(timerRound, nextRetryCount);
+            }, Math.min(1500 * nextRetryCount, 5000));
+        });
     },
     /**
      * 타이머 시작
@@ -1054,6 +1329,11 @@ const catchMind = {
     startTimer: function () {
         let self = this;
         let totalTime = self.totalTime;
+        const timerRound = self.currentGameRound;
+        if (self.roundResolved || !self.isGameStart) {
+            self.resetTimer();
+            return;
+        }
         if (!self.timeLeft || self.timeLeft <= 0) {
             self.timeLeft = self.totalTime;
         }
@@ -1091,20 +1371,17 @@ const catchMind = {
                 clearInterval(self.timerId);
                 self.isTimeRemain = false;
 
+                if (self.roundResolved || !self.isGameStart) {
+                    self.resetTimer();
+                    return;
+                }
+
                 // 타이머 만료 시 출제자 자동 승리
                 if (self.isGameLeader) {
-                    const timeoutData = {
-                        gameStatus: "TIMEOUT",
-                        roomId: roomId,
-                        userId: self.nickName
-                    };
-                    let successCallback = function(data) {
-                        let gameWinner = { "gameEvent": "newWinner", "winner": data.nickName, "timeout": true };
-                        dataChannel.sendMessage(gameWinner, 'gameEvent');
-                        self.speakWinner(data.nickName, true);
-                        self.resetGameRound(data.nickName);
-                    };
-                    ajaxToJson(window.__CONFIG__.API_BASE_URL + '/catchmind/update_game_status', 'POST', '', timeoutData, successCallback);
+                    self.enterRoundTransitionPending('timeout', timerRound, {
+                        retryCount: 0
+                    });
+                    self.requestTimeoutWinner(timerRound, 0);
                 }
             }
         }, 1000);
@@ -1124,6 +1401,8 @@ const catchMind = {
         let self = this;
         // 타이머 중지
         clearInterval(self.timerId);
+        self.timerId = null;
+        self.timeLeft = self.totalTime;
 
         if (self.timerBar) {
             // 프로그레스 바를 원래 상태로 재설정
@@ -1199,6 +1478,11 @@ const catchMind = {
     // 게임 참여자 데이터를 기반으로 모달 내용을 동적으로 생성
     displayGameResults: function (data) {
         let self = this;
+        if (!data) {
+            console.warn('[CatchMind] 게임 결과 데이터가 없어 결과 모달 표시를 건너뜁니다.');
+            self.showToast('게임 결과 데이터를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
         self.alreadyPlayedGame = true;
         // 모달 헤더에 총 게임 라운드 수 표시
         document.getElementById('totalGameRounds').textContent = `총 게임 라운드: ${data.totalGameRound}`;

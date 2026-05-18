@@ -1,10 +1,7 @@
 package webChat.service.game;
 
-import org.apache.coyote.BadRequestException;
-import webChat.controller.ExceptionController;
 import webChat.model.game.*;
-
-import java.util.List;
+import webChat.model.response.game.GameResultResponse;
 
 public interface CatchMindService {
     /**
@@ -12,23 +9,21 @@ public interface CatchMindService {
      * @param roomId
      * @return 게임 플레이 여부
      */
-    boolean chkAlreadyPlayedGame(String roomId) throws BadRequestException;
+    boolean chkAlreadyPlayedGame(String roomId);
 
     /**
      * python server 에 게임 대주제를 요청
      * @return 5개의 대주제를 return
-     * @throws Exception
      */
-    GameTitles getTitles() throws Exception;
+    GameTitles getTitles();
 
     /**
      * 대주제에 맞는 게임 소주제 요청
      * @param roomId
      * @param gameSubjects
      * @return 5개의 게임 소주제 return
-     * @throws Exception
      */
-    GameSubjects getSubjects(String roomId, GameSubjects gameSubjects) throws Exception;
+    GameSubjects getSubjects(String roomId, GameSubjects gameSubjects);
 
     /**
      * 게임 전체 정보 세팅
@@ -43,19 +38,18 @@ public interface CatchMindService {
      * @param userId
      * @return 유저 정보
      */
-    CatchMindUserDto updateUser(GameStatus gameStatus, String roomId, String userId) throws BadRequestException;
+    CatchMindUserDto updateUser(GameStatus gameStatus, String roomId, String userId);
 
     /**
      * 게임 결과 정보 return
      * @param roomId
-     * @return 방에서의 게임 결과
+     * @return 게임 결과 또는 라운드 동기화 정보
      */
-    GameSettingInfo getGameResult(String roomId) throws BadRequestException;
+    GameResultResponse getGameResult(String roomId);
 
     /**
      * 게임 정답 확인
      * @return 정답 여부
-     * @throws BadRequestException
      */
-    AnswerResp checkAnswer(AnswerReq answerReq) throws BadRequestException;
+    AnswerResp checkAnswer(AnswerReq answerReq);
 }

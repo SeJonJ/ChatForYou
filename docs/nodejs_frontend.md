@@ -31,6 +31,7 @@
 - **파일 경로**: `window.location.href` 방식 그대로 사용 (Electron이 처리)
 - **Node.js API**: `window.require`, `window.process`, `window.__dirname` — 브라우저 코드에서 직접 사용 금지 (Electron 전용이므로 isElectron() 분기 안에서만)
 - **SCSS/CSS 수정 시**: Electron sync 후 반드시 `npm run scss:build` 실행 필요
+- **프론트엔드 코드 수정 완료 후 (MANDATORY)**: `chatforyou-desktop/` 에서 `npm run sync` 를 실행하여 Electron 환경에서 빌드 에러가 없는지 확인해야 한다. 에러 없음이 확인될 때까지 작업 완료로 간주하지 않는다.
 
 ---
 
@@ -200,8 +201,9 @@ ajaxToJson(
     'POST',
     true,
     requestData,
-    function(data) {               // 성공 콜백
-        if (data.status === 'SUCCESS') {
+    function(response) {           // 성공 콜백
+        const { result, data } = response || {};
+        if (result === 'SUCCESS') {
             window.location.href = `${window.__CONFIG__.BASE_URL}/chat?roomId=${data.roomId}`;
         }
     },
@@ -223,7 +225,10 @@ fetch(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
     headers: { 'Content-Type': 'application/json' }
 })
     .then(response => response.json())
-    .then(data => { turnUrl = data.url; })
+    .then(response => {
+        const { data } = response || {};
+        turnUrl = data.url;
+    })
     .catch(error => console.error('TURN 서버 설정 실패:', error));
 ```
 
@@ -291,7 +296,7 @@ init: function() {
 ### 7. 주석 규칙
 
 - **인라인**: WHY가 담긴 한 줄 한글 주석 (WHAT 설명 금지)
-- **JSDoc**: 공통 유틸 함수에만 작성, `@param` / `@returns` 포함
+- **JSDoc**: 공통 유틸 함수와 모듈의 공개 진입 함수/상태 전환 함수에 작성, `@param` / `@returns` 포함
 - **TODO**: 리팩토링 예정 코드에만, 이유 명시
 
 ```javascript
@@ -303,7 +308,7 @@ this.handleOpen = this.handleOpen.bind(this);
 // 이벤트 바인딩 함수
 bindEvents: function() { ... }
 
-// JSDoc 예시 (공통 유틸)
+// JSDoc 예시 (공통 유틸 / 공개 함수)
 /**
  * Promise를 반환하는 AJAX
  * @param {string} url
@@ -313,6 +318,17 @@ bindEvents: function() { ... }
  */
 function ajaxToJsonPromise(url, method, data) { ... }
 ```
+
+공개 함수라도 내부 로컬 헬퍼, 짧은 이벤트 핸들러는 JSDoc 대신 WHY 주석만 유지한다.
+
+### 7-1. 성공 응답 처리 규칙
+
+- 공통 AJAX 유틸과 `fetchJson`은 **표준 wrapper 전체**를 그대로 넘긴다
+- 성공 콜백 파라미터 이름은 `response`로 통일한다
+- 콜백 첫 줄에서 `const { result, data, code, message, detail } = response || {};` 형태로 구조 분해한다
+- 이후 로직은 `result`, `data`만 사용하고 `resp.data`, `result.result`, `data.data` 같은 혼합 표현은 피한다
+- `REDIRECT_ROOM`, `REDIRECT_DASHBOARD`처럼 결과 타입 자체가 분기 키인 경우도 `result` 변수로만 비교한다
+- 레거시 엔드포인트가 아직 소문자 `success`를 반환하면, 해당 이유를 한 줄 주석으로 남기고 후속 정리 대상으로 기록한다
 
 ---
 
@@ -389,7 +405,7 @@ if (recvMessage.type === 'newType') {
 불가피하게 수정 시:
 - 색상/크기: `_variables.scss` 변수 사용 (`$color-primary` 등)
 - 수정 후 `npm run sass` 실행 필요
-- Electron 반영 시 `npm run sync:frontend` 추가 실행
+- Electron 반영 시 `npm run sync` 추가 실행
 
 ---
 

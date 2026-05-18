@@ -1,5 +1,6 @@
 package webChat.service.chatroom;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
+@Slf4j
 public class SseService {
 
     // 동시성 관련하여 CopyOnWriteArrayList
@@ -20,95 +22,79 @@ public class SseService {
     public SseEmitter createEmitter() {
         SseEmitter emitter = new SseEmitter(60_000L * 15);
 
-        // 리스트에 추가
-        emitters.add(emitter);
-
-        // 연결 종료 시 자동 제거
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
+        registerEmitter(emitter);
 
         return emitter;
     }
 
     // 방 생성 시, 연결된 모든 클라이언트에게 이벤트 전송
     public void sendRoomCreatedEvent(ChatRoom room) {
-        List<SseEmitter> deadEmitters = new ArrayList<>();
-
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("roomCreated")
-                        .data(room));
-            } catch (IOException e) {
-                deadEmitters.add(emitter);
-            }
-        }
-
-        emitters.removeAll(deadEmitters);
+        sendEventToAll("roomCreated", room);
     }
 
     // 방 삭제 시 이벤트 전송
     public void sendRoomDeletedEvent(ChatRoom room) {
-        List<SseEmitter> deadEmitters = new ArrayList<>();
-
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("roomDeleted")
-                        .data(room));
-            } catch (IOException e) {
-                deadEmitters.add(emitter);
-            }
-        }
-
-        emitters.removeAll(deadEmitters);
+        sendEventToAll("roomDeleted", room);
     }
 
 
     // 핑 관련 이벤트 전송
     @Scheduled(fixedDelay = 10_000L * 7) // 7분
     public void sendPingToClients() {
-        List<SseEmitter> deadEmitters = new ArrayList<>();
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("ping")
-                        .data("keep-alive"));
-            } catch (IOException e) {
-                deadEmitters.add(emitter);
-            }
-        }
-        emitters.removeAll(deadEmitters);
+        sendEventToAll("ping", "keep-alive");
     }
 
     // 방 인원수 변경 시 이벤트 전송
     public void sendRoomUserCntEvent(ChatRoom room) {
+        sendEventToAll("changeUserCnt", room);
+    }
+
+    public void sendChangeRoomSettingEvent(ChatRoom room) {
+        sendEventToAll("changeRoomSetting", room);
+    }
+
+    private void sendEventToAll(String eventName, Object data) {
         List<SseEmitter> deadEmitters = new ArrayList<>();
 
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event()
-                        .name("changeUserCnt")
-                        .data(room));
-            } catch (IOException e) {
-                deadEmitters.add(emitter);
+                        .name(eventName)
+                        .data(data));
+            } catch (Exception e) {
+                handleEmitterSendFailure(emitter, eventName, e, deadEmitters);
             }
         }
         emitters.removeAll(deadEmitters);
     }
 
-    public void sendChangeRoomSettingEvent(ChatRoom room) {
-        List<SseEmitter> deadEmitters = new ArrayList<>();
+    private void registerEmitter(SseEmitter emitter) {
+        emitters.add(emitter);
+        emitter.onCompletion(() -> cleanupEmitter(emitter, "completion", null));
+        emitter.onTimeout(() -> cleanupEmitter(emitter, "timeout", null));
+        emitter.onError(error -> cleanupEmitter(emitter, "error", error));
+    }
 
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("changeRoomSetting")
-                        .data(room));
-            } catch (IOException e) {
-                deadEmitters.add(emitter);
-            }
+    private void handleEmitterSendFailure(SseEmitter emitter, String eventName, Exception e, List<SseEmitter> deadEmitters) {
+        deadEmitters.add(emitter);
+        log.warn("SSE emitter send failed and will be removed: eventName={}, message={}", eventName, e.getMessage());
+        safeCompleteWithError(emitter, e);
+    }
+
+    private void cleanupEmitter(SseEmitter emitter, String reason, Throwable error) {
+        emitters.remove(emitter);
+        if (error == null) {
+            log.debug("SSE emitter removed: reason={}", reason);
+            return;
         }
-        emitters.removeAll(deadEmitters);
+        log.warn("SSE emitter removed: reason={}, message={}", reason, error.getMessage());
+    }
+
+    private void safeCompleteWithError(SseEmitter emitter, Exception e) {
+        try {
+            emitter.completeWithError(e);
+        } catch (Exception completeError) {
+            log.debug("SSE emitter completeWithError ignored: message={}", completeError.getMessage());
+        }
     }
 }

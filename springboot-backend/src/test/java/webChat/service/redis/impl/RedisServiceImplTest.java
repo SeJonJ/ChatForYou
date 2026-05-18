@@ -11,11 +11,13 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 import webChat.model.login.OauthRedis;
 import webChat.model.redis.DataType;
 import webChat.service.redis.RedisService;
+import webChat.support.ExternalTest;
 
 import java.util.Map;
 
 @SpringBootTest
 @Slf4j
+@ExternalTest
 class RedisServiceImplTest {
 
     @MockBean

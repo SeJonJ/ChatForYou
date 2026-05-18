@@ -1,8 +1,7 @@
 package webChat.service.routing;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import webChat.model.kafka.KafkaEvent;
@@ -17,37 +16,52 @@ import java.util.SortedMap;
 @Service
 @Slf4j
 public class RoutingInstanceProvider extends InstanceProvider {
-    @Autowired
-    private RedisService redisService;
-
     private final int CANDIDATE_SERVER_COUNT = 3;
 
-    public RoutingInstanceProvider(KafkaTemplate<String, KafkaEvent> kafkaTemplate, RedisService redisService) {
-        super(kafkaTemplate, redisService);
+    public RoutingInstanceProvider(KafkaTemplate<String, KafkaEvent> kafkaTemplate,
+                                   RedisService redisService,
+                                   @Lazy CookieCheckEvent cookieCheckEvent) {
+        super(kafkaTemplate, redisService, cookieCheckEvent);
     }
 
-    // 방 생성 시 현재 서버의 방 개수 증가
+    /**
+     * 방 생성 시 현재 서버의 방 개수를 증가시킨다.
+     */
     public void incrementInstanceRoomCount() {
         String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
-        Long newCount = redisService.increment(key, 1);
+        Long newCount = getRedisService().increment(key, 1);
         log.debug("Server {} room count increased to: {}", this.getInstanceId(), newCount);
     }
 
-    // 방 삭제 시 현재 서버의 방 개수 감소
+    /**
+     * 방 삭제 시 현재 서버의 방 개수를 감소시킨다.
+     */
     public void decrementInstanceRoomCount() {
         String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + this.getInstanceId();
-        Long newCount = redisService.decrement(key, 1);
+        Long newCount = getRedisService().decrement(key, 1);
         log.debug("Server {} room count decreased to: {}", this.getInstanceId(), newCount);
     }
 
-    // 서버의 현재 활성 방 개수 조회
+    /**
+     * 특정 서버의 현재 활성 방 개수를 조회한다.
+     *
+     * @param instanceId 인스턴스 ID
+     * @return 활성 방 개수
+     */
     private long getRoomCount(String instanceId) {
         String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + instanceId;
-        return redisService.getInstanceRoomCount(key);
+        return getRedisService().getInstanceRoomCount(key);
     }
 
+    /**
+     * 일관 해시 후보군 중 현재 방 수가 가장 적은 서버를 선택한다.
+     *
+     * @param roomId 채팅방 ID
+     * @param roomRoutingInfo 기존 라우팅 정보
+     * @return 선택된 인스턴스 ID
+     */
     @Override
-    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) throws BadRequestException {
+    public String getServerForRoom(String roomId, RoomRoutingInfo roomRoutingInfo) {
         if (getHashRing().isEmpty()) {
             log.warn("No servers available for room: {}", roomId);
             return null;
@@ -68,6 +82,13 @@ public class RoutingInstanceProvider extends InstanceProvider {
     }
 
 
+    /**
+     * 일관 해시 기준 상위 후보 서버 목록을 구한다.
+     *
+     * @param roomId 채팅방 ID
+     * @param count 최대 후보 개수
+     * @return 후보 서버 목록
+     */
     private List<String> getTopCandidateServers(String roomId, int count) {
         long hash = computeHash(roomId);
         List<String> candidates = new ArrayList<>();
@@ -95,13 +116,19 @@ public class RoutingInstanceProvider extends InstanceProvider {
         return candidates;
     }
 
+    /**
+     * 후보 서버 중 활성 방 수가 가장 적은 서버를 선택한다.
+     *
+     * @param candidates 후보 서버 목록
+     * @return 선택된 서버 ID
+     */
     private String selectServerWithLeastRooms(List<String> candidates) {
         String bestServer = null;
         long minRoomCount = Integer.MAX_VALUE;
 
         for (String candidate : candidates) {
             String key = RedisKeyPrefix.ROOM_COUNT_PREFIX.getPrefix() + candidate;
-            long roomCount = redisService.getInstanceRoomCount(key);
+            long roomCount = getRedisService().getInstanceRoomCount(key);
             log.info("=== Server {} has {} active rooms", candidate, roomCount);
 
             if (roomCount < minRoomCount) {

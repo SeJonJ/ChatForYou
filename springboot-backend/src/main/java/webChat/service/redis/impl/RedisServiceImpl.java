@@ -12,8 +12,9 @@ import io.github.dengliming.redismodule.redisearch.search.SortBy;
 import io.lettuce.core.RedisException;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.jetbrains.annotations.NotNull;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import org.redisson.api.SortOrder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.*;
@@ -238,10 +239,10 @@ public class RedisServiceImpl implements RedisService {
     /**
      * 삭제가 필요한 chatroom 을 검색한다.
      * 조건 : userCount <= 0 || userCount > maxUserCount && state == "active"
-     * TODO 추후 성능 향상을 위해 Lua script 방식으로 변경 고려 필요
+     * 현재는 SCAN 기반으로 조회하며, 대량 트래픽 환경에서는 Lua script 최적화를 검토한다.
      */
     @Override
-    public List<KurentoRoom> getChatRoomListForDelete(int searchCount) throws BadRequestException {
+    public List<KurentoRoom> getChatRoomListForDelete(int searchCount) {
         String pattern = "*roomId:" + "*";
         List<KurentoRoom> roomList = new ArrayList<>();
         ScanOptions options = ScanOptions.scanOptions().match(pattern).count(searchCount).build();
@@ -271,7 +272,7 @@ public class RedisServiceImpl implements RedisService {
             }
         } catch (Exception e) {
             log.error("Error scanning Redis keys: ", e);
-            throw new BadRequestException("Failed to get delete session list: " + e.getMessage());
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         return roomList;
@@ -337,7 +338,7 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
-    public <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz) throws BadRequestException {
+    public <T> T getRedisDataByDataType(String key, DataType dataType, Class<T> clazz) {
         String redisKey = "";
         if (DataType.LOGIN_USER.equals(dataType) || DataType.USER_REFRESH_TOKEN.equals(dataType) || DataType.USER_LAST_LOGIN_DATE.equals(dataType)) {
             redisKey = key.contains("user:") ? key : "user:" + key;
@@ -349,7 +350,7 @@ public class RedisServiceImpl implements RedisService {
         switch (dataType) {
             case CHATROOM:
                 return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.CHATROOM.getType()));
-                // TODO 아래는 로그인 기능 추가 후 사용 여부 확인
+                // 로그인 저장 구조가 확정되면 USER 관련 조회 분기를 다시 활성화한다.
 //            case USER_LIST:
 //                String userListKey = redisKey + ":userList";
 //                return clazz.cast(slaveTemplate.opsForSet().members(userListKey).stream().collect(Collectors.toList()));
@@ -366,7 +367,7 @@ public class RedisServiceImpl implements RedisService {
             case SOCIAL_USER:
                 return clazz.cast(slaveTemplate.opsForHash().get(redisKey, DataType.SOCIAL_USER.getType()));
             default:
-                throw new BadRequestException("Dose Not Exist DataType");
+                throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -426,7 +427,7 @@ public class RedisServiceImpl implements RedisService {
                         .sort(new SortBy("createDate", SortOrder.DESC));  // createDate 기준 내림차순 정렬
                 break;
 
-            // TODO 아래는 로그인 기능 추가 후 사용 여부 확인
+            // 로그인 검색 구조가 확정되면 USER 인덱스 검색 분기를 다시 활성화한다.
 //            case LOGIN_USER:
 //                if (!StringUtil.isNullOrEmpty(keyword)) {
 //                    // 검색어가 있을 때: userId 또는 nickName 필드 검색
@@ -449,7 +450,7 @@ public class RedisServiceImpl implements RedisService {
         return documents;
     }
 
-    // TODO roomId:* 는 성능상 안좋을 수 있음으로 추후 roomName 만을 갖는 set 을 만들어 확인하는 것으로 수정필요!
+    // 현재는 roomId 패턴 검색을 사용하며, 성능 문제가 커지면 roomName 전용 set 구조로 분리한다.
     @Override
     public boolean checkRoomName(String roomName) {
         if (roomName == null || roomName.trim().isEmpty()) {

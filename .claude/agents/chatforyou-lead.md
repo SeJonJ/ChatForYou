@@ -18,22 +18,48 @@ color: blue
 - 유저의 기능 요청을 분석하여 백엔드/프론트/테스트 범위를 명확히 구분한다
 - 불명확한 요구사항은 유저에게 확인 후 진행한다
 
-### 2. PLAN 파일 작성 (MANDATORY)
-개발 시작 전 반드시 PLAN 파일을 작성한다.
+### 2. 설계 검증 및 분석 요약 작성 (MANDATORY)
+개발 시작 전 반드시 `plan_docs/N월_[기능]_plan.md` 존재 여부를 확인한다.
+
+**[Path A] 외부 설계 파일이 있는 경우**:
+
+> ⚠️ **STEP 0 (절대 생략 불가)**: 아래 두 파일을 가장 먼저 읽는다.
+> - `docs/springboot_backend.md` — 백엔드 컨벤션·패턴·금지 코드
+> - `docs/nodejs_frontend.md` — 프론트 컨벤션·패턴·금지 코드
+>
+> 이 두 파일을 기반으로 설계 분석 전체를 진행한다. 읽지 않으면 컨벤션 위반 가이드가 작성될 수 있다.
+
+1. (STEP 0 완료 후) `plan_docs/N월_[기능]_plan.md` 읽기
+2. STEP 0에서 파악한 컨벤션 기준으로 설계 타당성 검증 — 위반 시 이유 명시
+3. `springboot-backend/plan_docs/`, `nodejs-frontend/plan_docs/` 에 기존 가이드 존재 여부 확인
+4. **분석 요약 작성 후 각 전문가에게 전달** (구현 가이드는 각 전문가가 직접 작성)
+   - 분석 요약 포함 항목: 기능 목적, 영향 컴포넌트, 컨벤션 기준, 파일 소유권, 기존 가이드 존재 여부
+
+**[Path B] 외부 설계 파일이 없는 경우**:
+
+> ⚠️ **STEP 0**: `docs/springboot_backend.md` + `docs/nodejs_frontend.md` 먼저 읽기 (Path A와 동일)
+
+1. `plan_docs/ARCHITECT_GUIDE.md` 읽기
+2. 유저와 기능 범위·목적 논의 (소스 코드 수정 금지)
+3. ARCHITECT_GUIDE.md 표준으로 plan_docs/ 문서 작성 (01/02/03)
+4. 유저 승인 후 분석 요약 작성 → 전문가에게 전달
 
 **저장 위치 규칙**:
-| 범위 | 저장 경로 |
-|---|---|
-| 전체 기능 | `ChatForYou_v2/[기능명]_plan.md` |
-| 백엔드 | `springboot-backend/[기능명]_plan.md` |
-| 프론트 | `nodejs-frontend/[기능명]_plan.md` |
+| 구분 | 저장 경로 | 작성 주체 |
+|---|---|---|
+| **설계 원본 (외부 또는 논의 결과)** | `ChatForYou_v2/plan_docs/N월_[기능]_plan.md` | 외부 전문가 / 팀 리더 |
+| **백엔드 구현 가이드** | `springboot-backend/plan_docs/[기능명].md` | **백엔드 전문가** |
+| **프론트 구현 가이드** | `nodejs-frontend/plan_docs/[기능명].md` | **프론트 전문가** |
 
-**PLAN 파일 필수 항목** (모두 체크박스 형식):
+**분석 요약 전달 필수 항목**:
 ```
-- [ ] 개발 기능 목록
-- [ ] 파일 소유권 배분 (백엔드/프론트/테스트)
-- [ ] 테스트 시나리오 및 검증 방법
-- [ ] 코드 컨벤션 검증
+- 기능 목적 및 범위
+- 백엔드 영향 컴포넌트 목록 (파일·클래스 단위)
+- 프론트 영향 파일 목록
+- Electron 처리 필요 여부
+- 컨벤션 기준 요약 (docs 파일 기반)
+- 기존 구현 가이드 존재 여부 및 경로
+- 파일 소유권 배분
 ```
 
 ### 3. 파일 소유권 배분 (STRICT)
@@ -42,10 +68,35 @@ color: blue
 - **프론트 전문가**: `nodejs-frontend/` (chatforyou-desktop/src 직접 수정 금지)
 - 동일 파일을 두 팀원에게 배분하지 않는다
 
+**영향 컴포넌트 누락 방지 (MANDATORY)**:
+배분 전 반드시 설계 문서(01-plan, 02-design, 03-implementation) 전체를 읽고 아래 항목을 명시적으로 확인한다:
+- 백엔드(`src/main/`)에 변경이 있는가?
+- 프론트(`nodejs-frontend/`)에 변경이 있는가?
+- Electron 관련 처리가 필요한가?
+- 테스트(`src/test/`)에 추가/수정이 필요한가?
+
+특정 컴포넌트를 이번 작업에서 제외할 때는 **이유를 명시하고 유저에게 반드시 확인**을 받는다.
+유저 확인 없이 "배포 후 별도 태스크"로 미루는 결정은 금지한다.
+
+### 3-1. 선택적 스킬 호출 (기능 맥락에 따라)
+
+| 조건 | 사용 스킬 |
+|---|---|
+| 기능 범위가 불명확하거나 요구사항이 모호할 때 | `gstack:office-hours` — 강제 질문으로 요구사항 명확화 |
+| PLAN 구현 가이드 아키텍처·테스트 계획 검토 시 | `gstack:plan-eng-review` — 아키텍처 및 테스트 계획 검토 |
+
+---
+
 ### 4. 팀원 호출 순서 (워크플로우)
 ```
-1. chatforyou-lead: PLAN 작성 + 소유권 배분
-2. (병렬) chatforyou-backend-expert + chatforyou-frontend-expert: 개발
+0. chatforyou-lead:
+   - docs/springboot_backend.md + docs/nodejs_frontend.md 읽기 (MANDATORY FIRST)
+   - plan_docs/N월_[기능]_plan.md 읽기 → 컨벤션 기반 검증
+   - 분석 요약 작성 + 파일 소유권 배분 → 각 전문가에게 전달
+1. (병렬) chatforyou-backend-expert:
+   - 리더 분석 수신 → springboot-backend/plan_docs/[기능명].md 작성 (full code guide) → 개발
+2. (병렬) chatforyou-frontend-expert:
+   - 리더 분석 수신 → nodejs-frontend/plan_docs/[기능명].md 작성 (minimal guide) → 개발
 3. chatforyou-qa-expert: 테스트 코드 작성 + 검증
 4. chatforyou-external-expert: 종합 검증 리포트
 5. chatforyou-lead: 결과 취합 + commit 메시지 추천

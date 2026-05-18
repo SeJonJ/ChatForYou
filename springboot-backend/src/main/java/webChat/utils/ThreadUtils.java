@@ -1,11 +1,9 @@
 package webChat.utils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import webChat.config.ThreadPoolConfig;
 
-import javax.annotation.PostConstruct;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -17,21 +15,15 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 public class ThreadUtils {
-    @Autowired
-    private ThreadPoolConfig threadPoolConfig;
     private static ExecutorService executor;
 
-    @PostConstruct
-    private void init() {
+    public ThreadUtils(ThreadPoolConfig threadPoolConfig) {
         executor = threadPoolConfig.scheduledExecutor();
-    }
-
-    private ThreadUtils() {
     }
 
     @FunctionalInterface
     public interface Task {
-        boolean execute() throws Exception;
+        boolean execute();
     }
 
     /**
@@ -93,7 +85,7 @@ public class ThreadUtils {
                     log.warn("Interrupted during retry for job: {}", jobName, ie);
                     future.completeExceptionally(ie); // 예외를 CompletableFuture에 전달
                     break; // 루프 종료
-                } catch (Exception e) { // 일반 예외 처리
+                } catch (RuntimeException e) { // 일반 예외 처리
                     attempts++; // 시도 횟수 증가
                     if (attempts < retry) { // 재시도 가능하면 대기 후 재실행
                         log.info("=== try {} Job :: {}", jobName, attempts);

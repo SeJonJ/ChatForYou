@@ -3,18 +3,14 @@ package webChat.service.routing;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Component;
 import webChat.model.kafka.*;
@@ -67,20 +63,18 @@ public class CookieCheckEvent {
     private static final double BACKOFF_MULTIPLIER = 1.5; // 지수적 백오프 승수
     private static final int MAX_INTERVAL_MS = 1000; // 최대 간격 1초
 
-    @EventListener(WebServerInitializedEvent.class)
-    @Async("taskExecutor")
-    public void collectOwnCookieAsync() throws InterruptedException, BadRequestException {
-        instanceProvider.initInstanceId();
-        // Kafka consumer 준비 대기
-        waitKafkaConsumerReady();
-
-        log.info("=== 인스턴스 제공 이벤트 init 시작 ===");
-        instanceProvider.initInstanceProviderEvent();
-
+    /**
+     * 현재 인스턴스의 sessionAffinity 쿠키를 수집하거나 로컬 대체 쿠키를 초기화한다.
+     * 호출 순서는 RoutingBootstrapCoordinator 가 관리한다.
+     * 이 메서드는 listener 준비 확인 이후에만 실행된다는 전제에서 쿠키 수집 자체에만 집중한다.
+     *
+     * @throws InterruptedException Kafka consumer 준비 대기 또는 retry sleep 중 인터럽트가 발생한 경우
+     */
+    public void collectOwnCookie() throws InterruptedException {
         log.info("=== 최적화 쿠키 수집 시작 ===");
 
         // 로컬환경인 경우 쿠키 탐색 무시
-        if (StringUtil.isNullOrEmpty(cookieCheckDomain)) {
+        if (!isCookieCheckDomainConfigured()) {
             String localCookie = "local_cookie|" + this.instanceProvider.getInstanceId();
             saveCookieAndComplete(localCookie);
             return;
@@ -102,13 +96,6 @@ public class CookieCheckEvent {
 
         // Phase 3: 개선된 Fallback
         handleFallback();
-    }
-
-    private void waitKafkaConsumerReady() throws InterruptedException {
-        for (int i = 0; i < 20; i++) {
-            if (instanceProvider != null && !instanceProvider.getActiveServers().isEmpty()) break;
-            Thread.sleep(500);
-        }
     }
 
     /**
@@ -261,9 +248,17 @@ public class CookieCheckEvent {
     }
 
     /**
-     * 실제 쿠키 검증 
+     * 실제 쿠키 값을 health endpoint 응답의 instanceId 기준으로 검증한다.
+     *
+     * @param cookie 검증 대상 sessionAffinity 쿠키
+     * @return 현재 인스턴스로 라우팅되는 쿠키이면 true, 아니면 false
      */
     private boolean validateCookie(String cookie) {
+        if (!isCookieCheckDomainConfigured()) {
+            log.debug("cookie.check.domain 미설정 - HTTP 쿠키 검증 스킵");
+            return false;
+        }
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.add("Cookie", RoutingCookie.CHATFORYOU_SERVER_COOKIE.getName() + "=" + cookie);
@@ -288,7 +283,7 @@ public class CookieCheckEvent {
     /**
      * 개선된 Fallback 
      */
-    private void handleFallback() throws BadRequestException {
+    private void handleFallback() {
         // Phase 2 retry : 90% 목표 성공률 기반 최적화
         String cookie = tryOptimizedCollection(instanceProvider.getActiveServers().size(), true);
         if (cookie != null) {
@@ -375,6 +370,12 @@ public class CookieCheckEvent {
                 log.debug("쿠키 응답 수신: {} -> {} (쿠키: {})", responseFrom, requesterId, cookie);
 
                 if (cookie != null && !cookie.isEmpty()) {
+                    if (!isCookieCheckDomainConfigured()) {
+                        log.debug("cookie.check.domain 미설정 - 쿠키 응답 검증 스킵: requesterId={}, responseFrom={}",
+                                requesterId, responseFrom);
+                        return;
+                    }
+
                     // 응답받은 실제 쿠키로 검증
                     if (validateCookie(cookie)) {
                         saveCookieAndComplete(cookie);
@@ -399,6 +400,11 @@ public class CookieCheckEvent {
 
                 RoutingCookieInfo cookieInfo = event.getCookieInfo();
                 if (cookieInfo != null && cookieInfo.isValidForDiscovery() && !cookieCollected) {
+                    if (!isCookieCheckDomainConfigured()) {
+                        log.debug("cookie.check.domain 미설정 - 쿠키 발견 검증 스킵: discovererId={}", discovererId);
+                        return;
+                    }
+
                     String discoveredCookie = cookieInfo.getCookie();
                     // 발견된 실제 쿠키로 검증
                     if (validateCookie(discoveredCookie)) {
@@ -410,6 +416,15 @@ public class CookieCheckEvent {
         } catch (Exception e) {
             log.error("쿠키 발견 이벤트 처리 실패: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 실제 도메인 기반 쿠키 검증을 수행할 수 있는 설정 상태인지 확인한다.
+     *
+     * @return cookie.check.domain 설정 여부
+     */
+    private boolean isCookieCheckDomainConfigured() {
+        return !StringUtil.isNullOrEmpty(cookieCheckDomain);
     }
 
     // 기존 유틸리티 메서드들 완전 유지
@@ -445,7 +460,7 @@ public class CookieCheckEvent {
         return null;
     }
 
-    private void saveCookieAndComplete(String cookie) throws BadRequestException {
+    private void saveCookieAndComplete(String cookie) {
         String instanceCookie = redisService.getRedisDataByDataType(RedisKeyPrefix.INSTANCE_COOKIE_PREFIX.getPrefix() + instanceProvider.getInstanceId(), DataType.INSTANCE_COOKIE, String.class);
         if(!StringUtil.isNullOrEmpty(cookieCheckDomain) && !StringUtil.isNullOrEmpty(instanceCookie) && instanceCookie.contains("|")) {
             log.warn("=== 이미 쿠키가 존재 : [{}] :: [{}] ===", instanceProvider.getInstanceId(), instanceCookie);

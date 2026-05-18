@@ -103,9 +103,8 @@ public class RecordingService {
                                 log.debug("Participant {} already connected to Composite", participant.getUserId());
                             }
                         } catch (Exception e) {
-                            // TODO 예외처리 세분화
-                            log.error("Failed to connect participant {} to Composite: {}",
-                                    participant.getUserId(), e.getMessage());
+                            log.error("녹화용 Composite 연결 실패: roomId={}, participantId={}",
+                                    roomId, participant.getUserId(), e);
                             // 개별 참여자 연결 실패는 전체 녹화를 중단하지 않음
                             kurentoMessageSender.broadcastError(roomId,
                                     KurentoMessageBuilder.participantRecordingError()
@@ -119,7 +118,7 @@ public class RecordingService {
                     log.error("Composite not found after starting recording for room: {}", roomId);
                 }
             } catch (Exception e) {
-                log.error("Error connecting participants to Composite for room {}: {}", roomId, e.getMessage());
+                log.error("녹화 시작 후 Composite 연결 처리 실패: roomId={}", roomId, e);
                 // 참여자 연결 실패 시에도 녹화는 시작된 상태
             }
 
@@ -135,8 +134,8 @@ public class RecordingService {
             return recordingId;
 
         } catch (Exception e) {
-            log.error("Failed to start room recording for room {}: {}", roomId, e.getMessage());
-            throw new IOException("Failed to start room recording: " + e.getMessage(), e);
+            log.error("방 녹화 시작 실패: roomId={}, requestUserId={}", roomId, requestUser.getUserId(), e);
+            throw new IOException("Failed to start room recording", e);
         }
     }
 
@@ -167,13 +166,13 @@ public class RecordingService {
                             log.info("Participant {} disconnected from Composite", participant.getUserId());
                         }
                     } catch (Exception e) {
-                        log.error("Failed to disconnect participant {} from Composite: {}",
-                                participant.getUserId(), e.getMessage());
+                        log.error("녹화용 Composite 연결 해제 실패: roomId={}, participantId={}",
+                                roomId, participant.getUserId(), e);
                     }
                 }
                 log.info("All participants disconnected from Composite for room {}", roomId);
             } catch (Exception e) {
-                log.error("Error disconnecting participants from Composite for room {}: {}", roomId, e.getMessage());
+                log.error("녹화 종료 후 Composite 연결 해제 처리 실패: roomId={}", roomId, e);
             }
 
             log.info("Room recording stopped successfully for room {}", roomId);
@@ -191,8 +190,8 @@ public class RecordingService {
             }
 
         } catch (Exception e) {
-            log.error("Failed to stop room recording for room {}: {}", roomId, e.getMessage());
-            throw new IOException("Failed to stop room recording: " + e.getMessage(), e);
+            log.error("방 녹화 종료 실패: roomId={}, requestUserId={}", roomId, requestUser.getUserId(), e);
+            throw new IOException("Failed to stop room recording", e);
         }
     }
 
@@ -222,7 +221,8 @@ public class RecordingService {
                         autoStopMinutes));
 
             } catch (Exception e) {
-                log.error("Failed to auto-stop recording: {}", e.getMessage());
+                log.error("자동 녹화 종료 실패: roomId={}, recordingId={}",
+                        room.getRoomId(), recordingInfo.getRecordingId(), e);
 
                 // 실패 이벤트 발행
                 eventPublisher.publishEvent(new RecordingAutoStopFailedEvent(

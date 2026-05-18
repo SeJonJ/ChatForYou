@@ -1,15 +1,16 @@
 package webChat.service.monitoring.impl;
+
 import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.model.CityResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.HandlerInterceptor;
-import webChat.controller.ExceptionController;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.model.log.ClientInfo;
 import webChat.service.monitoring.ClientCheckService;
 import webChat.service.monitoring.MonitoringService;
@@ -24,9 +25,8 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class MonitoringServiceImpl implements MonitoringService,HandlerInterceptor {
-
-    private static final Logger log = LoggerFactory.getLogger(MonitoringServiceImpl.class);
+@Slf4j
+public class MonitoringServiceImpl implements MonitoringService, HandlerInterceptor {
 
     private final ClientCheckService clientCheckService;
     private final PrometheusService prometheusService;
@@ -46,7 +46,7 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
         ClientInfo clientInfo = getClientInfoByAddrs(ipAddress);
 
         if(Objects.isNull(clientInfo)){
-            throw new ExceptionController.AccessForbiddenException("no clientinfo");
+            throw new ChatForYouException(ErrorCode.ACCESS_DENIED, "no clientinfo");
         }
 
         Boolean isBlack = clientCheckService.checkBlackList(clientInfo);
@@ -56,7 +56,7 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
         if(isBlack){
             // black access 정보만 따로 저장
             prometheusService.saveCountInfo("black_access_info", clientInfo);
-            throw new ExceptionController.AccessForbiddenException("black ip");
+            throw new ChatForYouException(ErrorCode.ACCESS_DENIED, "black ip");
         }
         return !isBlack;
     }
@@ -75,7 +75,7 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
             }
 
             Optional<CityResponse> client = cityDataBaseReader.tryCity(inetAddress);
-            if(client.isPresent()){
+            if (client.isPresent()) {
                 CityResponse info = client.get();
 
                 return ClientInfo.builder()
@@ -93,15 +93,14 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
             return null;
 
         } catch (Exception e) {
-            throw new ExceptionController.AccessForbiddenException("can not find ipAddrs");
+            log.warn("접속자 GeoIP 조회 실패: ipAddress={}", ipAddress, e);
+            throw new ChatForYouException(ErrorCode.ACCESS_DENIED, "can not find ipAddrs");
         }
     }
 
     private void printRequestInfo(HttpServletRequest request) {
-        log.info("##########################################");
-        log.info("========= 접속자 기본 정보");
-        log.info("Remote ipAddrs ::: " + ClientUtils.getRemoteAddr(request));
-        log.info("Remote Host ipAddrs ::: " + request.getRemoteHost());
+        log.info("접속자 요청 정보: remoteAddr={}, remoteHost={}",
+                ClientUtils.getRemoteAddr(request), request.getRemoteHost());
 
         // 🌟 nginx에서 추가한 새로운 디버깅용 헤더들
         log.debug("========== nginx 디버깅 헤더들 ==========");
@@ -148,6 +147,6 @@ public class MonitoringServiceImpl implements MonitoringService,HandlerIntercept
             log.info("Header: {} = {}", headerName, headerValue);
         }
 
-        log.info("##########################################");
+        log.info("접속자 요청 헤더 로깅 종료");
     }
 }

@@ -4,10 +4,11 @@ import com.google.common.collect.Lists;
 import io.github.dengliming.redismodule.redisearch.index.Document;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import webChat.controller.ExceptionController;
+import org.springframework.transaction.annotation.Transactional;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisIndex;
@@ -33,6 +34,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class ChatRoomService {
     private final KurentoRoomManager kurentoRoomManager;
     private final RedisService redisService;
@@ -50,7 +52,8 @@ public class ChatRoomService {
     private final List<RoomState> ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED);
 
     // roomName 로 채팅방 만들기
-    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo, String roomId) throws BadRequestException {
+    @Transactional
+    public ChatRoom createChatRoom(ChatRoomInVo chatRoomInVo, String roomId) {
 
         this.validateRoomInfo(chatRoomInVo.getRoomName(), chatRoomInVo.getMaxUserCnt());
 
@@ -81,7 +84,7 @@ public class ChatRoomService {
             chatKafkaProducer.sendCreateRoomEvent(chatRoom);
             return chatRoom;
         } else {
-            throw new BadRequestException("room type is not exist : " + chatRoomInVo.getRoomType());
+            throw new ChatForYouException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }
 
@@ -124,32 +127,44 @@ public class ChatRoomService {
      * @param roomId room 이름
      * @return 만약에 room 이 있다면 해당 room 객체 return
      */
-    public ChatRoom findRoomById(String roomId) throws BadRequestException {
+    public ChatRoom findRoomById(String roomId) {
         return redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
     }
 
     // 채팅방 비밀번호 조회
-    public Map<String, Object> validatePwd(String email, String roomId, String roomPwd) throws BadRequestException {
-        Map<String, Object> result = new HashMap<>();
+    public Map<String, Object> validatePwd(String email, String roomId, String roomPwd) {
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
-        if(chatRoom == null) {
-            // TODO 방정보 찾을 수 없는 경우 예외처리
+        if (chatRoom == null) {
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
         }
         boolean validPwd = chatRoom.getRoomPwd().equals(roomPwd);
         boolean overUserCnt = chatRoom.getUserCount() + 1 > chatRoom.getMaxUserCnt();
         boolean isValidate = validPwd && !overUserCnt;
+        Map<String, Object> result = new HashMap<>();
         result.put("isValidate", isValidate);
 
         // jwt 토큰 발급
         if (isValidate) {
-            String token = jwtRoomProvider.create(chatRoom.getRoomId(), email);
-            result.put("token", token);
+            result.putAll(createRoomTokenResponse(chatRoom.getRoomId(), email));
         }
         return result;
     }
 
+    public Map<String, Object> refreshRoomToken(String email, String roomId) {
+        ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        if (chatRoom == null) {
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+        }
+
+        if (!chatRoom.isSecretChk()) {
+            throw new ChatForYouException(ErrorCode.INVALID_ROOM_ACCESS);
+        }
+
+        return createRoomTokenResponse(chatRoom.getRoomId(), email);
+    }
+
     // maxUserCnt 에 따른 채팅방 입장 여부
-    public boolean chkRoomUserCnt(String roomId) throws BadRequestException {
+    public boolean chkRoomUserCnt(String roomId) {
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
         if (chatRoom == null || chatRoom.getUserCount() + 1 > chatRoom.getMaxUserCnt()) {
@@ -164,9 +179,9 @@ public class ChatRoomService {
      * 방 영구 삭제
      * @param kurentoRoom
      * @return
-     * @throws BadRequestException
      */
-    public void delChatRoom(KurentoRoom kurentoRoom) throws BadRequestException, ExceptionController.DelRoomException {
+    @Transactional
+    public void delChatRoom(KurentoRoom kurentoRoom) {
         try {
             kurentoRoomManager.deleteKurentoRoom(kurentoRoom);
             redisService.deleteAllChatRoomData(kurentoRoom.getRoomId());
@@ -179,7 +194,7 @@ public class ChatRoomService {
 
             log.info("Room {} deleted permanently", kurentoRoom.getRoomId());
         } catch (Exception e) {
-            throw new ExceptionController.DelRoomException("Hard Delete Room Exception");
+            throw new ChatForYouException(ErrorCode.ROOM_DELETE_FAILED);
         }
 
     }
@@ -188,17 +203,20 @@ public class ChatRoomService {
      * roomId 만 받아서 방을 inactive 상태로 변경
      * @param roomId
      * @return
-     * @throws BadRequestException
      */
-    public boolean delChatRoom(String roomId) throws BadRequestException {
+    @Transactional
+    public boolean delChatRoom(String roomId, boolean isSystem) {
         KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        if (kurentoRoom == null) {
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+        }
 
-        if(kurentoRoom.getUserCount() <= 0) {
+        if(kurentoRoom.getUserCount() <= 0 || isSystem) {
             // 채팅방 state 를 deactive 로 업데이트 -> batch 로 삭제
             kurentoRoom.deactivate();
             redisService.updateChatRoom(kurentoRoom);
         } else {
-            throw new ExceptionController.DelRoomException("Soft Delete Room Exception");
+            throw new ChatForYouException(ErrorCode.ROOM_DELETE_FAILED);
         }
         // 채팅방 삭제 이벤트를 Kafka에 발행
         chatKafkaProducer.sendDeleteRoomEvent(kurentoRoom);
@@ -210,8 +228,12 @@ public class ChatRoomService {
     }
 
     // 채팅방 수정
-    public ChatRoom updateRoom(String roomId, String roomName, String roomPwd, int maxUserCnt) throws BadRequestException {
+    @Transactional
+    public ChatRoom updateRoom(String roomId, String roomName, String roomPwd, int maxUserCnt) {
         ChatRoom chatRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+        if (chatRoom == null) {
+            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+        }
         // 방 이름 혹은 최대 인원 수 변경 시에 kafka -> sse를 통해 실시간 방 업데이트
         if (!chatRoom.getRoomName().equals(roomName) || chatRoom.getMaxUserCnt() != maxUserCnt) {
             chatKafkaProducer.sendChangedRoomSettingEvent(chatRoom);
@@ -229,19 +251,26 @@ public class ChatRoomService {
      * @param room
      * @return
      */
+    @Transactional
     public KurentoRoom updateRoom(KurentoRoom room) {
         redisService.updateChatRoom(room);
         return room;
     }
 
-    public void validateRoomInfo(String roomName, int maxUserCnt) throws BadRequestException {
+    public void validateRoomInfo(String roomName, int maxUserCnt) {
         if(maxUserCnt > MAX_USER_COUNT) {
-            throw new BadRequestException("can not over max user count : " + maxUserCnt);
+            throw new ChatForYouException(ErrorCode.INVALID_INPUT_VALUE);
         }
 
         boolean hasRoomName = redisService.checkRoomName(roomName);
         if(hasRoomName) {
-            throw new ExceptionController.AlreadyExistRoomNameException("room name is already exist : " + roomName);
+            throw new ChatForYouException(ErrorCode.ROOM_ALREADY_EXISTS);
         }
+    }
+
+    private Map<String, Object> createRoomTokenResponse(String roomId, String email) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("token", jwtRoomProvider.create(roomId, email));
+        return result;
     }
 }

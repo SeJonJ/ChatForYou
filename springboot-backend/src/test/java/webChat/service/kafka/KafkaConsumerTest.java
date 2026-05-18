@@ -5,6 +5,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import webChat.model.kafka.KafkaEvent;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -14,10 +15,10 @@ import java.util.concurrent.CountDownLatch;
 @Setter
 public class KafkaConsumerTest {
     private CountDownLatch latch = new CountDownLatch(1);
-    private String receivedMessage;
+    private KafkaEvent receivedMessage;
 
     @KafkaListener(topics = "test-topic", groupId = "test-consumer")
-    public void listen(String message) {
+    public void listen(KafkaEvent message) {
         this.receivedMessage = message;
         latch.countDown();
         log.info("#################### 받은 메시지: {}", message);

@@ -180,8 +180,7 @@ const dataChannel = {
                 catchMind.canvasDrawingEvent(event);
                 break;
             case 'newWinner':
-                catchMind.speakWinner(event.winner, event.timeout);
-                catchMind.resetGameRound(event.winner);
+                catchMind.handleNewWinnerEvent(event.winner, event.timeout, event.round);
                 break;
             case 'clearCanvas':
                 catchMind.clearCanvas(true);
