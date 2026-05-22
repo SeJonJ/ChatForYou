@@ -40,6 +40,12 @@ public enum ErrorCode {
     NOT_RECORDING(HttpStatus.BAD_REQUEST, "K002", "녹화 중인 방이 아닙니다."),
     RECORDING_ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, "K003", "녹화 정보를 확인할 수 없습니다. 관리자에게 문의해주세요."),
     RECORDING_FILE_EXISTS(HttpStatus.BAD_REQUEST, "K004", "해당 방에는 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다."),
+    KURENTO_COMPOSITE_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "K005", "Kurento Composite를 찾을 수 없습니다."),
+    RECORDING_START_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "K006", "녹화 시작에 실패했습니다."),
+
+    // Infrastructure
+    EXTERNAL_API_ERROR(HttpStatus.BAD_GATEWAY, "I001", "외부 API 호출에 실패했습니다."),
+    JSON_CONVERSION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "I002", "JSON 변환에 실패했습니다."),
 
     // User
     USER_NOT_FOUND(HttpStatus.BAD_REQUEST, "U001", "존재하지 않는 계정입니다.");

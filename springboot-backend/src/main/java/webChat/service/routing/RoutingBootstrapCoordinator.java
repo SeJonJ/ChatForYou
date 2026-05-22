@@ -76,6 +76,8 @@ public class RoutingBootstrapCoordinator {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Routing bootstrap interrupted before completion", e);
+        } catch (RuntimeException e) {
+            log.error("Routing bootstrap failed with unexpected exception", e);
         }
     }
 

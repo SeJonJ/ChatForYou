@@ -3,6 +3,8 @@ package webChat.utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpResponse;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -77,7 +79,7 @@ public class HttpUtil {
             return httpClient.execute(httpGet);
         } catch (Exception e) {
             log.error("GET full response 요청 실패: url={}", url, e);
-            throw new RuntimeException(e);
+            throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "GET full response 실패: " + url, e);
         }
     }
 
@@ -116,16 +118,16 @@ public class HttpUtil {
             if (statusCode >= 400) {
                 log.info("GET Request failed with status code: {}", statusCode);
                 log.info("Error Response Body: {}", responseBody);
-                throw new RuntimeException(responseBody);
+                throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "GET " + statusCode + ": " + responseBody);
             }
 
             log.debug("GET Response Body: {}", responseBody);
             return objectMapper.readValue(responseBody, responseType);
-        } catch (RuntimeException e) {
+        } catch (ChatForYouException e) {
             throw e;
         } catch (Exception e) {
             log.error("GET 요청 처리 실패: url={}", url, e);
-            throw new RuntimeException(e);
+            throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "GET 요청 처리 실패: " + url, e);
         }
     }
 
@@ -170,16 +172,16 @@ public class HttpUtil {
             if (statusCode >= 400) {
                 log.info("POST Request failed with status code: {}", statusCode);
                 log.info("Error Response Body: {}", responseBody);
-                throw new RuntimeException(responseBody);
+                throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "POST " + statusCode + ": " + responseBody);
             }
 
             log.debug("POST Response Body: {}", responseBody);
             return objectMapper.readValue(responseBody, responseType);
-        } catch (RuntimeException e) {
+        } catch (ChatForYouException e) {
             throw e;
         } catch (Exception e) {
             log.error("POST 요청 처리 실패: url={}", url, e);
-            throw new RuntimeException(e);
+            throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "POST 요청 처리 실패: " + url, e);
         }
     }
 }

@@ -78,6 +78,16 @@ class GlobalExceptionHandlerIntegrationTest {
             return requiredHeader;
         }
 
+        @GetMapping("/external-api-error")
+        public String externalApiError() {
+            throw new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "GET 502: upstream error");
+        }
+
+        @GetMapping("/json-conversion-error")
+        public String jsonConversionError() {
+            throw new ChatForYouException(ErrorCode.JSON_CONVERSION_ERROR, "object→json 변환 실패", new RuntimeException("jackson error"));
+        }
+
         @PostMapping("/validation")
         public String validation(@Valid @RequestBody ValidationRequest request) {
             return "ok";
@@ -205,6 +215,32 @@ class GlobalExceptionHandlerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("A002"))
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.message").value(ErrorCode.UNAUTHORIZED.getMessage()))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    @DisplayName("EXTERNAL_API_ERROR(I001) 발생 시 502 + I001 응답 반환")
+    void externalApiError_returns502WithI001() throws Exception {
+        // when & then
+        mockMvc.perform(get("/test/exception/external-api-error"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("I001"))
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.message").value(ErrorCode.EXTERNAL_API_ERROR.getMessage()))
+                .andExpect(jsonPath("$.detail").value("GET 502: upstream error"))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    @DisplayName("JSON_CONVERSION_ERROR(I002) 발생 시 500 + I002 응답 반환")
+    void jsonConversionError_returns500WithI002() throws Exception {
+        // when & then
+        mockMvc.perform(get("/test/exception/json-conversion-error"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("I002"))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value(ErrorCode.JSON_CONVERSION_ERROR.getMessage()))
+                .andExpect(jsonPath("$.detail").value("object→json 변환 실패"))
                 .andExpect(jsonPath("$.traceId").exists());
     }
 }

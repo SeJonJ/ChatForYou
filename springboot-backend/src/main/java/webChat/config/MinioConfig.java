@@ -83,7 +83,7 @@ public class MinioConfig {
 
         } catch (KeyManagementException | NoSuchAlgorithmException e) {
             log.error("Failed to initialize MinIO clients", e);
-            throw new RuntimeException(e);
+            throw new IllegalStateException("MinIO 초기화 실패", e);
         }
     }
 }

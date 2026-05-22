@@ -2,6 +2,7 @@ package webChat.config;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -73,6 +75,21 @@ public class ThreadPoolConfig {
 
         // 스레드 이름 접두사
         executor.setThreadNamePrefix("async-task-");
+
+        // 호출 스레드의 MDC context를 비동기 스레드로 전파
+        executor.setTaskDecorator(runnable -> {
+            Map<String, String> contextMap = MDC.getCopyOfContextMap();
+            return () -> {
+                if (contextMap != null) {
+                    MDC.setContextMap(contextMap);
+                }
+                try {
+                    runnable.run();
+                } finally {
+                    MDC.clear();
+                }
+            };
+        });
 
         // 스레드 풀 초기화
         executor.initialize();
