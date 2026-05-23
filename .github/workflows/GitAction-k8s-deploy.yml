@@ -40,6 +40,27 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('springboot-backend/**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      - name: Run backend unit tests
+        run: |
+          cd springboot-backend
+          ./gradlew test --no-daemon
+        # @ExternalTest 태그 테스트는 build.gradle excludeTags 'external'로 자동 제외
+        # 제외 대상: Redis(RedisServiceImplTest), Kafka(KafkaTest), 외부 HTTP(CookieCheckEventTest)
+        # CI 실행 대상: Pure Mockito, MockMvc 슬라이스 테스트 전체
       - name: Configure Kubeconfig
         uses: azure/k8s-set-context@v3
         with:
