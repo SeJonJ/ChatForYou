@@ -23,6 +23,25 @@ Before responding to any request, read the following files in order. Do not skip
    - `.claude/agents/*`
    - `.claude/skills/*`
 
+## AGENT_GUIDE Compliance Gate (applies to all direct requests)
+
+AGENT_GUIDE rules apply equally when implementation is requested directly,
+without going through `/chatforyou-dev-team`.
+
+### Before writing any implementation code (required declaration)
+Explicitly state the following before writing any code:
+- **Risk Level**: L0 / L1 / L2 / L3 (AGENT_GUIDE §5)
+- **Applicable phase range**: Phase XX–XX (AGENT_GUIDE §6)
+
+For L2 or higher, confirm that a `plan_docs/00-base_plan/` file exists before proceeding.
+
+### Before reporting any implementation task as complete (required check)
+Verify all applicable items in AGENT_GUIDE §11 Definition of Done.
+Explicitly state the reason for any item that was skipped.
+If `.local/local_agent_guide.md` exists, confirm that vault knowledge capture was performed.
+
+---
+
 ## Claude-Specific Rules
 - Use the Claude runtime asset ecosystem to coordinate design, implementation, and verification flows.
 - For design or analysis tasks, verify consistency with existing `plan_docs` first.

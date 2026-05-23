@@ -122,8 +122,10 @@ All agents in the `chatforyou-dev-team` must strictly adhere to the following 6-
 ### 6.1.1 Phase 00 — Vault Scan Procedure
 
 Before writing the base plan, scan the Obsidian vault for all prior knowledge
-related to the feature. This prevents repeating past decisions and surfaces
-known risks before planning begins.
+related to the feature when `.local/local_agent_guide.md` and the available
+Obsidian vault MCP tools are available. This prevents repeating past decisions
+and surfaces known risks before planning begins. If the local guide or vault MCP
+tools are unavailable, record the vault scan as N/A with the reason and proceed.
 
 1. Read `wiki/index.md` to identify relevant notes
 2. Search across all note types for the feature topic:
@@ -265,7 +267,14 @@ When a user requests **"External Expert Review"** or **"Consultant Validation"**
 | Problem | Solution | UX Effect | Core Value |
 |:---|:---|:---|:---|
 ## 3. Lessons Learned & Future Tasks
+## 4. Vault Knowledge Capture
+| Prefix | Note Title | Action | Reason |
+|:---|:---|:---|:---|
+| [BUG] / [TECH] / [SPEC] / [BRAINSTORM] / [POSTMORTEM] | — | created / updated / checked-no-update / N/A | — |
 ```
+
+`checked-no-update` means the vault capture check was performed, but no capture
+trigger applied and no note needed to be created or updated.
 
 ### 6.4 Phase 04: Bug Patterns & Risk Assessment Guide
 
@@ -391,6 +400,10 @@ Project-specific mandatory rules (§8.1, §8.2) always take precedence when they
 8. Unfinished cleanup or placeholder implementation notes are either resolved or reported as a remaining risk.
 9. The result was reported using the Output Contract.
 10. No commit or push was performed.
+11. Vault knowledge capture check was completed or explicitly marked N/A.
+    After any task that reaches Phase 03 or includes code changes, check whether
+    vault updates are required. Trigger conditions and procedure are defined in
+    `.local/local_agent_guide.md` when available.
 
 ## 12. Appendix
 
@@ -399,7 +412,7 @@ Quick checklist:
 - Before start: check `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
 - Before implementation: re-read `AGENT_GUIDE.md` and the relevant `docs/*.md`
 - During work: review component impact and conventions
-- Before finish: run build/tests, **run Post-Phase 03 checks** (Node.js syntax check + Spring Boot `./gradlew clean build`), run convention validation, update implementation-guide checklists, self-review, and verify the Output Contract
+- Before finish: run build/tests, **run Post-Phase 03 checks** (Node.js syntax check + Spring Boot `./gradlew clean build`), run convention validation, update implementation-guide checklists, perform vault knowledge capture check (§11.11), self-review, and verify the Output Contract
 
 Common rules must be maintained in `AGENT_GUIDE.md`.
 `CODEX.md`, `CLAUDE.md`, `GEMINI.md` and similar wrappers must stay thin and define only agent-specific startup differences.

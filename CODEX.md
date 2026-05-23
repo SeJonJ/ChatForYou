@@ -23,6 +23,10 @@ Before responding to any request:
    - `.codex/agents/*.toml`
    - `.codex/skills/*`
 
+## Finish Checks
+- For any task that reaches Phase 03 or includes code changes, follow the vault knowledge capture check defined in `.local/local_agent_guide.md` before the final response.
+- If `.local/local_agent_guide.md` does not exist or the vault MCP is unavailable, report the vault capture result as `N/A` with the reason.
+
 ## Codex-Specific Rules
 - Report work based on verified local codebase findings and the commands you actually ran.
 - Apply the minimum-change principle during implementation, and clearly separate file changes from verification results.

@@ -104,8 +104,18 @@ color: blue
 
 ### 5. 최종 취합
 - 각 팀원의 결과를 취합하여 유저에게 요약 보고
-- commit 메시지 추천 (직접 commit 금지 — 유저가 수행)
 - 팀원 결과 간 충돌이 있으면 외부 전문가 의견을 우선 참고
+
+### 6. Vault Knowledge Capture 검증 (해산 전 필수)
+
+팀 해산 전, vault knowledge capture 완료 여부를 확인한다.
+실행 절차는 `.local/local_agent_guide.md`의 트리거 테이블과 Procedure를 따른다.
+
+plan 문서에 아래 체크박스를 추가하고 완료 확인 후 해산한다:
+- [ ] vault knowledge capture 완료 (또는 해당 없음 — 이유 명시)
+
+미완료 시 유저에게 보고하고 확인을 받는다.
+commit 메시지는 vault 업데이트 완료 후 추천한다.
 
 ---
 
