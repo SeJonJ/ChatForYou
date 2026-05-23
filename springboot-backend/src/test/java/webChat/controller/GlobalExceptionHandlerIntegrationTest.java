@@ -88,6 +88,16 @@ class GlobalExceptionHandlerIntegrationTest {
             throw new ChatForYouException(ErrorCode.JSON_CONVERSION_ERROR, "object→json 변환 실패", new RuntimeException("jackson error"));
         }
 
+        @GetMapping("/kurento-composite-not-found")
+        public String kurentoCompositeNotFound() {
+            throw new ChatForYouException(ErrorCode.KURENTO_COMPOSITE_NOT_FOUND);
+        }
+
+        @GetMapping("/recording-start-failed")
+        public String recordingStartFailed() {
+            throw new ChatForYouException(ErrorCode.RECORDING_START_FAILED, "pipeline 초기화 중 실패");
+        }
+
         @PostMapping("/validation")
         public String validation(@Valid @RequestBody ValidationRequest request) {
             return "ok";
@@ -241,6 +251,31 @@ class GlobalExceptionHandlerIntegrationTest {
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.message").value(ErrorCode.JSON_CONVERSION_ERROR.getMessage()))
                 .andExpect(jsonPath("$.detail").value("object→json 변환 실패"))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    @DisplayName("KURENTO_COMPOSITE_NOT_FOUND(K005) 발생 시 500 + K005 응답 반환")
+    void kurentoCompositeNotFound_returns500WithK005() throws Exception {
+        // when & then
+        mockMvc.perform(get("/test/exception/kurento-composite-not-found"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("K005"))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value(ErrorCode.KURENTO_COMPOSITE_NOT_FOUND.getMessage()))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    @DisplayName("RECORDING_START_FAILED(K006) 발생 시 500 + K006 응답 반환 + detail 포함")
+    void recordingStartFailed_returns500WithK006() throws Exception {
+        // when & then
+        mockMvc.perform(get("/test/exception/recording-start-failed"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("K006"))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value(ErrorCode.RECORDING_START_FAILED.getMessage()))
+                .andExpect(jsonPath("$.detail").value("pipeline 초기화 중 실패"))
                 .andExpect(jsonPath("$.traceId").exists());
     }
 }
