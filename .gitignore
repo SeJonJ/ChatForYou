@@ -175,9 +175,10 @@ settings.local.json
 springboot-backend/.claude
 nodejs-frontend/.claude
 
-## gemini 관련
+## Google AI Pro 관련
 .gemini/
-GEMINI.md
+.context
+.antigravitycli
 
 # cursor 관련
 .cursor
@@ -206,6 +207,7 @@ GEMINI.md
 .codex/.tmp/
 .codex/skills/.system
 .codex/config.toml
+.codex/*.sqlite*
 
 # 테스트 결과물
 test-results/

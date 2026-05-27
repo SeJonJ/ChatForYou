@@ -42,6 +42,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 ## 팀 활성화 조건
 
 **사용 O**: 신규 기능 추가, 주요 리팩토링, 다수 파일에 걸친 변경 (PLAN 파일이 필요한 수준)
+복잡 버그도 L2 이상이거나 PLAN 파일 생성이 필요한 수준이면 chatforyou-dev-team을 활성화한다.
 
 **사용 X**: 단순 버그 수정 1~2줄, 텍스트 수정, 개별 agent로 충분한 작업
 
@@ -49,15 +50,17 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 ## 워크플로우 실행 순서
 
-### STEP 1: 팀 리더 — 설계 검증 및 분석 요약 작성
+### STEP 1: 팀 리더 — 설계 검증 및 분석 요약 작성 (= Phase 00 Base Plan + Phase 01 Plan + Phase 02 Design)
 
 `chatforyou-lead` agent를 호출하여 먼저 `plan_docs/N월_[기능]_plan.md` 존재 여부를 확인한다.
 
-> ⚠️ **MANDATORY FIRST**: 팀 리더는 설계 파일을 읽기 전에 반드시 아래 두 파일을 먼저 읽는다.
-> - `docs/springboot_backend.md` — 백엔드 컨벤션 기준
-> - `docs/nodejs_frontend.md` — 프론트 컨벤션 기준
+> ⚠️ **MANDATORY FIRST**: 팀 리더는 설계 파일을 읽기 전에 반드시 아래 순서로 읽는다.
+> 1. `AGENT_GUIDE.md` — 단일 진실 공급원 (공통 규칙, 워크플로우, 위험도 분류)
+> 2. `.local/local_agent_guide.md` — 로컬 설정 (존재하는 경우)
+> 3. `docs/springboot_backend.md` — 백엔드 컨벤션 기준
+> 4. `docs/nodejs_frontend.md` — 프론트 컨벤션 기준
 >
-> 이 두 파일을 기반으로 설계 분석 전체를 진행한다.
+> `AGENT_GUIDE.md`의 Pre-Implementation Compliance Gate 선언(Risk Level + Phase range) 후 설계 분석을 진행한다.
 
 **[Path A] 외부 설계 파일이 있는 경우**:
 1. (docs 읽기 완료 후) `plan_docs/N월_[기능]_plan.md` 읽기
@@ -85,7 +88,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 ---
 
-### STEP 2: 병렬 개발 — 백엔드 + 프론트
+### STEP 2: 병렬 개발 — 백엔드 + 프론트 (= Phase 03 Do)
 
 `chatforyou-backend-expert`와 `chatforyou-frontend-expert`를 **병렬**로 호출:
 
@@ -114,7 +117,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 ---
 
-### STEP 3: QA — 시나리오/통합/경계값 테스트
+### STEP 3: QA — 시나리오/통합/경계값 테스트 (= Phase 03 Do 계속)
 
 `chatforyou-qa-expert` agent를 호출하여:
 1. 백엔드 전문가 결과물 확인 (src/main/ + 단위 테스트)
@@ -126,7 +129,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 ---
 
-### STEP 4: 외부 전문가 — 종합 검증
+### STEP 4: 외부 전문가 — 종합 검증 (= Phase 04 Analyze + Phase 05 Expert Review)
 
 `chatforyou-external-expert` agent를 호출하여:
 1. 백엔드/프론트/QA 전원 결과물 수신
@@ -135,7 +138,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 ---
 
-### STEP 5: 팀 리더 — 최종 취합
+### STEP 5: 팀 리더 — 최종 취합 (= Phase 06 Report)
 
 `chatforyou-lead` agent가:
 1. 전원 결과물 취합
@@ -178,3 +181,19 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 - **파일 소유권 엄수** — 배분되지 않은 파일 수정 금지
 - **PLAN 파일 없이 시작 금지**
 - 외부 전문가의 Critical 항목은 유저에게 반드시 보고
+
+---
+
+## AGENT_GUIDE Compliance Gate
+
+이 skill을 통해 시작하는 모든 작업에도 `AGENT_GUIDE.md`의 Pre-Implementation Compliance Gate가 동일하게 적용된다.
+
+### STEP 1 시작 전 (팀 리더 필수 선언)
+- **Risk Level**: L0 / L1 / L2 / L3 (`AGENT_GUIDE.md` Risk & Workflow Gate 기준)
+- **Applicable phase range**: Phase XX–XX (`docs/agent/pdca-templates.md` 기준)
+- L2 이상: `plan_docs/N월_[기능]_plan.md` 존재 확인 필수
+- L3 + WebRTC/WebSocket 변경: `docs/agent/webrtc-review-protocol.md` 필수 리뷰 완료 후 구현
+
+### 작업 완료 전 (팀 리더 필수 확인)
+`AGENT_GUIDE.md` Definition of Done 전체 항목을 확인한다.
+건너뛴 항목은 이유를 명시한다.

@@ -64,6 +64,11 @@ static/js/
 └── rtc/             # WebRTC 핵심 (kurento-service.js, dataChannel.js 등)
 ```
 
+**Temporary artifacts cleanup (MANDATORY)**
+
+프론트엔드 임시 테스트 산출물, 스크린샷, 로컬 재현용 HTML/JS, 실험 로그는 프로젝트 루트의 `.test-temp/`에 둔다.
+`nodejs-frontend/` 내부에 임시 산출물을 누적하지 말고, 작업 완료 전 정리하거나 남겨야 하는 이유를 최종 보고에 명시한다.
+
 **모듈 패턴 — 객체 리터럴 방식 (MANDATORY)**
 
 `$(document).ready()` 사용을 최소화한다. 이벤트 바인딩은 반드시 모듈의 `init()` 안에서 처리한다.

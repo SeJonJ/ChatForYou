@@ -59,7 +59,8 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 `chatforyou-lead` agent를 호출하여 먼저 `plan_docs/N월_[기능]_plan.md` 존재 여부를 확인한다.
 
-> ⚠️ **MANDATORY FIRST**: 팀 리더는 설계 파일을 읽기 전에 반드시 아래 세 파일을 먼저 읽는다.
+> ⚠️ **MANDATORY FIRST**: 팀 리더는 설계 파일을 읽기 전에 먼저 `AGENT_GUIDE.md`의 Risk & Workflow Gate를 확인하고,
+> 위험도에 따라 필요한 `docs/agent/*` 문서를 읽은 뒤 아래 세 파일을 읽는다.
 > - `docs/springboot_backend.md` — 백엔드 컨벤션 기준
 > - `docs/nodejs_frontend.md` — 프론트 컨벤션 기준
 > - `docs/chatforyou_desktop.md` — 데스크톱 동기화/직접 수정 금지 기준
