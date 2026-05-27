@@ -193,7 +193,7 @@ public class CookieCheckEvent {
                     currentInterval = Math.min((int)(currentInterval * BACKOFF_MULTIPLIER), MAX_INTERVAL_MS);
 
                 } catch (Exception e) {
-                    log.warn("Phase 2 시도 {}/{} 실패: {}", attempt, optimalRetries, e.getMessage());
+                    log.warn("Phase 2 시도 {}/{} 실패", attempt, optimalRetries, e);
                     Thread.sleep(currentInterval);
                 }
 
@@ -275,7 +275,7 @@ public class CookieCheckEvent {
             return isValid;
 
         } catch (Exception e) {
-            log.warn("실제 쿠키 검증 실패: {}", e.getMessage());
+            log.warn("실제 쿠키 검증 실패", e);
             return false;
         }
     }
