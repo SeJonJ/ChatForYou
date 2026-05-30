@@ -16,6 +16,10 @@
 
 let locationHost = window.__CONFIG__.API_BASE_URL.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
 let participants = {};
+// 재연결 버튼 5분 카운터 타이머 — 방 퇴장 시 clearTimeout 처리 필요
+const pendingReconnectTimers = new Map();
+// reconnect 클릭 시 nickName 복원용 — peer 수신 실패 시 저장, reconnect 클릭 후 삭제
+const reconnectMetaCache = new Map(); // participantId → { userId, nickName }
 
 let userId = null;
 let nickName = null;
@@ -91,7 +95,8 @@ const wsMessageHandlers = {
         const participant = participants[msg.name];
         if (participant?.rtcPeer) {
             participant.rtcPeer.addIceCandidate(msg.candidate, (error) => {
-                if (error) console.error("Error adding candidate:", error);
+                // error.message는 TURN credential 포함 가능 — name만 로깅
+            if (error) console.warn('[WebRTC:ICE] addIceCandidate 실패:', error?.name);
             });
         }
     },
@@ -265,6 +270,11 @@ function teardownRoomSession(options) {
     });
     participants = {};
 
+    // 재연결 타이머 전체 정리 — 방 퇴장 시 5분 카운터 누수 방지
+    pendingReconnectTimers.forEach(function(timerId) { clearTimeout(timerId); });
+    pendingReconnectTimers.clear();
+    reconnectMetaCache.clear(); // reconnect nickName 캐시도 함께 정리
+
     if (window._cleanupDummyVideo) {
         window._cleanupDummyVideo();
     }
@@ -319,6 +329,17 @@ function connectWebSocket() {
         }
     };
 }
+
+// 재연결 버튼 — 동적 생성 요소이므로 document delegation 1회 등록
+$(document).on('click', '.reconnect-btn', function() {
+    const participantId = $(this).data('participant-id');
+    // 캐시에서 nickName 복원 — 없으면 userId만으로 폴백 (undefined 렌더링 방지)
+    const meta = reconnectMetaCache.get(participantId) || { userId: participantId };
+    // clearFallbackState가 placeholder 제거 + 타이머 취소 + 캐시 삭제를 일괄 처리
+    clearFallbackState(participantId);
+    // 사용자 명시 트리거로 1회 재연결 시도 (자동 재시도 아님)
+    receiveVideo(meta);
+});
 
 // 새로고침 감지 및 연결 분기
 $(function () {
@@ -753,9 +774,127 @@ function onNewParticipant(request) {
     receiveVideo(newParticipant);
 }
 
+/**
+ * WebRTC peer 셋업/SDP 처리 실패 공통 처리.
+ * 본인(role='self') 실패는 강제 퇴장 모달, 상대(role='remote') 실패는 Toast + 재연결 버튼.
+ * @param {Object} ctx
+ * @param {string} ctx.participantId - 실패 대상 userId
+ * @param {'self'|'remote'} ctx.role - 본인 송수신 peer / 상대 수신 peer 구분
+ * @param {'create'|'answer'} ctx.phase - 실패 단계
+ * @param {Error} ctx.error - 원본 에러
+ */
+function handlePeerSetupError(ctx) {
+    // 방 퇴장 진행 중이면 조용히 종료 — teardown 이후 도착한 비동기 콜백 무시
+    if (roomTeardownStarted || forcedSessionExitInProgress) return;
+
+    // error.message 는 TURN credential/IP 포함 가능 — name만 로깅
+    console.error('[WebRTC:PeerError] participant=' + ctx.participantId +
+        ' role=' + ctx.role + ' phase=' + ctx.phase, ctx.error?.name);
+
+    // 본인 송수신 peer 실패 → 방에 머물 수 없으므로 강제 퇴장
+    if (ctx.role === 'self') {
+        // 즉시 퇴장하므로 dispose 와 모달 순서 무관
+        if (participants[ctx.participantId]) {
+            disposeParticipantEntry(ctx.participantId);
+        }
+        showConnectionFailModal({
+            title: '미디어 연결 실패',
+            message: '카메라/마이크 또는 네트워크 설정으로 인해\n통화를 시작할 수 없습니다.\n방에서 나간 뒤 다시 시도해주세요.',
+            dismissible: false,
+            onConfirm: () => leaveRoom('error')
+        });
+        return;
+    }
+
+    // 상대 수신 peer 실패 → dispose 전에 nickName 추출 (dispose 이후엔 participants 항목이 삭제됨)
+    const displayName = (participants[ctx.participantId] && participants[ctx.participantId].nickName)
+        ? participants[ctx.participantId].nickName
+        : ctx.participantId;
+    showWarningToast(displayName + '님과의 영상 연결이 일시적으로 끊겼습니다.');
+    // placeholder 삽입은 dispose 전 — container DOM이 살아있어야 after()로 옆에 삽입 가능
+    showParticipantPlaceholder(ctx.participantId, displayName);
+    // reconnect 클릭 시 nickName 복원을 위해 dispose 전에 캐시 저장
+    reconnectMetaCache.set(ctx.participantId, {
+        userId: ctx.participantId,
+        nickName: displayName
+    });
+    // placeholder 삽입 후 participant 정리 — ICE candidate race 차단 + stream track stop 보장
+    if (participants[ctx.participantId]) {
+        disposeParticipantEntry(ctx.participantId);
+    }
+
+    // 5분 후 새로고침 안내 Toast — 구조적 오류 시 사용자 안내
+    const timerId = setTimeout(function() {
+        showWarningToast('서버 연결이 원활하지 않습니다. 새로고침 후 다시 시도해 주세요.', 6000);
+        pendingReconnectTimers.delete(ctx.participantId);
+    }, 5 * 60 * 1000);
+    pendingReconnectTimers.set(ctx.participantId, timerId);
+
+    // 백엔드 통지 — Rate Limit 적용 (10초당 3회 초과 시 서버에서 silently drop)
+    sendMessageToServer({
+        event: 'PARTICIPANT_RECEIVE_FAILED',
+        roomId: roomId,
+        senderId: userId,
+        targetUserId: ctx.participantId,
+        phase: ctx.phase
+    });
+}
+
+/**
+ * 상대 수신 실패 fallback 상태(재연결 타이머/캐시/placeholder) 일괄 정리 헬퍼.
+ * reconnect 클릭, 참가자 퇴장, 세션 교체 등 모든 정리 경로에서 공통 호출.
+ * @param {string} participantId - 정리 대상 userId
+ */
+function clearFallbackState(participantId) {
+    if (pendingReconnectTimers.has(participantId)) {
+        clearTimeout(pendingReconnectTimers.get(participantId));
+        pendingReconnectTimers.delete(participantId);
+    }
+    reconnectMetaCache.delete(participantId); // reconnect nickName 캐시도 함께 정리
+    $('#participant-placeholder-' + participantId).remove();
+}
+
+/**
+ * 상대 수신 peer 실패 시 participant 컨테이너 옆에 placeholder와 재연결 버튼을 삽입한다.
+ * dispose 전에 호출되어야 $container가 존재하며, after()로 삽입해 dispose 후에도 DOM에 유지된다.
+ * @param {string} participantId - 실패 대상 userId
+ * @param {string} nickNameStr - 표시할 닉네임
+ */
+function showParticipantPlaceholder(participantId, nickNameStr) {
+    // 실제 participant 컨테이너는 <div id="{userId}" class="participant [main]"> 구조
+    const $container = $('#' + participantId);
+    if ($container.length === 0) return;
+
+    const placeholderId = 'participant-placeholder-' + participantId;
+    if ($('#' + placeholderId).length > 0) return; // 중복 생성 방지
+
+    // container 클래스를 그대로 물려받아 레이아웃 일관성 유지
+    const containerClass = $container.attr('class') || 'participant';
+    const $placeholder = $('<div>').attr('id', placeholderId).attr('class', containerClass + ' participant-placeholder-wrapper');
+    const $inner = $('<div>').addClass('d-flex flex-column align-items-center justify-content-center h-100');
+    const $nameSpan = $('<span>').addClass('placeholder-nickname text-muted small mb-2').text(nickNameStr);
+    const $btn = $('<button>')
+        .attr('id', 'reconnect-btn-' + participantId)
+        .addClass('btn btn-sm btn-outline-secondary reconnect-btn')
+        .attr('data-participant-id', participantId)
+        .text('다시 연결');
+    $inner.append($nameSpan, $btn);
+    $placeholder.append($inner);
+    // container 다음 위치에 삽입 — dispose 후 container가 제거돼도 placeholder는 DOM에 유지됨
+    $container.after($placeholder);
+}
+
 function receiveVideoResponse(result) {
+    if (!participants[result.name] || !participants[result.name].rtcPeer) return;
     participants[result.name].rtcPeer.processAnswer(result.sdpAnswer, function (error) {
-        if (error) return console.error(error);
+        if (error) {
+            return handlePeerSetupError({
+                participantId: result.name,
+                role: 'remote',
+                phase: 'answer',
+                error
+            });
+        }
     });
 }
 
@@ -811,7 +950,13 @@ function onExistingParticipants(msg) {
         participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
             function(error) {
                 if (error) {
-                    return console.error(error);
+                    // 본인 송수신 peer 생성 실패 → 강제 퇴장
+                    return handlePeerSetupError({
+                        participantId: userId,
+                        role: 'self',
+                        phase: 'create',
+                        error
+                    });
                 }
 
                 this.generateOffer(participant.offerToReceiveVideo.bind(participant));
@@ -877,7 +1022,13 @@ function receiveVideo(sender) {
     participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
         function (error) {
             if (error) {
-                return console.error(error);
+                // 상대 수신 peer 생성 실패 → Toast + 재연결 버튼
+                return handlePeerSetupError({
+                    participantId: sender.userId,
+                    role: 'remote',
+                    phase: 'create',
+                    error
+                });
             }
             this.generateOffer(participant.offerToReceiveVideo.bind(participant));
         });
@@ -984,6 +1135,9 @@ function leaveRoom(type) {
 function onParticipantLeft(request) {
     console.log('[WebRTC:Participant] 퇴장:', request.name);
 
+    // fallback placeholder + 재연결 타이머 정리 — participant 존재 여부와 무관하게 항상 선행 처리
+    clearFallbackState(request.name);
+
     const participant = participants[request.name];
 
     if (!participant) {
@@ -1018,6 +1172,8 @@ function onParticipantSessionReplaced(request) {
     }
 
     console.log('[WebRTC:Participant] 세션 교체:', replacedParticipant.userId);
+    // 세션 교체 전 fallback 상태 정리 — stale placeholder/타이머 방지
+    clearFallbackState(replacedParticipant.userId);
     disposeParticipantEntry(replacedParticipant.userId);
     receiveVideo(replacedParticipant);
 }

@@ -42,6 +42,7 @@ public enum ErrorCode {
     RECORDING_FILE_EXISTS(HttpStatus.BAD_REQUEST, "K004", "해당 방에는 이미 녹화 파일이 있습니다. 녹화를 시작할 수 없습니다."),
     KURENTO_COMPOSITE_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "K005", "Kurento Composite를 찾을 수 없습니다."),
     RECORDING_START_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "K006", "녹화 시작에 실패했습니다."),
+    PEER_SETUP_FAILED(HttpStatus.BAD_REQUEST, "K007", "WebRTC 피어 설정 중 오류가 발생했습니다."),
 
     // Infrastructure
     EXTERNAL_API_ERROR(HttpStatus.BAD_GATEWAY, "I001", "외부 API 호출에 실패했습니다."),

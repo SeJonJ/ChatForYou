@@ -11,4 +11,5 @@ public enum KurentoEvent {
     TEXT_OVERLAY,
     RECORDING_START,
     RECORDING_STOP,
+    PARTICIPANT_RECEIVE_FAILED,
 }
