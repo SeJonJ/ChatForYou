@@ -39,7 +39,7 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 | 백엔드 전문가 | `chatforyou-backend-expert` | 초록색 | backend-architect, backend-convention-checker | `bkit:bkend-auth/data/storage/cookbook`, `gstack:cso`, `gstack:investigate` |
 | 프론트 전문가 | `chatforyou-frontend-expert` | 노란색 | javascript-pro, frontend-convention-checker | `bkit:phase-5/6`, `gstack:browse` |
 | QA 전문가 | `chatforyou-qa-expert` | 빨간색 | backend-test-layer skill, backend-test-convention-checker | `bkit:qa-phase`, `bkit:zero-script-qa`, `gstack:qa`, `gstack:investigate` |
-| 외부 전문가 | `chatforyou-external-expert` | 주황색 | code-reviewer, code-review:code-review | `bkit:audit`, `bkit:code-review`, `gstack:review`, `gstack:codex`, `gstack:cso` |
+| 외부 전문가 | `chatforyou-external-expert` | 주황색 | code-reviewer, code-review:code-review, **`$claude consult` (STEP 5 cross-model 필수)** | `bkit:audit`, `bkit:code-review`, `gstack:review`, `gstack:cso` |
 
 > **선택적 스킬 원칙**: 각 팀원은 기능 종류에 맞는 스킬을 자율적으로 판단하여 호출한다. 각 agent 파일의 "선택적 스킬 호출" 섹션 참고.
 
@@ -162,25 +162,91 @@ STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 
 ---
 
-### STEP 4: 외부 전문가 — 종합 검증
+### STEP 4: 팀 리더 + QA(보조) — 04-analyze 작성 (설계-구현 gap 분석)
 
-`chatforyou-external-expert` agent를 호출하여:
-1. 백엔드/프론트/QA 전원 결과물 수신
-2. 팀 의견 상충 지점, 누락 위험 요소 분석
-3. 종합 검증 리포트 작성 (Critical / Suggestions / 통합 리스크)
+`chatforyou-lead` agent가 (qa 보조):
+1. 02-design 과 03-implementation, 실제 구현 코드를 대조하여 설계-구현 gap 분석
+2. `chatforyou-qa-expert` 가 STEP 3 에서 작성한 통합/경계/HTTP 테스트의 커버리지 검증 의견을 **보조로** 수신
+3. `plan_docs/04-analyze/[기능명].md` 작성
+   - Design vs Implementation Gap (Match Rate)
+   - Missing Items & Deviations
+   - QA Coverage Verification (qa 보조 의견)
+   - Review Context for External Model (**필수**)
+4. 04 의 `Review Context for External Model` 섹션에는 아래 항목을 반드시 포함한다:
+   - Original User Intent
+   - Key Decisions During Implementation
+   - Scope Changes / Deferred Items
+   - Design vs Implementation Notes
+   - QA Coverage Summary
+   - Known Risks / Open Questions
+   - Files External Reviewer Must Inspect
+5. 04 자체로 단독 판정(APPROVED/FAIL)을 내리지 않는다 — 판정은 STEP 5 external-expert + Claude 에서 종합
 
 ---
 
-### STEP 5: 팀 리더 — 최종 취합
+### STEP 5: 외부 전문가 + Claude 교차검증 — 05-expert-review 작성
+
+`chatforyou-external-expert` agent를 호출하여:
+1. 백엔드/프론트/QA 전원 결과물 + STEP 4 의 04 gap findings 수신
+2. 팀 의견 상충 지점, 누락 위험 요소 분석
+3. **Core WebRTC Architecture Gate**
+   - Review loop 시작 전에 WebRTC 코어 기능의 아키텍처 변경 여부를 확인한다.
+   - 대상: WebRTC, WebSocket, Signaling, Kurento, ICE/SDP, DataChannel, room lifecycle, media pipeline, signaling event contract, recovery/reconnect state machine.
+   - 새 아키텍처 변경이 감지되면 자동 review-rework를 시작하지 않고 유저 사전 확인을 받는다.
+   - 단순 버그 수정이나 기존 승인 설계 안의 국소 수정은 이 gate의 사전 확인 대상이 아니다.
+4. **Claude 교차검증 (cross-model independent review) — MANDATORY**
+   - 기본: `$claude consult` 호출
+   - 입력은 `plan_docs/00-base_plan/[feature].md`, `01-plan`, `02-design`, `03-implementation`, `04-analyze`, `springboot-backend/plan_docs/[feature]_plan.md`, `nodejs-frontend/plan_docs/[feature]_plan.md`, 구현 파일 목록으로 고정한다.
+   - 요청: "설계 기준 구현 정합 + 설계-구현 gap + 누락/엣지/보안/lifecycle 리스크" review
+   - 결과를 05 에 `Reviewer: Claude via $claude consult` 로 명시
+   - cross-model 동의는 권고이지 결정이 아님 (최종 판단 = external-expert + 유저)
+5. **Risk별 review-rework loop 적용 기준**
+   - L3: Phase 05에서 3-iteration review-rework loop를 mandatory로 자동 실행한다.
+   - L2: review-rework loop는 recommended이며, loop 실행 전 유저 확인을 받는다.
+   - L1/L0: review-rework loop를 사용하지 않는다.
+   - L3 rework 범위는 원래 승인된 설계와 scope 안의 수정으로 제한한다. 새 요구사항, 새 아키텍처, 위험한 migration은 자동 rework하지 않고 `Needs User Approval`로 분리한다.
+6. **1 iteration의 정의**
+   - `$claude consult` 실행
+   - Claude Findings 원문 기록
+   - `chatforyou-external-expert` + `chatforyou-lead` + 담당 dev-team triage
+   - 타당한 피드백 rework
+   - `03-implementation` 및 `04-analyze` 갱신
+7. **3-iteration stop rule**
+   - L3는 최대 3회까지 자동 반복한다.
+   - 3번째 Claude review 결과와 external-expert 종합 판정이 `APPROVED`가 아니면 `plan_docs/05-expert-review/[기능명].md`에 `Final Status: BLOCKED`를 기록한다.
+   - 이 경우 STEP 6 진입 금지, `06-report 작성 금지`, 유저 보고 후 종료한다.
+8. `$claude` 실패 시 자동 fallback을 순서대로 시도한다:
+   - `$claude consult` 재시도 또는 fresh session
+   - context 축약 후 04 Review Context + 01/02/03 + 핵심 구현 파일 중심으로 재시도
+   - 유저가 직접 실행할 수 있는 `$claude consult` 또는 raw `claude -p` 프롬프트 출력
+9. L3에서 fallback까지 실패하면 `plan_docs/05-expert-review/[기능명].md` 에 `Final Status: BLOCKED` 를 기록하고, STEP 6 / `06-report 작성 금지`를 명시한다.
+10. L2에서 외부 리뷰가 recommended인 경우에만, 사용자 명시 수용하에 `APPROVED_WITH_RISK` 또는 `DONE_WITH_CONCERNS` 형태를 허용한다.
+11. `plan_docs/05-expert-review/[기능명].md` 작성
+   - Critical Findings / Suggestions / 통합 리스크
+   - Claude Findings 원문 섹션 (요약 금지)
+   - external-expert Interpretation
+   - Review Loop Iterations 표
+   - `Needs User Approval` 항목
+   - 최종 판정 (APPROVED / FAIL / BLOCKED)
+
+---
+
+### STEP 6: 팀 리더 — 06-report + 최종 취합
+
+**진입 조건**: STEP 5 의 최종 판정이 **APPROVED** 인 경우에만 STEP 6 진입.
+- 05 = **FAIL** → STEP 6 보류. Required Actions 를 유저에게 전달하고 rework 후 STEP 2 또는 3 으로 복귀하여 STEP 5 재실행. APPROVED 달성 시 STEP 6 진입.
+- 05 = **BLOCKED** → STEP 6 금지. 외부 리뷰 복구 또는 사용자 지시 후 STEP 5 재실행.
+- L3 3-iteration stop rule로 05 = **BLOCKED**가 된 경우 → `06-report 작성 금지`, 유저 보고 후 종료.
 
 `chatforyou-lead` agent가:
 1. 전원 결과물 취합
 2. STEP 2 Exit Gate 충족 여부 확인
    - 구현 가이드 체크박스 상태 확인
    - 백엔드/프론트 컨벤션 검증 결과 확인
-3. 외부 전문가 Critical 항목 유저에게 전달
+3. 외부 전문가 Critical 항목 + Claude 교차검증 결과를 유저에게 전달
 4. PLAN 파일 체크리스트 완료 표시
-5. commit 메시지 추천 (실제 commit은 유저가 직접)
+5. `plan_docs/06-report/[기능명].md` 작성 (Completion Summary / Lessons Learned / Future Tasks / Vault Knowledge Capture)
+6. commit 메시지 추천 (실제 commit은 유저가 직접)
 
 ---
 
@@ -201,11 +267,14 @@ STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
   backend-test-layer skill 기준
   backend-test-convention-checker 검증
     ↓
-[chatforyou-external-expert]
-  전원 결과물 수신 → 종합 분석 → 검증 리포트
+[chatforyou-lead] + qa(보조)
+  04-analyze: 설계-구현 gap 분석 + QA 커버리지 검증
+    ↓
+[chatforyou-external-expert] + $claude consult
+  05-expert-review: 독립 종합 + Claude 교차검증
     ↓
 [chatforyou-lead]
-  최종 취합 + commit 메시지 추천
+  06-report + 최종 취합 + commit 메시지 추천
   (commit/push는 유저 직접)
 ```
 

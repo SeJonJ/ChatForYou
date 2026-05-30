@@ -1,5 +1,13 @@
 ## 개발 시 유의점 : chatforyou-desktop(electron) ##
 
+### plan_docs 미사용 원칙
+`chatforyou-desktop/` 은 `nodejs-frontend/` 자산을 동기화한 결과물이므로 자체 `plan_docs/` 를 운영하지 않는다.
+데스크탑에 영향을 주는 변경은 다음 위치에 기록한다:
+- 프론트 코드 레벨 상세 → `nodejs-frontend/plan_docs/[기능명]_plan.md`
+- 기능 단위 PDCA 산출물 → 루트 `plan_docs/00–06/[기능명].md`
+- Electron 환경에서만 발생하는 sync / build-scripts / auto-update 변경 사유는 위 plan_docs 에 별도 섹션으로 명시
+- 책임 분배 상세: `docs/agent/pdca-templates.md` 의 **Component-level Plan Docs** 참조
+
 ### Agent / Skill 활용(사용 가능 하다면)
 
 | 작업 영역 | 사용 권장 |

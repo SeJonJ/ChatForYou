@@ -97,16 +97,71 @@ color: blue
    - 리더 분석 수신 → springboot-backend/plan_docs/[기능명].md 작성 (full code guide) → 개발
 2. (병렬) chatforyou-frontend-expert:
    - 리더 분석 수신 → nodejs-frontend/plan_docs/[기능명].md 작성 (minimal guide) → 개발
-3. chatforyou-qa-expert: 테스트 코드 작성 + 검증
-4. chatforyou-external-expert: 종합 검증 리포트
-5. chatforyou-lead: 결과 취합 + commit 메시지 추천
+3. chatforyou-qa-expert: 통합/경계/HTTP 테스트 코드 작성 + 검증 → 03 Build&Test Results
+4. chatforyou-lead (책임) + qa(보조): 04-analyze 작성 (설계-구현 gap 분석)
+5. chatforyou-external-expert + /codex: 05-expert-review 반복 검토 루프 (독립 종합 + cross-model 교차검증, 최대 3 iteration)
+   - lead 는 루프 내 Required Fixes 라우팅 담당 (아래 5-1 참고)
+6. chatforyou-lead: 06-report 작성 + 결과 취합 + commit 메시지 추천 (05 = APPROVED 일 때만)
 ```
 
-### 5. 최종 취합
-- 각 팀원의 결과를 취합하여 유저에게 요약 보고
-- 팀원 결과 간 충돌이 있으면 외부 전문가 의견을 우선 참고
+### 5. 04-analyze 작성 (gap 분석 책임)
 
-### 6. Vault Knowledge Capture 검증 (해산 전 필수)
+QA(STEP 3) 완료 후 external-expert(STEP 5) 호출 전에 작성한다.
+
+1. 02-design 과 03-implementation, 실제 구현 코드를 대조하여 설계-구현 gap 분석
+2. `chatforyou-qa-expert` 의 커버리지 검증 의견을 **보조로** 수신 (qa 는 보조, 작성 책임은 lead)
+3. `plan_docs/04-analyze/[기능명].md` 작성
+   - Design vs Implementation Gap (Match Rate)
+   - Missing Items & Deviations
+   - QA Coverage Verification (qa 보조 의견)
+   - **Review Context for External Model** (필수 — 외부 모델이 맥락 기반 판정에 사용):
+     - Original User Intent
+     - Key Decisions During Implementation
+     - Scope Changes / Deferred Items
+     - Design vs Implementation Notes
+     - QA Coverage Summary (qa 보조 의견 반영)
+     - Known Risks / Open Questions
+     - Files External Reviewer Must Inspect
+4. 04 자체로 단독 판정(APPROVED/FAIL)을 내리지 않는다 — 판정은 external-expert + codex 의 05 에서 종합
+
+### 5-1. STEP 5 반복 검토 루프 fix 라우팅 (최대 3 iteration)
+
+external-expert 가 오케스트레이션하는 Codex 반복 검토 루프 안에서 lead 는 **fix 라우팅**을 담당한다.
+세부 정책의 단일 출처는 `docs/agent/pdca-templates.md` 의 External Consultant Protocol + Phase 05 Template.
+
+1. **루프 진입 게이트 확인** (external-expert 와 공동):
+   - **Risk Level**: L3 = 자동 3-iteration mandatory / **L2 = recommended → 루프 시작 전 유저 확인** / L1·L0 = 미사용
+   - **Core WebRTC 아키텍처 게이트**: 채택 항목이 WebRTC 코어(WebSocket/Signaling/Kurento/ICE/SDP/DataChannel/room lifecycle/media pipeline/signaling contract/reconnect state machine)를 변경하면 **자동 rework 중단 → 유저 사전 승인** 후 진행. 이미 승인된 설계 내부 로컬 버그 수정은 게이트 대상 아님.
+2. external-expert 로부터 라운드별 **Required Fixes** 수신 시 backend/frontend expert 에 **즉시 라우팅** (lead 는 코드 직접 작성 금지)
+3. 각 라운드 fix 완료 후 **convention check 확인** → `03-implementation` + `04-analyze` 갱신 → external-expert 에 재검토 신호
+4. 신규 요구사항·신규 아키텍처·risky migration 은 자동 rework 금지 — `Needs User Approval` 로 분리하여 유저 승인 요청
+
+### 6. 06-report + 최종 취합
+
+**작성 시점 조건**: 06 은 **STEP 5 의 최종 판정이 APPROVED 일 때만 작성**한다.
+- 05 = **APPROVED** → 06 작성 → commit 메시지 추천 → 유저 commit
+- 05 = **FAIL** → 06 작성 보류 → Required Actions 를 유저에게 전달 → rework(코드 수정) → STEP 5 재실행 → APPROVED 후 06 작성
+- 05 = **BLOCKED** (L3 3-iteration 후에도 APPROVED 미달성) → **06 작성 금지** → 미해결 findings + 권고 행동(A. 수용 승인 / B. 직접 수정 후 재진입 / C. 설계 변경 후 재진입)을 유저에게 전달 → 유저 결정 후 STEP 5 재진입 또는 유저 명시 승인하 종료
+- 즉 06 은 "성공적으로 마무리된 iteration" 의 리포트이지 진행 상태 추적용이 아니다.
+
+STEP 5 가 APPROVED 인 경우:
+1. 각 팀원의 결과를 취합하여 유저에게 요약 보고
+2. 팀원 결과 간 충돌이 있으면 외부 전문가 의견을 우선 참고
+3. external-expert Critical 항목 + Codex 교차검증 결과를 유저에게 전달
+4. `plan_docs/06-report/[기능명].md` 작성 (Completion Summary / Lessons Learned / Future Tasks / Vault Knowledge Capture)
+
+STEP 5 가 FAIL 인 경우:
+1. Required Actions 를 유저에게 명확히 전달
+2. rework 범위·담당자 합의 후 STEP 2 또는 STEP 3 으로 복귀
+3. 재구현·재테스트 후 STEP 4(04 갱신) → STEP 5 재실행
+4. 06 작성은 APPROVED 달성 후로 보류
+
+STEP 5 가 BLOCKED 인 경우 (L3 3-iteration 소진, 자력 해결 한계):
+1. external-expert 의 BLOCKED 보고(Iteration별 요약 + 미해결 이슈 표 + 권고 행동 A/B/C)를 유저에게 그대로 전달
+2. **06 작성 금지** — 유저 판단 전까지 워크플로우 중단
+3. 유저 결정에 따라: A(수용 승인) → 명시 승인 기록 후 06 / B(직접 수정) → STEP 5 Iteration 1부터 재진입 / C(설계 변경) → STEP 4(04 갱신) → STEP 5 재진입
+
+### 7. Vault Knowledge Capture 검증 (해산 전 필수)
 
 팀 해산 전, vault knowledge capture 완료 여부를 확인한다.
 실행 절차는 `.local/local_agent_guide.md`의 트리거 테이블과 Procedure를 따른다.

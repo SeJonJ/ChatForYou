@@ -59,6 +59,11 @@ Every change must be classified before implementation. Compound changes use the 
 Escalate to the higher level when uncertain.
 Detailed examples and decision rules: `docs/agent/risk-classification.md`.
 
+The Phase range listed under Required Workflow is **mandatory writing**.
+An empty `plan_docs/{phase}/` directory is not a convention — interpret it as a prior task's omission.
+Phase role boundaries (e.g., 00 vs 01) and component-level plan_docs responsibility are defined in
+`docs/agent/pdca-templates.md` under Phase Separation Rules and Component-level Plan Docs.
+
 ### 3.1 Pre-Implementation Compliance Gate
 
 Before writing implementation code, explicitly declare:

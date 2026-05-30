@@ -103,14 +103,48 @@ color: blue
 2. (병렬) chatforyou-frontend-expert:
    - 리더 분석 수신 → nodejs-frontend/plan_docs/[기능명].md 작성 (full skeleton guide, no test code templates) → 개발
 3. chatforyou-qa-expert: 테스트 코드 작성 + 검증
-4. chatforyou-external-expert: 종합 검증 리포트
-5. chatforyou-lead: 결과 취합 + commit 메시지 추천
+4. chatforyou-lead + chatforyou-qa-expert(보조): 04-analyze 작성 + Review Context for External Model 필수 포함
+5. chatforyou-external-expert: 05-expert-review 작성 + 외부 모델 리뷰 종합 판정
+6. chatforyou-lead: 05 APPROVED 이후에만 06-report 작성 + 결과 취합 + commit 메시지 추천
 ```
 
 ### 5. 최종 취합
 - 각 팀원의 결과를 취합하여 유저에게 요약 보고
 - commit 메시지 추천 (직접 commit 금지 — 유저가 수행)
 - 팀원 결과 간 충돌이 있으면 외부 전문가 의견을 우선 참고
+
+### 6. Phase 04 / 06 문서 책임
+- `plan_docs/04-analyze/[기능명].md` 작성 책임자는 `chatforyou-lead`다.
+- 04에는 반드시 `Review Context for External Model` 섹션을 포함한다.
+- QA 전문가는 04의 `QA Coverage Verification` 보조 의견만 제공한다.
+- 04는 APPROVED/FAIL/BLOCKED 최종 판정을 내리지 않는다. 판정은 05에서 `chatforyou-external-expert`가 외부 모델 리뷰까지 포함해 작성한다.
+- `plan_docs/06-report/[기능명].md`는 05의 `Final Status`가 `APPROVED`일 때만 작성한다.
+- 05가 `FAIL`이면 Required Actions 처리 후 04/05를 다시 실행한다.
+- 05가 `BLOCKED`이면 외부 리뷰 복구 후 05를 다시 실행하기 전까지 06을 작성하지 않는다.
+- L3 3-iteration review-rework loop에서 3번째 review 후에도 `APPROVED`가 아니면 05에 `Final Status: BLOCKED`와 `06-report 작성 금지`를 기록하고 유저 보고로 종료한다.
+
+### 7. Phase 05 Rework Triage 책임
+- `chatforyou-external-expert`가 Claude Findings를 기록한 뒤, lead는 dev-team triage를 주도한다.
+- 각 finding을 `accepted`, `rejected`, `deferred`, `Needs User Approval`로 분류한다.
+- accepted rework는 기존 승인 설계와 scope 안에서 담당자를 재배정한다.
+- 백엔드/프론트 구현 변경이 있으면 담당 agent에게 component plan docs와 `03-implementation` 갱신을 요구한다.
+- rework 후 lead는 `04-analyze`의 gap 분석, QA Coverage Summary, Files External Reviewer Must Inspect를 최신 상태로 갱신한다.
+- Claude 또는 외부 전문가가 WebRTC 코어 아키텍처 변경을 제안하면 자동 rework하지 않고 `Needs User Approval`로 분리한다.
+- L2에서 review-rework loop를 적용하려면 loop 시작 전 유저 확인을 받는다.
+
+#### Required 04 Section
+
+```markdown
+## 4. Review Context for External Model
+
+### Original User Intent
+### Key Decisions During Implementation
+### Scope Changes / Deferred Items
+### Design vs Implementation Notes
+### QA Coverage Summary
+### Known Risks / Open Questions
+### Files External Reviewer Must Inspect
+```
 
 ---
 

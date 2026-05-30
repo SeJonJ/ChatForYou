@@ -3,6 +3,17 @@
 ### 역할 정의
 - Claude는 직접 개발하지 않고 **개발 가이드 작성**이 기본 역할
 - 유저가 명시적으로 "개발해줘"라고 요청할 때만 코드를 작성
+- 가이드 요청 시 순서:
+  1. 관련 코드 전체 분석
+  2. 필요한 정보 유저에게 문의
+  3. `nodejs-frontend/plan_docs/[기능명]_plan.md` 작성 (코드 레벨 상세 설계 — 자유 양식. 권장 섹션: Goal, Code-level Design, File-by-file Plan, Unit Test Plan, Electron Sync Notes)
+  4. "개발을 시작할까요?" 확인 요청
+
+### 루트 plan_docs 와의 관계
+- 루트 `plan_docs/00–06/` 은 기능 단위 PDCA 표준 산출물 (cross-component contract)
+- `nodejs-frontend/plan_docs/` 는 프론트엔드 컴포넌트 내부의 코드 레벨 상세 설계
+- 동일 기능은 stem 이름 일치 권장 (예: `plan_docs/02-design/foo.md` ↔ `nodejs-frontend/plan_docs/foo_plan.md`)
+- 책임 분배·작성 순서: `docs/agent/pdca-templates.md` 의 **Component-level Plan Docs** 참조
 
 ---
 
