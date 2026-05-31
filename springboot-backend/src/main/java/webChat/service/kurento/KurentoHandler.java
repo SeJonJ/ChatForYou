@@ -417,7 +417,10 @@ public class KurentoHandler extends TextWebSocketHandler {
             // 유저명을 통해 session 값을 가져온다
             final KurentoUserSession sender = participantService.getParticipant(message.getRoomId(), senderUserId);
             if (sender == null) {
-                throw new ChatForYouException(ErrorCode.USER_NOT_FOUND, senderUserId);
+                // 인메모리 방 참가자 조회 실패는 "일시적 부재"(JOIN 직후 상대 퇴장 경쟁 조건)이지
+                // "존재하지 않는 계정(U001)"이 아니다. 프론트가 인증 에러로 오인하여 leaveRoom 하지 않도록
+                // 의미가 분리된 K008(PEER_NOT_IN_ROOM)을 전송한다.
+                throw new ChatForYouException(ErrorCode.PEER_NOT_IN_ROOM, senderUserId);
             }
             // jsonMessage 에서 sdpOffer 값을 가져온다
             final String sdpOffer = message.getSdpOffer();

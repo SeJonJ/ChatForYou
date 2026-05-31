@@ -110,6 +110,23 @@ function getCurrentRoomId() {
 }
 
 /**
+ * 현재 방 통화 페이지에서 WebSocket 세션이 활성 상태인지 확인한다.
+ * A003/R005 갱신 실패 시 redirectToLogin/redirectToRoomList 호출 방지에 사용한다.
+ * sessionStorage의 _connected 플래그로 판단 — kurento-service.js 의존 없음.
+ * @returns {boolean}
+ */
+function isInRoomCallPage() {
+    const pathName = window.location.pathname || '';
+    if (pathName.indexOf('/room/kurentoroom.html') === -1) {
+        return false;
+    }
+    const roomId = new URLSearchParams(window.location.search).get('roomId');
+    if (!roomId) return false;
+    const connectedKey = roomId.replaceAll('-', '') + '_connected';
+    return sessionStorage.getItem(connectedKey) === 'true';
+}
+
+/**
  * R005 복구에 사용할 roomId를 요청 단위 override 또는 room page URL에서 가져온다.
  * @param {{roomId?: string}} requestOptions
  * @returns {string|null}
@@ -230,6 +247,11 @@ function executeTokenAjax(requestOptions) {
                         });
                     })
                     .catch(function () {
+                        // 통화 중이면 강제 페이지 이동 없이 경고 toast만 표시 — WebSocket 채널 유지 우선
+                        if (isInRoomCallPage()) {
+                            showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
+                            return;
+                        }
                         redirectToLogin();
                     });
                 return;
@@ -245,6 +267,11 @@ function executeTokenAjax(requestOptions) {
                         });
                     })
                     .catch(function() {
+                        // 통화 중이면 방 목록 이동 없이 경고 toast만 표시 — WebSocket 채널 유지 우선
+                        if (isInRoomCallPage()) {
+                            showApiErrorToast('방 접근 토큰이 만료되었습니다. 통화 종료 후 방에 다시 입장해주세요.');
+                            return;
+                        }
                         redirectToRoomList();
                     });
                 return;

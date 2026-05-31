@@ -531,6 +531,33 @@ class KurentoHandlerTest {
         verify(kurentoMessageSender, never()).sendStandardErrorToUser(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("RECEIVE_VIDEO_FROM_sender가_방에없으면_K008_PEER_NOT_IN_ROOM_에러를_detail과함께_전송한다")
+    void handleTextMessage_receiveVideoFrom_senderNotInRoom_sendsK008WithDetail() {
+        // given: RECEIVE_VIDEO_FROM 대상(sender)이 인메모리 방 참가자 조회에서 null
+        KurentoHandler handler = createHandler();
+        String payload = """
+                {
+                  "event":"RECEIVE_VIDEO_FROM",
+                  "roomId":"room-1",
+                  "senderId":"ghost-user",
+                  "senderNickName":"ghost",
+                  "sdpOffer":"dummy-offer"
+                }
+                """;
+
+        given(participantService.getBySessionId(session)).willReturn(activeUser);
+        // JOIN 직후 상대 퇴장 경쟁 조건 — sender 세션이 방에 없음
+        given(participantService.getParticipant("room-1", "ghost-user")).willReturn(null);
+
+        // when
+        handler.handleTextMessage(session, new TextMessage(payload));
+
+        // then: U001(USER_NOT_FOUND)이 아닌 K008(PEER_NOT_IN_ROOM)을 detail(senderId)과 함께 전송
+        verify(kurentoMessageSender).sendStandardErrorToUser(eq(activeUser), eq(ErrorCode.PEER_NOT_IN_ROOM), eq("ghost-user"));
+        verify(kurentoMessageSender, never()).sendStandardErrorToUser(eq(activeUser), eq(ErrorCode.USER_NOT_FOUND), any());
+    }
+
     private KurentoHandler createHandler() {
         return new KurentoHandler(
                 kurentoRoomManager,

@@ -168,6 +168,21 @@ const wsMessageHandlers = {
     // 6. 서버 에러 (표준 에러 응답 처리)
     // ==========================================
     error: (msg) => {
+        // K008(방에 없는 참가자) = peer 단위 실패이므로 leaveRoom 하지 않는다. U001은 K008 배포 전 전이 fallback.
+        // detail 유무와 무관하게 여기서 종결한다 — handleApiError로 흘리면 U001이 AUTH_REQUIRED에 걸려 leaveRoom 루프가 재발한다.
+        if (msg.code === 'K008' || msg.code === 'U001') {
+            if (msg.detail) {
+                handlePeerSetupError({
+                    participantId: msg.detail,
+                    role: 'remote',
+                    phase: 'server-error',
+                    error: new Error(msg.message || '영상 연결 실패')
+                });
+            } else {
+                showWarningToast(msg.message || '상대방과의 연결에 실패했습니다.');
+            }
+            return;
+        }
         // handleApiError는 ajaxUtil.js에 선언되어 있으므로 jqXHR 구조로 래핑
         handleApiError({ responseJSON: msg });
     }
@@ -962,7 +977,15 @@ function onExistingParticipants(msg) {
                 this.generateOffer(participant.offerToReceiveVideo.bind(participant));
                 mediaDevice.init(); // video 와 audio 장비를 모두 가져온 후 mediaDvice 장비 영역 세팅
             });
-        msg.data.forEach(receiveVideo)
+        msg.data.forEach(function(sender) {
+            // JOIN 직후 상대방이 동시에 퇴장하는 경쟁 조건 방어:
+            // rtcPeer가 이미 존재하면 기존 연결이 유효하므로 중복 생성을 방지한다.
+            if (participants[sender.userId] && participants[sender.userId].rtcPeer) {
+                console.debug('[WebRTC:Join] 이미 활성 peer 존재, skip:', sender.userId);
+                return;
+            }
+            receiveVideo(sender);
+        });
     }
 
     // 입장 직후에는 권한 검사 결과가 먼저 정리돼야 handleSuccess로 넘어간다.

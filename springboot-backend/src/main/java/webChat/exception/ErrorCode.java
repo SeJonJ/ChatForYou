@@ -43,6 +43,7 @@ public enum ErrorCode {
     KURENTO_COMPOSITE_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "K005", "Kurento Composite를 찾을 수 없습니다."),
     RECORDING_START_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "K006", "녹화 시작에 실패했습니다."),
     PEER_SETUP_FAILED(HttpStatus.BAD_REQUEST, "K007", "WebRTC 피어 설정 중 오류가 발생했습니다."),
+    PEER_NOT_IN_ROOM(HttpStatus.NOT_FOUND, "K008", "현재 방에 없는 참가자입니다."),
 
     // Infrastructure
     EXTERNAL_API_ERROR(HttpStatus.BAD_GATEWAY, "I001", "외부 API 호출에 실패했습니다."),
