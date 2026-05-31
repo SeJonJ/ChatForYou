@@ -59,6 +59,17 @@ Every change must be classified before implementation. Compound changes use the 
 Escalate to the higher level when uncertain.
 Detailed examples and decision rules: `docs/agent/risk-classification.md`.
 
+### 3.0 Independent PDCA Cycle Rule (MANDATORY)
+
+When the user explicitly requests an L3 (or equivalent) flow or a new PDCA development flow, the agent MUST start a new, independent 00-base_plan — even if the bug or feature is technically adjacent to a recently completed cycle.
+
+**"Technically adjacent" is never a reason to reuse or extend a prior cycle.**
+
+- Adjacent = same file, same service, same module → does NOT justify cycle reuse
+- A new PDCA cycle requires: new `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`, new phase documents 01–06, and independent log analysis
+
+Violation pattern to avoid: skipping 00 and reusing a prior cycle's documents because the code is in the same area. This pattern caused the 2026-05 session expiry + call drop incident PDCA to be processed incorrectly.
+
 The Phase range listed under Required Workflow is **mandatory writing**.
 An empty `plan_docs/{phase}/` directory is not a convention — interpret it as a prior task's omission.
 Phase role boundaries (e.g., 00 vs 01) and component-level plan_docs responsibility are defined in

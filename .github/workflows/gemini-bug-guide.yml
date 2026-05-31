@@ -46,7 +46,7 @@ jobs:
           ISSUE_TITLE: '${{ github.event.issue.title }}'
           ISSUE_BODY: '${{ github.event.issue.body }}'
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
-          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
           gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
