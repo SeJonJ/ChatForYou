@@ -30,6 +30,7 @@ let roomName = null;
 let turnUrl = null;
 let turnUser = null;
 let turnPwd = null;
+let peerReconnectTimeoutMs = 5 * 60 * 1000; // 기본 5분, initTurnServer에서 서버 설정값으로 덮어씀
 
 let origGetUserMedia;
 
@@ -386,6 +387,9 @@ const initTurnServer = function () {
             turnUrl = data.url;
             turnUser = data.username;
             turnPwd = data.credential;
+            if (data.peerReconnectTimeoutMs != null && data.peerReconnectTimeoutMs > 0) {
+                peerReconnectTimeoutMs = data.peerReconnectTimeoutMs;
+            }
         })
         .catch(error => {
             console.error('Error:', error);
@@ -842,7 +846,7 @@ function handlePeerSetupError(ctx) {
     const timerId = setTimeout(function() {
         showWarningToast('서버 연결이 원활하지 않습니다. 새로고침 후 다시 시도해 주세요.', 6000);
         pendingReconnectTimers.delete(ctx.participantId);
-    }, 5 * 60 * 1000);
+    }, peerReconnectTimeoutMs);
     pendingReconnectTimers.set(ctx.participantId, timerId);
 
     // 백엔드 통지 — Rate Limit 적용 (10초당 3회 초과 시 서버에서 silently drop)

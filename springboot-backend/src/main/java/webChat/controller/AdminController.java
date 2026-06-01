@@ -40,6 +40,9 @@ public class AdminController {
     @Value("${turn.server.credential}")
     private String turnServerCredential;
 
+    @Value("${server.rtc.peer.reconnect-fallback-timeout-ms:300000}")
+    private long peerReconnectFallbackTimeoutMs;
+
     /**
      * 관리자용 JWT 토큰을 발급한다.
      *
@@ -122,10 +125,11 @@ public class AdminController {
     @PostMapping("/turnconfig")
     @ResponseBody
     public ResponseEntity<ChatForYouResponse> turnServerConfig(){
-        Map<String, String> turnServerConfig = new HashMap<>();
+        Map<String, Object> turnServerConfig = new HashMap<>();
         turnServerConfig.put("url", turnServerUrl);
         turnServerConfig.put("username", turnServerUserName);
         turnServerConfig.put("credential", turnServerCredential);
+        turnServerConfig.put("peerReconnectTimeoutMs", peerReconnectFallbackTimeoutMs);
 
         return ResponseEntity.ok(ChatForYouResponse.ofSuccess(turnServerConfig));
     }
