@@ -4,7 +4,7 @@ description: >
   외부 전문가가 plan_docs/N월_[기능]_plan.md 로 작성한 설계를 Codex가 검증하는 3단계 워크플로우.
   1) 외부 설계 문서 + 관련 MD 분석 → 2) 타당성 검증 및 수정(이유 명시) → 3) 백엔드/프론트 구현 가이드 작성.
   유저가 설계·분석·아키텍처·검토 등을 요청할 때 반드시 사용.
-  AGENT_GUIDE.md 규칙 4번(설계 검증 형식)과 6·7번(PLAN 파일 운영)을 통합한 워크플로우.
+  AGENT_GUIDE.md, docs/agent/pdca-templates.md, docs/agent/output-contract.md의 설계 검증·PLAN 파일 운영 규칙을 통합한 워크플로우.
 triggers:
   - "설계"
   - "아키텍처"

@@ -26,8 +26,11 @@ import webChat.service.redis.RedisService;
 import webChat.utils.JsonUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Kurento WebRTC WebSocket 메시지 핸들러.
@@ -54,6 +57,11 @@ public class KurentoHandler extends TextWebSocketHandler {
     // 녹화 관련
     private final RecordingService recordingService;
     private final KurentoMessageSender kurentoMessageSender;
+
+    // PARTICIPANT_RECEIVE_FAILED Rate Limit — (senderId:targetUserId) 조합별 타임스탬프 목록
+    private final Map<String, List<Long>> peerSetupFailureTimestamps = new ConcurrentHashMap<>();
+    private static final int RATE_LIMIT_MAX = 3;
+    private static final long RATE_LIMIT_WINDOW_MS = 10_000L;
 
     /**
      * WebSocket 텍스트 메시지를 수신하고 이벤트 유형에 따라 적절한 처리 메서드로 분기한다.
@@ -102,6 +110,10 @@ public class KurentoHandler extends TextWebSocketHandler {
                     break;
                 case RECORDING_STOP: // 녹화 중지
                     processRecordingStop(KurentoRecordingMessage.of(message.getPayload()), user);
+                    break;
+                case PARTICIPANT_RECEIVE_FAILED: // 클라이언트 peer 설정 실패 보고
+                    processParticipantReceiveFailed(KurentoRTCMessage.of(message.getPayload()), user);
+                    break;
                 default:
                     break;
             }
@@ -378,6 +390,11 @@ public class KurentoHandler extends TextWebSocketHandler {
         kurentoRoomManager.leave(kurentoRoom, user);
         redisService.decrementUserCount(kurentoRoom);
         chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+
+        // 퇴장한 사용자의 Rate Limit 항목 정리 — sender 및 target 양방향 제거
+        final String leavingUserId = user.getUserId();
+        peerSetupFailureTimestamps.keySet().removeIf(key ->
+            key.startsWith(leavingUserId + ":") || key.endsWith(":" + leavingUserId));
     }
 
     /**
@@ -400,7 +417,10 @@ public class KurentoHandler extends TextWebSocketHandler {
             // 유저명을 통해 session 값을 가져온다
             final KurentoUserSession sender = participantService.getParticipant(message.getRoomId(), senderUserId);
             if (sender == null) {
-                throw new ChatForYouException(ErrorCode.USER_NOT_FOUND, senderUserId);
+                // 인메모리 방 참가자 조회 실패는 "일시적 부재"(JOIN 직후 상대 퇴장 경쟁 조건)이지
+                // "존재하지 않는 계정(U001)"이 아니다. 프론트가 인증 에러로 오인하여 leaveRoom 하지 않도록
+                // 의미가 분리된 K008(PEER_NOT_IN_ROOM)을 전송한다.
+                throw new ChatForYouException(ErrorCode.PEER_NOT_IN_ROOM, senderUserId);
             }
             // jsonMessage 에서 sdpOffer 값을 가져온다
             final String sdpOffer = message.getSdpOffer();
@@ -454,6 +474,64 @@ public class KurentoHandler extends TextWebSocketHandler {
             user,
             KurentoMessageBuilder.textOverlaySuccess()
         );
+    }
+
+    /**
+     * 클라이언트에서 peer 셋업 실패를 보고할 때 인증·권한을 검증하고 로그를 기록한다.
+     * Rate Limit 초과 시 silently drop하여 남용을 방지한다.
+     *
+     * @param message targetUserId와 phase를 포함한 RTC 메시지
+     * @param user    보고한 참가자 세션
+     */
+    private void processParticipantReceiveFailed(KurentoRTCMessage message, KurentoUserSession user) {
+        if (user == null) {
+            log.warn("PARTICIPANT_RECEIVE_FAILED: 인증되지 않은 세션 요청");
+            return;
+        }
+
+        final String senderId = user.getUserId();
+        final String targetUserId = message.getTargetUserId();
+        // null/blank guard — 조작된 메시지로 인한 rate-limit 오염 방지
+        if (targetUserId == null || targetUserId.isBlank()) {
+            log.warn("PARTICIPANT_RECEIVE_FAILED: targetUserId 누락, 무시 (senderId={})", senderId);
+            return;
+        }
+        final String rawPhase = message.getPhase();
+        final String phase = (rawPhase == null || rawPhase.isBlank()) ? "unknown" : rawPhase;
+        final String roomId = user.getRoomId();
+
+        if (participantService.getParticipant(roomId, targetUserId) == null) {
+            log.warn("PARTICIPANT_RECEIVE_FAILED: targetUserId가 방 멤버 아님: roomId={}, targetUserId={}", roomId, targetUserId);
+            return;
+        }
+
+        if (isRateLimited(senderId, targetUserId)) {
+            log.debug("PARTICIPANT_RECEIVE_FAILED rate-limited: senderId={}, targetUserId={}", senderId, targetUserId);
+            return;
+        }
+
+        log.warn("WebRTC peer 설정 실패 보고: roomId={}, senderId={}, targetUserId={}, phase={}",
+                roomId, senderId, targetUserId, phase);
+    }
+
+    /**
+     * (senderId, targetUserId) 조합의 10초 윈도우 내 호출 횟수가 RATE_LIMIT_MAX를 초과했는지 확인한다.
+     * 초과 시 true를 반환하여 silently drop 처리를 유도한다.
+     *
+     * @param senderId     보고한 참가자 userId
+     * @param targetUserId 실패 대상 참가자 userId
+     * @return 호출 횟수가 초과되면 true
+     */
+    private boolean isRateLimited(String senderId, String targetUserId) {
+        final String key = senderId + ":" + targetUserId;
+        final long now = System.currentTimeMillis();
+        peerSetupFailureTimestamps.compute(key, (k, times) -> {
+            if (times == null) times = new ArrayList<>();
+            times.removeIf(t -> now - t > RATE_LIMIT_WINDOW_MS);
+            times.add(now);
+            return times;
+        });
+        return peerSetupFailureTimestamps.get(key).size() > RATE_LIMIT_MAX;
     }
 
     /**

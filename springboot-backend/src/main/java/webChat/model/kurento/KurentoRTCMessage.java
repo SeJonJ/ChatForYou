@@ -12,6 +12,9 @@ import webChat.utils.JsonUtils;
 public class KurentoRTCMessage extends KurentoMessage {
     private String sdpOffer;
     private JsonObject candidate;
+    // PARTICIPANT_RECEIVE_FAILED 시그널에서 사용하는 필드
+    private String targetUserId;
+    private String phase;
 
     public static KurentoRTCMessage of(String jsonStr){
         return JsonUtils.jsonToObj(jsonStr, KurentoRTCMessage.class);

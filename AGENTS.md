@@ -1,6 +1,7 @@
 # AGENTS.md
 
 이 저장소에서 작업하는 에이전트는 공통 규칙을 먼저 `AGENT_GUIDE.md`에서 확인한다.
+Codex로 작업하는 경우 `CODEX.md`를 함께 읽고, Codex-specific 실행 차이는 `CODEX.md`를 따른다.
 
 ## Project-Local Codex
 Run Codex for this repository with `CODEX_HOME=$PWD/.codex codex` or `./scripts/run-codex-local.sh`.

@@ -151,7 +151,7 @@ public abstract class InstanceProvider {
             log.debug("쿠키 응답 이벤트 발행 완료: {} -> {}", instanceId, requesterId);
 
         } catch (Exception e) {
-            log.error("쿠키 응답 이벤트 발행 실패: {}", e.getMessage());
+            log.error("쿠키 응답 이벤트 발행 실패", e);
         }
     }
 
@@ -289,7 +289,7 @@ public abstract class InstanceProvider {
                 log.warn("CookieCheckEvent가 초기화되지 않음");
             }
         } catch (Exception e) {
-            log.error("쿠키 응답 이벤트 처리 실패: {}", e.getMessage());
+            log.error("쿠키 응답 이벤트 처리 실패", e);
         }
     }
 
@@ -304,7 +304,7 @@ public abstract class InstanceProvider {
                 log.warn("CookieCheckEvent가 초기화되지 않음");
             }
         } catch (Exception e) {
-            log.error("쿠키 발견 이벤트 처리 실패: {}", e.getMessage());
+            log.error("쿠키 발견 이벤트 처리 실패", e);
         }
     }
 

@@ -12,8 +12,10 @@ color: red
 
 **역할 경계**:
 - ✅ 담당: 시나리오 설계, 통합 테스트(`@SpringBootTest`), HTTP 계층(`@WebMvcTest`), 경계값, 동시성
+- ✅ 담당: 04-analyze의 `QA Coverage Verification` 보조 의견 제공
 - ❌ 미담당: Service 단위 테스트 (`@ExtendWith(MockitoExtension)`) → 백엔드 전문가 담당
 - ❌ 미담당: 프론트 테스트 — 프론트는 코드 컨벤션 검증만으로 충분
+- ❌ 미담당: 04 본문 작성, 04 판정, APPROVED/FAIL/BLOCKED 판단, external review 판단
 
 ---
 
@@ -103,7 +105,19 @@ assertThat(result.getRoomId()).isEqualTo(roomId);
 5. @SpringBootTest 기반 통합/시나리오 테스트 작성 (최소화)
 6. backend-test-convention-checker로 컨벤션 검증
 7. 결과를 팀 리더에게 보고
+8. 팀 리더가 04-analyze를 작성할 때 `QA Coverage Verification` 보조 의견만 제공
 ```
+
+### 04-analyze 보조 의견 범위
+
+QA 전문가는 04 본문 작성자가 아니다. 아래 범위만 팀 리더에게 전달한다:
+- 커버한 테스트 케이스
+- 미커버 테스트 케이스
+- 의도적으로 제외한 테스트 케이스와 이유
+- 설계 요구사항 대비 테스트 커버리지 충분성 판단
+- 추가 권장 시나리오
+
+QA 전문가는 04의 설계-구현 gap 최종 판단, APPROVED/FAIL/BLOCKED 판정, external review 판단을 담당하지 않는다.
 
 ---
 
@@ -112,6 +126,7 @@ assertThat(result.getRoomId()).isEqualTo(roomId);
 - **프로덕션 코드(`src/main/`) 수정 금지** — 백엔드 전문가 담당
 - **Service 단위 테스트 작성 금지** — 백엔드 전문가 담당
 - **프론트 테스트 작성 금지** — 프론트는 컨벤션 검증만으로 충분
+- **04 본문 작성 금지** — QA Coverage Verification 보조 의견만 제공
 - **commit / push 금지**
 - 테스트 작성 전 반드시 backend-test-layer skill을 읽고 기준을 확인
 - 테스트 작성 완료 후 반드시 backend-test-convention-checker로 검증

@@ -31,6 +31,8 @@ import webChat.model.record.RecordingInfo;
 import webChat.repository.kurento.KurentoCompositeMap;
 import webChat.repository.kurento.KurentoPipelineMap;
 import webChat.repository.kurento.KurentoRecorderMap;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 import webChat.service.chatroom.participant.KurentoParticipantService;
 
 import javax.annotation.PreDestroy;
@@ -171,7 +173,7 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       Composite composite = KurentoCompositeMap.getComposite(roomId);
 
       if (composite == null) {
-        throw new RuntimeException("Composite not found for room: " + roomId);
+        throw new ChatForYouException(ErrorCode.KURENTO_COMPOSITE_NOT_FOUND, "roomId=" + roomId);
       }
 
       // Composite와 같은 pipeline에서 RecorderEndpoint 생성
@@ -202,7 +204,7 @@ public class KurentoRoom extends ChatRoom implements Closeable {
       log.error("Failed to start room recording for room {}: {}", this.getRoomId(), e.getMessage());
       // 실패 시 리소스 정리 및 Redis 상태 초기화
       this.cleanupRoomRecording();
-      throw new RuntimeException("Failed to start room recording", e);
+      throw new ChatForYouException(ErrorCode.RECORDING_START_FAILED, "roomId=" + this.getRoomId(), e);
     }
   }
 

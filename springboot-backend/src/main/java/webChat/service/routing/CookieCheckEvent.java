@@ -147,7 +147,7 @@ public class CookieCheckEvent {
             return null;
 
         } catch (Exception e) {
-            log.error("Phase 1 오류: {}", e.getMessage());
+            log.error("Phase 1 오류", e);
             return null;
         }
     }
@@ -193,7 +193,7 @@ public class CookieCheckEvent {
                     currentInterval = Math.min((int)(currentInterval * BACKOFF_MULTIPLIER), MAX_INTERVAL_MS);
 
                 } catch (Exception e) {
-                    log.warn("Phase 2 시도 {}/{} 실패: {}", attempt, optimalRetries, e.getMessage());
+                    log.warn("Phase 2 시도 {}/{} 실패", attempt, optimalRetries, e);
                     Thread.sleep(currentInterval);
                 }
 
@@ -211,7 +211,7 @@ public class CookieCheckEvent {
             return null;
 
         } catch (Exception e) {
-            log.error("Phase 2 오류: {}", e.getMessage());
+            log.error("Phase 2 오류", e);
             return null;
         }
     }
@@ -275,7 +275,7 @@ public class CookieCheckEvent {
             return isValid;
 
         } catch (Exception e) {
-            log.warn("실제 쿠키 검증 실패: {}", e.getMessage());
+            log.warn("실제 쿠키 검증 실패", e);
             return false;
         }
     }
@@ -331,7 +331,7 @@ public class CookieCheckEvent {
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
             log.debug("쿠키 요청 이벤트 발행 완료: {}", instanceProvider.getInstanceId());
         } catch (Exception e) {
-            log.error("쿠키 요청 이벤트 발행 실패: {}", e.getMessage());
+            log.error("쿠키 요청 이벤트 발행 실패", e);
         }
     }
 
@@ -346,7 +346,7 @@ public class CookieCheckEvent {
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
             log.info("쿠키 응답 이벤트 발행 완료: {} -> {} (쿠키: {})", instanceProvider.getInstanceId(), requesterId, cookie);
         } catch (Exception e) {
-            log.error("쿠키 응답 이벤트 발행 실패: {}", e.getMessage());
+            log.error("쿠키 응답 이벤트 발행 실패", e);
         }
     }
 
@@ -384,7 +384,7 @@ public class CookieCheckEvent {
                 }
             }
         } catch (Exception e) {
-            log.error("쿠키 응답 이벤트 처리 실패: {}", e.getMessage());
+            log.error("쿠키 응답 이벤트 처리 실패", e);
         }
     }
 
@@ -414,7 +414,7 @@ public class CookieCheckEvent {
                 }
             }
         } catch (Exception e) {
-            log.error("쿠키 발견 이벤트 처리 실패: {}", e.getMessage());
+            log.error("쿠키 발견 이벤트 처리 실패", e);
         }
     }
 
@@ -432,7 +432,7 @@ public class CookieCheckEvent {
         try {
             return new String(response.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8).trim();
         } catch (Exception e) {
-            log.error("Response instanceId 추출 실패: {}", e.getMessage());
+            log.error("Response instanceId 추출 실패", e);
             return "";
         }
     }
@@ -483,7 +483,7 @@ public class CookieCheckEvent {
             kafkaTemplate.send(KafkaTopic.SERVER_LIFECYCLE_EVENTS, KafkaSendKey.EVENT_TYPE, event);
             log.debug("쿠키 발견 이벤트 발행 완료");
         } catch (Exception e) {
-            log.error("쿠키 발견 이벤트 발행 실패: {}", e.getMessage());
+            log.error("쿠키 발견 이벤트 발행 실패", e);
         }
     }
 }

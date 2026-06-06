@@ -180,6 +180,39 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("EXTERNAL_API_ERROR(I001) 발생 시 502 응답 반환")
+    void handleChatForYouException_externalApiError_returns502() {
+        // given
+        ChatForYouException ex = new ChatForYouException(ErrorCode.EXTERNAL_API_ERROR, "GET 502: upstream error");
+
+        // when
+        ResponseEntity<ErrorResponse> response = handler.handleChatForYouException(ex);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getCode()).isEqualTo("I001");
+        assertThat(response.getBody().getStatus()).isEqualTo(502);
+    }
+
+    @Test
+    @DisplayName("JSON_CONVERSION_ERROR(I002) 발생 시 500 응답 반환")
+    void handleChatForYouException_jsonConversionError_returns500() {
+        // given
+        ChatForYouException ex = new ChatForYouException(ErrorCode.JSON_CONVERSION_ERROR, "object→json 변환 실패",
+                new RuntimeException("jackson error"));
+
+        // when
+        ResponseEntity<ErrorResponse> response = handler.handleChatForYouException(ex);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getCode()).isEqualTo("I002");
+        assertThat(response.getBody().getStatus()).isEqualTo(500);
+    }
+
+    @Test
     @DisplayName("AsyncRequestNotUsableException 래핑 예외는 204로 무시한다")
     void handleException_asyncRequestWrapped_returnsNoContent() {
         // given

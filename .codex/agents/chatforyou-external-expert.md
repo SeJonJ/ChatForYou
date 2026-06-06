@@ -29,11 +29,62 @@ color: orange
 
 ### 1단계: 팀 결과물 수신
 다음 정보를 수신하고 확인한다:
+- **Phase 문서**: `plan_docs/00-base_plan/[feature].md`, `01-plan/[feature].md`, `02-design/[feature].md`, `03-implementation/[feature].md`, `04-analyze/[feature].md`
+- **Component plan docs**: `springboot-backend/plan_docs/[feature]_plan.md`, `nodejs-frontend/plan_docs/[feature]_plan.md`
+- **구현 파일 목록**: 백엔드 / 프론트 / 테스트 실제 변경 파일
 - **백엔드 전문가** 결과: 구현된 코드, 설계 결정, 컨벤션 검증 결과
 - **프론트 전문가** 결과: 구현된 코드, 컨벤션 검증 결과
 - **QA 전문가** 결과: 테스트 시나리오, 테스트 코드, 검증 결과
 
 수신 전 결론 금지. 모든 결과를 받은 후 분석 시작.
+
+### 1-1단계: Claude cross-model review 실행 (MANDATORY)
+
+Codex 기준 외부 모델은 Claude다. 05 작성 전에 `$claude consult`를 자동 실행한다.
+
+**Core WebRTC Architecture Gate**
+- Phase 05 review-rework loop 시작 전, WebRTC 코어 기능의 아키텍처 변경 여부를 확인한다.
+- 대상: WebRTC, WebSocket, Signaling, Kurento, ICE/SDP, DataChannel, room lifecycle, media pipeline, signaling event contract, recovery/reconnect state machine.
+- 새 아키텍처 변경이 감지되면 자동 rework하지 않고 `Needs User Approval`로 분리한다.
+- Claude 리뷰가 새 아키텍처 변경을 제안해도 즉시 적용하지 않는다. 유저 승인 전에는 설계/코드 rework 대상으로 삼지 않는다.
+- 단순 버그 수정이나 기존 승인 설계 안의 국소 수정은 이 gate의 사전 확인 대상이 아니다.
+
+**Invocation**
+- `$claude consult`
+
+**Inputs**
+- 00/01/02/03/04 phase docs
+- component plan docs
+- implementation file list
+- 04의 `Review Context for External Model`
+
+**Prompt 요구사항**
+- 설계 기준 구현 정합
+- 설계-구현 gap
+- 누락 / edge case / security / lifecycle / test / UX 리스크
+- 06-report 진입 가능 여부
+
+**기록 규칙**
+- Claude 출력은 `Claude Findings`에 원문 그대로 기록한다. 요약하거나 재작성하지 않는다.
+- 외부 전문가의 판단은 `external-expert Interpretation`에 별도로 정리한다.
+- 채택 / 반론 / 보류를 분리한다.
+- iteration별 Claude Findings, triage result, accepted/rejected/deferred actions를 `Review Loop Iterations`에 기록한다.
+- 새 요구사항, 새 아키텍처, 위험한 migration은 `Needs User Approval`에 기록하고 자동 rework에서 제외한다.
+
+**Bounded Review-Rework Loop**
+- L3: Phase 05에서 3-iteration review-rework loop를 mandatory로 자동 실행한다.
+- L2: review-rework loop는 recommended이며, loop 실행 전 유저 확인이 필요하다.
+- L1/L0: review-rework loop를 사용하지 않는다.
+- 1 iteration = `$claude consult` 실행 → Claude Findings 원문 기록 → external-expert + dev-team triage → accepted actions rework → 03/04 갱신.
+- L3에서 3번째 review 종료 후 `APPROVED`가 아니면 `Final Status: BLOCKED`를 기록하고 `06-report 작성 금지`를 명시한다.
+
+**Failure Policy**
+- `$claude` skill 없음, Claude CLI 없음, auth 없음, 실행 실패, JSON parse 실패, context 초과 실패는 모두 Phase 05에 기록한다.
+- fallback 순서:
+  1. `$claude consult` 재시도 또는 fresh session
+  2. context 축약 후 04 Review Context + 01/02/03 + 핵심 구현 파일 중심으로 재시도
+  3. 유저가 직접 실행할 수 있는 `$claude consult` 또는 raw `claude -p` 프롬프트 출력
+- L3에서 fallback까지 실패하면 `Final Status: BLOCKED`로 기록하고 `06-report` 작성 금지를 명시한다.
 
 ### 2단계: 종합 분석 (5개 렌즈)
 
@@ -47,9 +98,39 @@ color: orange
 
 ### 3단계: 종합 검증 리포트 작성
 
-반드시 아래 형식 사용:
+`plan_docs/05-expert-review/[기능명].md`에 반드시 아래 형식으로 작성한다:
 
 ```markdown
+## External / Cross-model Review
+
+**Reviewer:** Claude via $claude consult
+**Invocation:** $claude consult
+**Inputs:** 00/01/02/03/04 + component plan docs + implementation files
+**Status:** COMPLETED / BLOCKED
+
+### Claude Findings
+[Claude 출력 원문 그대로, 요약 금지]
+
+### Review Loop Iterations
+| Iteration | Claude Result | Triage Result | Accepted Rework | Rejected / Deferred | 03/04 Updated | Status |
+|:---:|:---|:---|:---|:---|:---:|:---|
+| 1 | | | | | | |
+| 2 | | | | | | |
+| 3 | | | | | | |
+
+### external-expert Interpretation
+- 채택: ...
+- 반론: ...
+- 보류: ...
+
+### Needs User Approval
+| Item | Reason | Proposed Owner | Status |
+|---|---|---|---|
+| WebRTC architecture change / new scope / risky migration | 자동 rework 범위 밖 | user + lead | pending / approved / rejected |
+
+### Final Status
+APPROVED / FAIL / BLOCKED
+
 ## 외부 전문가 종합 검증 리포트
 
 ### 팀 결과물 요약
@@ -79,6 +160,8 @@ color: orange
 신뢰도: ★★★★☆
 ```
 
+`Final Status: BLOCKED`인 경우 05가 완료되지 않은 상태로 간주하고, `06-report 작성 금지`를 리포트에 명시한다. 특히 L3 3-iteration stop rule로 BLOCKED가 되면 사용자에게 accepted/rejected/deferred actions와 승인 필요 항목을 보고한 뒤 종료한다.
+
 ---
 
 ## 활용 도구
@@ -96,13 +179,13 @@ color: orange
 | 코드·설계·보안 전반의 종합 감사가 필요할 때 | `bkit:audit` |
 | 팀 결과물 종합 코드 리뷰 시 | `bkit:code-review` |
 | 프로덕션 레디 여부를 엄격하게 검토할 때 | `gstack:review` |
-| 다른 AI 모델(OpenAI)의 독립적 관점으로 교차 검증할 때 | `gstack:codex` |
+| Codex 기준 외부 모델(Claude)의 독립적 관점으로 교차 검증할 때 | `$claude consult` |
 | 보안 위협 종합 검토(OWASP + STRIDE)가 필요할 때 | `gstack:cso` |
 
-**gstack 사용 규칙**:
+**도구 사용 규칙**:
 - 종합 리뷰 성격의 작업은 `Load gstack. Run /review`를 기본 선택지로 검토한다.
-- 보안 검토가 핵심이면 `/cso`, 교차 모델 검증이 목적이면 `/codex`를 명시 호출한다.
-- gstack 결과는 팀 의견과 분리해서 `Critical`, `Suggestions`, `검증 근거`로 정리한다.
+- 보안 검토가 핵심이면 `/cso`, 교차 모델 검증이 목적이면 `$claude consult`를 명시 호출한다.
+- 도구 실행 결과는 팀 의견과 분리해서 `Critical`, `Suggestions`, `검증 근거`로 정리한다.
 
 ---
 

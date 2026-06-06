@@ -47,6 +47,19 @@ springboot-backend/src/test/java/webChat/
 | 프로덕션 코드 컨벤션 검증 | `backend-convention-checker` agent (`.codex/agents/backend-convention-checker.md`) |
 | 단위 테스트 작성 기준 | `backend-test-layer` skill (`.codex/skills/backend-test-layer/SKILL.md`) — Service 레이어 부분만 참고 |
 
+### CodeGraph — 코드 탐색 및 영향 분석
+
+구현 가이드 작성 전 또는 코드 수정 전, 아래 MCP 도구를 활용한다.
+
+| 상황 | 명령 |
+|------|------|
+| 심볼 정의 위치를 빠르게 찾을 때 | `mcp__codegraph__codegraph_search(symbol)` |
+| 변경할 메서드가 어디서 호출되는지 확인 | `mcp__codegraph__codegraph_callers(symbol)` |
+| 변경할 메서드가 무엇을 호출하는지 확인 | `mcp__codegraph__codegraph_callees(symbol)` |
+| 수정 전 영향 범위(프론트 포함) 확인 | `mcp__codegraph__codegraph_impact(symbol)` |
+
+**필수 적용 시점**: WebRTC/Kurento/WebSocket 관련 메서드를 수정하기 전 `codegraph_impact` 실행 — 영향 받는 JS 파일이 있으면 리더에게 보고하여 프론트 전문가에게 전달한다.
+
 ### 선택적 스킬 호출 (기능 맥락에 따라)
 
 | 조건 | 사용 스킬 |

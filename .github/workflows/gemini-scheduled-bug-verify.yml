@@ -69,7 +69,7 @@ jobs:
           ISSUE_TITLE: ${{ env.title }}
           ISSUE_BODY: ${{ env.body }}
           ISSUE_STATE: ${{ env.state }}
-          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
           gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'

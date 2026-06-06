@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import webChat.exception.ChatForYouException;
+import webChat.exception.ErrorCode;
 
 public class JsonUtils {
 
@@ -33,7 +35,7 @@ public class JsonUtils {
             try{
                 return gson.fromJson(jsonString, clazz);
             }catch (Exception e2){
-                throw new RuntimeException("Failed to convert JSON to Object", e);
+                throw new ChatForYouException(ErrorCode.JSON_CONVERSION_ERROR, "json→object 변환 실패", e);
             }
         }
     }
@@ -42,7 +44,7 @@ public class JsonUtils {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to convert Object to JSON", e);
+            throw new ChatForYouException(ErrorCode.JSON_CONVERSION_ERROR, "object→json 변환 실패", e);
         }
     }
 

@@ -39,7 +39,7 @@ public class SseService {
 
 
     // 핑 관련 이벤트 전송
-    @Scheduled(fixedDelay = 10_000L * 7) // 7분
+    @Scheduled(fixedDelay = 10_000L * 7) // 70초 keep-alive ping (10_000ms × 7 = 70,000ms)
     public void sendPingToClients() {
         sendEventToAll("ping", "keep-alive");
     }

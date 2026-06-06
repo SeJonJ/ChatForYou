@@ -4,7 +4,7 @@ description: >
   외부 전문가가 plan_docs/N월_[기능]_plan.md 로 작성한 설계를 Claude가 검증하는 3단계 워크플로우.
   1) 외부 설계 문서 + 관련 MD 분석 → 2) 타당성 검증 및 수정(이유 명시) → 3) 백엔드/프론트 구현 가이드 작성.
   유저가 설계·분석·아키텍처·검토 등을 요청할 때 반드시 사용.
-  CLAUDE.md 규칙 4번(설계 검증 형식)과 6·7번(PLAN 파일 운영)을 통합한 워크플로우.
+  AGENT_GUIDE.md, docs/agent/pdca-templates.md, docs/agent/output-contract.md의 설계 검증·PLAN 파일 운영 규칙을 통합한 워크플로우.
 triggers:
   - "설계"
   - "아키텍처"
@@ -60,9 +60,9 @@ ARCHITECT_GUIDE.md의 01-05 표준과 핵심 원칙(Design-First, No-Code Mandat
 ```
 plan_docs/
   N월_[기능]_plan.md          ← 논의 결론, 유의점, 문서 맵핑
-  01-plan/                    ← L1 System Context + L2 Data Model
-  02-design/                  ← L3 API Interface + Sequence Diagram
-  03-implementation/          ← L4 수정 파일 목록, 알고리즘, Config 변경
+  01-plan/                    ← AL1 System Context + AL2 Data Model
+  02-design/                  ← AL3 API Interface + Sequence Diagram
+  03-implementation/          ← AL4 수정 파일 목록, 알고리즘, Config 변경
 ```
 
 > 유저 승인 후 Path A의 구현 가이드 작성 단계로 진행
@@ -76,7 +76,7 @@ plan_docs/
 다음 파일을 **모두** 읽는다:
 
 1. `plan_docs/N월_[기능]_plan.md` — 외부 전문가 설계 원본
-2. `CLAUDE.md` — 프로젝트 개발 원칙 및 컨벤션
+2. `AGENT_GUIDE.md` — 프로젝트 공통 개발 원칙 및 컨벤션 (SSOT)
 3. `docs/springboot_backend.md` — 백엔드 컨벤션
 4. `docs/nodejs_frontend.md` — 프론트 컨벤션
 5. 관련 기존 plan 파일 (유사 기능이 있는 경우)

@@ -175,9 +175,10 @@ settings.local.json
 springboot-backend/.claude
 nodejs-frontend/.claude
 
-## gemini 관련
+## Google AI Pro 관련
 .gemini/
-GEMINI.md
+.context
+.antigravitycli
 
 # cursor 관련
 .cursor
@@ -206,6 +207,7 @@ GEMINI.md
 .codex/.tmp/
 .codex/skills/.system
 .codex/config.toml
+.codex/*.sqlite*
 
 # 테스트 결과물
 test-results/
@@ -225,6 +227,7 @@ plan_docs/02**
 plan_docs/03**
 plan_docs/04**
 plan_docs/05**
+plan_docs/06**
 
 springboot-backend/plan_docs/*
 nodejs-frontend/plan_docs/*
@@ -232,4 +235,6 @@ nodejs-frontend/plan_docs/*
 # ========================================
 # 로컬 전용 에이전트 설정 (커밋 금지)
 # ========================================
-.local/
+.local/.codegraph/
+.codegraph/
+.local/local_agent_guide.md

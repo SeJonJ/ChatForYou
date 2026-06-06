@@ -9,6 +9,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 import webChat.model.kafka.KafkaServerEvent;
 import webChat.model.kafka.ServerEvent;
+import webChat.support.ExternalTest;
 
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Slf4j
+@ExternalTest
 public class KafkaTest {
     @MockBean
     private ServletServerContainerFactoryBean webSocketContainer;

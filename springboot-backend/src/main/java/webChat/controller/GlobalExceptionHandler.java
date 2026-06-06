@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import webChat.exception.ChatForYouException;
 import webChat.exception.ErrorCode;
@@ -89,6 +90,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(buildErrorResponse(errorCode.getStatus().value(), errorCode.getCode(), errorCode.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncRequestTimeout(AsyncRequestTimeoutException e) {
+        // SSE/DeferredResult 연결 정상 타임아웃 — 에러 응답 불필요.
+        // 응답이 이미 text/event-stream으로 커밋된 상태에서 JSON ErrorResponse를
+        // 반환하려 하면 HttpMessageNotWritableException이 연쇄 발생한다.
+        // void 반환으로 응답 바디 쓰기를 생략하고, emitter 정리는
+        // SseService.registerEmitter()의 onTimeout() 콜백이 담당한다.
+        log.debug("비동기 요청 타임아웃 (SSE 정상 종료): {}", e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,9 +1,11 @@
 package webChat.utils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import webChat.config.ThreadPoolConfig;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -51,57 +53,65 @@ public class ThreadUtils {
      * @see ExecutorService
      */
     public static CompletableFuture<Boolean> runTask(Task task, int retry, long sleep, String jobName) {
+        Map<String, String> callerContextMap = MDC.getCopyOfContextMap(); // 호출 스레드 MDC context 캡처
         CompletableFuture<Boolean> future = new CompletableFuture<>(); // 작업 결과를 반환할 CompletableFuture 생성
 
         executor.submit(() -> { // 비동기 작업 실행
-            int attempts = 0; // 현재 시도 횟수
-            boolean isSuccess = false; // 작업 성공 여부
+            if (callerContextMap != null) {
+                MDC.setContextMap(callerContextMap);
+            }
+            try {
+                int attempts = 0; // 현재 시도 횟수
+                boolean isSuccess = false; // 작업 성공 여부
 
-            while (attempts < retry && !isSuccess) { // 최대 재시도 횟수와 성공 여부 확인
-                try {
-                    // 스레드가 인터럽트 상태인지 확인 (필요 시 즉시 중단)
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedException("Thread was interrupted before task execution");
-                    }
+                while (attempts < retry && !isSuccess) { // 최대 재시도 횟수와 성공 여부 확인
+                    try {
+                        // 스레드가 인터럽트 상태인지 확인 (필요 시 즉시 중단)
+                        if (Thread.currentThread().isInterrupted()) {
+                            throw new InterruptedException("Thread was interrupted before task execution");
+                        }
 
-                    // 작업 실행
-                    isSuccess = task.execute();
+                        // 작업 실행
+                        isSuccess = task.execute();
 
-                    if (isSuccess) { // 작업 성공 시
-                        log.info("=== {} Job Success ===", jobName);
-                        future.complete(true); // 성공 결과를 CompletableFuture에 전달
-                    } else { // 작업 실패 시
+                        if (isSuccess) { // 작업 성공 시
+                            log.info("=== {} Job Success ===", jobName);
+                            future.complete(true); // 성공 결과를 CompletableFuture에 전달
+                        } else { // 작업 실패 시
+                            attempts++; // 시도 횟수 증가
+                            if (attempts < retry) { // 재시도 가능하면 대기 후 재실행
+                                log.info("=== try {} Job :: {}", jobName, attempts);
+                                Thread.sleep(sleep); // 재시도 전 대기
+                            } else { // 최대 재시도 횟수 초과 시 실패 처리
+                                log.warn("=== {} Job Failed after {} attempts ===", jobName, attempts);
+                                future.complete(false); // 실패 결과를 CompletableFuture에 전달
+                            }
+                        }
+                    } catch (InterruptedException ie) { // 인터럽트 예외 처리
+                        Thread.currentThread().interrupt(); // 인터럽트 상태 복구
+                        log.warn("Interrupted during retry for job: {}", jobName, ie);
+                        future.completeExceptionally(ie); // 예외를 CompletableFuture에 전달
+                        break; // 루프 종료
+                    } catch (RuntimeException e) { // 일반 예외 처리
                         attempts++; // 시도 횟수 증가
                         if (attempts < retry) { // 재시도 가능하면 대기 후 재실행
                             log.info("=== try {} Job :: {}", jobName, attempts);
-                            Thread.sleep(sleep); // 재시도 전 대기
+                            try {
+                                Thread.sleep(sleep); // 재시도 전 대기
+                            } catch (InterruptedException ie) { // 대기 중 인터럽트 발생 시 처리
+                                Thread.currentThread().interrupt(); // 인터럽트 상태 복구
+                                log.warn("Interrupted while sleeping between retries", ie);
+                                future.completeExceptionally(ie); // 예외를 CompletableFuture에 전달
+                                break; // 루프 종료
+                            }
                         } else { // 최대 재시도 횟수 초과 시 실패 처리
-                            log.warn("=== {} Job Failed after {} attempts ===", jobName, attempts);
-                            future.complete(false); // 실패 결과를 CompletableFuture에 전달
+                            log.warn("=== {} Job Failed :: {}", jobName, attempts);
+                            future.completeExceptionally(e); // 최종 실패 예외를 CompletableFuture에 전달
                         }
-                    }
-                } catch (InterruptedException ie) { // 인터럽트 예외 처리
-                    Thread.currentThread().interrupt(); // 인터럽트 상태 복구
-                    log.warn("Interrupted during retry for job: {}", jobName, ie);
-                    future.completeExceptionally(ie); // 예외를 CompletableFuture에 전달
-                    break; // 루프 종료
-                } catch (RuntimeException e) { // 일반 예외 처리
-                    attempts++; // 시도 횟수 증가
-                    if (attempts < retry) { // 재시도 가능하면 대기 후 재실행
-                        log.info("=== try {} Job :: {}", jobName, attempts);
-                        try {
-                            Thread.sleep(sleep); // 재시도 전 대기
-                        } catch (InterruptedException ie) { // 대기 중 인터럽트 발생 시 처리
-                            Thread.currentThread().interrupt(); // 인터럽트 상태 복구
-                            log.warn("Interrupted while sleeping between retries", ie);
-                            future.completeExceptionally(ie); // 예외를 CompletableFuture에 전달
-                            break; // 루프 종료
-                        }
-                    } else { // 최대 재시도 횟수 초과 시 실패 처리
-                        log.warn("=== {} Job Failed :: {}", jobName, attempts);
-                        future.completeExceptionally(e); // 최종 실패 예외를 CompletableFuture에 전달
                     }
                 }
+            } finally {
+                MDC.clear();
             }
         });
 
@@ -131,8 +141,7 @@ public class ThreadUtils {
                         try {
                             onSuccess.accept(result);
                         } catch (Exception e) {
-                            log.error("Unknown Runtime Exception | Message: {}, Details: {}",
-                                    e.getMessage(), e.getStackTrace());
+                            log.error("Unknown Runtime Exception | Message: {}", e.getMessage(), e);
                         }
                     }
                     return result;

@@ -75,7 +75,7 @@ public class FirebaseConfig {
                 }
             }
 
-            throw new RuntimeException("Firebase 설정 파일을 찾을 수 없습니다.");
+            throw new IllegalStateException("Firebase 설정 파일 누락", new IOException("firebase/google_account_key.json 및 대체 경로 모두 존재하지 않습니다."));
         }
     }
 }

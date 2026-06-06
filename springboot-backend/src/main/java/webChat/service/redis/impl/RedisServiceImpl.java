@@ -119,7 +119,7 @@ public class RedisServiceImpl implements RedisService {
         try {
             return objectMapper.readValue(json, typeReference);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to convert JSON to object", e);
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR, "Redis JSON 역직렬화 실패", e);
         }
     }
 
@@ -230,7 +230,7 @@ public class RedisServiceImpl implements RedisService {
                 keys.add(new String(cursor.next(), StandardCharsets.UTF_8));
             }
         } catch (Exception e) {
-            throw new RuntimeException("Error occurred while scanning Redis keys", e);
+            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR, "Redis key scan 실패", e);
         }
 
         return keys;
@@ -303,7 +303,7 @@ public class RedisServiceImpl implements RedisService {
                     keysToDelete.add(new String(cursor.next(), StandardCharsets.UTF_8).replace("\"", ""));
                 }
             } catch (Exception e) {
-                log.error("Error occurred while scanning and deleting keys ::: {}", e.getMessage());
+                log.error("Error occurred while scanning and deleting keys", e);
                 return false;
             }
 
@@ -312,7 +312,7 @@ public class RedisServiceImpl implements RedisService {
             }
             return true;
         } catch (RedisException e) {
-            log.error("UnExcepted Redis Exception ::: {}", Arrays.toString(e.getStackTrace()));
+            log.error("UnExpected Redis Exception", e);
             return false;
         }
     }

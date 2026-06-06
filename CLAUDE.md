@@ -13,7 +13,7 @@ Before responding to any request, read the following files in order. Do not skip
 ## Start Order
 1. `AGENT_GUIDE.md`
 2. `.local/local_agent_guide.md` (if it exists)
-3. Relevant `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
+3. Relevant `plan_docs/N월_[기능]_plan.md` or `plan_docs/00-base_plan/YYYY/MM/[feature]_plan.md`
 4. Relevant component convention docs
    - `docs/springboot_backend.md`
    - `docs/nodejs_frontend.md`
@@ -30,6 +30,7 @@ Before responding to any request, read the following files in order. Do not skip
 - Do not modify `.claude/*` paths unless the user explicitly requests it — they are Claude runtime assets.
 
 ## Skill routing
+<!-- Claude/gstack specific tool routing only — not project policy. Project rules are in AGENT_GUIDE.md -->
 
 When the user's request matches an available skill, invoke it via the Skill tool. The
 skill has multi-step workflows, checklists, and quality gates that produce better
