@@ -39,6 +39,18 @@ nodejs-frontend/src/static/
 | 프론트 버그 추적 | `error-debugging:debugger` agent |
 | 프론트 코드 컨벤션 검증 | `frontend-convention-checker` agent (`.codex/agents/frontend-convention-checker.md`) |
 
+### CodeGraph — JS 코드 탐색 및 영향 분석
+
+`rtc/` 영역 수정 또는 백엔드와 시그널링 연동 변경 시 아래 MCP 도구를 활용한다.
+
+| 상황 | 명령 |
+|------|------|
+| JS 함수 정의 위치 빠르게 찾기 | `mcp__codegraph__codegraph_search(symbol)` |
+| 수정할 JS 함수의 호출처 확인 | `mcp__codegraph__codegraph_callers(symbol)` |
+| WebRTC 관련 함수 변경 시 영향 범위 확인 | `mcp__codegraph__codegraph_impact(symbol)` |
+
+**사용 기준**: `rtc/kurento-service.js` 또는 WebSocket 메시지 핸들러 수정 전 `codegraph_impact` 실행. 단순 UI(DOM/CSS) 변경은 생략 가능.
+
 ### 선택적 스킬 호출 (기능 맥락에 따라)
 
 | 조건 | 사용 스킬 |

@@ -235,4 +235,6 @@ nodejs-frontend/plan_docs/*
 # ========================================
 # 로컬 전용 에이전트 설정 (커밋 금지)
 # ========================================
-.local/
+.local/.codegraph/
+.codegraph/
+.local/local_agent_guide.md

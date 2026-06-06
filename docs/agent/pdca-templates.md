@@ -83,12 +83,13 @@ Before writing the base plan, scan the Obsidian vault for prior knowledge when
 
 1. Read the Obsidian vault's `AGENT_GUIDE.md` (vault-internal note, separate from the project root file).
 2. Read `wiki/index.md`.
-3. Search for relevant prefixed notes:
-   - `[BRAINSTORM]`
-   - `[SPEC]`
-   - `[TECH]`
-   - `[BUG]`
-   - `[POSTMORTEM]`
+3. Search for relevant prefixed notes (filename format `TAG - {Title}.md`;
+   the frontmatter `tags:` first item mirrors the category):
+   - `BRAINSTORM - `
+   - `SPEC - `
+   - `TECH - `
+   - `BUG - `
+   - `POSTMORTEM - `
 4. Read only the relevant notes needed for the task, normally 1-5 files.
 5. Summarize findings under `## 0. Prior Knowledge (Vault Scan)` in the base plan.
 
@@ -354,7 +355,7 @@ APPROVED / FAIL / BLOCKED
 ## 4. Vault Knowledge Capture
 | Prefix | Note Title | Action | Reason |
 |:---|:---|:---|:---|
-| [BUG] / [TECH] / [SPEC] / [BRAINSTORM] / [POSTMORTEM] | — | created / updated / checked-no-update / N/A | — |
+| BUG - / TECH - / SPEC - / BRAINSTORM - / POSTMORTEM - | — | created / updated / checked-no-update / N/A | — |
 ```
 
 `checked-no-update` means the vault capture check was performed, but no capture

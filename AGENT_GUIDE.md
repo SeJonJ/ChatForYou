@@ -104,6 +104,19 @@ For L1 changes that qualify for lightweight mode, confirm all L1 conditions in �
 - Remove temporary exception handling, debug traces, and placeholder notes before final delivery, or report them as remaining risks.
 - Use `chatforyou_v2` as the PR base branch when discussing PRs.
 
+### 4.1.1 CodeGraph — Code Navigation Principles
+
+CodeGraph MCP is installed. Use the following priority order for code navigation:
+
+| Purpose | Preferred tool |
+|---------|---------------|
+| Locate a symbol definition | `codegraph_search` or `codegraph_callers/callees` |
+| Assess change impact | `codegraph_impact <symbol>` |
+| Find affected test files | `codegraph_affected <file>` |
+| Plain text search | Grep (as before) |
+
+Do not force CodeGraph for simple lookups where Grep suffices. Run `codegraph_impact` before modifying any symbol with complex dependencies — especially WebRTC signaling and room lifecycle.
+
 ### 4.2 WebRTC / WebSocket Changes
 
 Any modification to WebRTC, WebSocket, signaling, Kurento, ICE/SDP, DataChannel, room lifecycle, or related client/server flows is L3.
