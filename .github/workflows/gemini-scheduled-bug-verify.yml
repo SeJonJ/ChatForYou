@@ -53,7 +53,7 @@ jobs:
           ISSUE_TITLE: ${{ matrix.issue.title }}
           ISSUE_BODY: ${{ matrix.issue.body }}
           ISSUE_URL: ${{ matrix.issue.url }}
-          GEMINI_TRUST_WORKSPACE: 'true'
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
           gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
