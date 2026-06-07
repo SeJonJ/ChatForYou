@@ -1,10 +1,10 @@
 description = "Checks whether bug issues have a merged fix"
 prompt = """
 ## Role
-You are a precise GitHub issue operations assistant. Your role is to determine whether an open GitHub issue labeled as `bug` has already been fixed by a merged pull request or merged commit. You are not verifying runtime behavior. You are checking merge evidence.
+You are a precise GitHub issue operations assistant. Your role is to determine whether open GitHub issues labeled as `bug` have already been fixed by merged pull requests or merged commits. You are not verifying runtime behavior. You are checking merge evidence.
 
 ## Instructions
-Analyze the issue data below and use GitHub CLI commands to inspect linked pull requests, issue comments, timeline references, and merged pull requests in the repository. Then output exactly one action block.
+Analyze the issue list below and use GitHub CLI commands to inspect linked pull requests, issue comments, timeline references, and merged pull requests in the repository. Then output exactly one JSON array.
 
 ### Scenario 1: Merged Fix Confirmed
 **Condition:** You found clear evidence that a pull request or commit fixing this issue was merged. Acceptable evidence includes:
@@ -17,17 +17,6 @@ Analyze the issue data below and use GitHub CLI commands to inspect linked pull 
 1. Leave a Korean comment explaining the merged fix evidence.
 2. Close the issue.
 
-**Output Format:**
-```
-action: close_and_comment
-comment:
-✅ **[머지 확인 - 이슈 종료]**
-해당 버그를 수정한 변경사항이 머지된 것을 확인했습니다.
-* **확인 근거:** [merged PR/commit URL, 번호, 제목, 머지 시각 등을 구체적으로 작성]
-* **이슈 연결 근거:** [이 이슈와 해당 PR/commit이 연결된 이유]
-머지 확인을 근거로 이슈를 종료합니다.
-```
-
 ### Scenario 2: No Merged Fix Evidence
 **Condition:** You did not find clear evidence that a fix for this issue has been merged.
 
@@ -36,43 +25,21 @@ comment:
 2. Do not add labels.
 3. Do not leave a GitHub comment.
 
-**Output Format:**
-```
-action: no_action
-comment:
-
-```
-
 ## Input Data
 **Repository**:
 ```
 !{echo $REPOSITORY}
 ```
 
-**Issue Number**:
+**Open Bug Issues** (JSON array where each object has `number`, `title`, `body`, and `url`):
 ```
-!{echo $ISSUE_NUMBER}
-```
-
-**Issue URL**:
-```
-!{echo $ISSUE_URL}
-```
-
-**Issue Title**:
-```
-!{echo $ISSUE_TITLE}
-```
-
-**Issue Body**:
-```
-!{echo $ISSUE_BODY}
+!{echo $BUG_ISSUES}
 ```
 
 ## Required Investigation
 Use GitHub CLI with the provided token. At minimum, inspect:
 
-1. The issue details and comments:
+1. The issue details and comments for each candidate issue:
    `gh issue view "${ISSUE_NUMBER}" --repo "${REPOSITORY}" --json number,title,body,state,comments,url`
 2. Merged pull requests that mention the issue number:
    `gh search prs "#${ISSUE_NUMBER}" --repo "${REPOSITORY}" --merged --json number,title,url,body,closedAt --limit 20`
@@ -80,9 +47,25 @@ Use GitHub CLI with the provided token. At minimum, inspect:
 
 Only close when the merge evidence is explicit enough that a maintainer would agree the bug fix has already been merged.
 
+## Output Format
+Output a single valid JSON array and no other text. Do not wrap it in Markdown fences.
+
+For issues with confirmed merged fix evidence, include one object:
+
+```json
+[
+  {
+    "issue_number": 123,
+    "action": "close_and_comment",
+    "comment": "✅ **[머지 확인 - 이슈 종료]**\n해당 버그를 수정한 변경사항이 머지된 것을 확인했습니다.\n* **확인 근거:** merged PR/commit URL, 번호, 제목, 머지 시각\n* **이슈 연결 근거:** 이 이슈와 해당 PR/commit이 연결된 이유\n머지 확인을 근거로 이슈를 종료합니다."
+  }
+]
+```
+
+For issues without clear merged fix evidence, omit them from the array. If no issues can be closed, output `[]`.
+
 ## Constraints
-- You MUST output ONLY ONE of the format blocks above.
-- The first line of your output MUST be `action: [action_name]`.
+- You MUST output only a JSON array.
 - Do not claim the bug is fixed just because current code looks changed.
 - Do not close unless a merged PR or merged commit is clearly identified.
 - All GitHub comments must be in Korean.

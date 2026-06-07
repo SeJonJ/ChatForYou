@@ -2,7 +2,7 @@ name: '📋 Gemini Scheduled Issue Triage'
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 3 * * *'
   pull_request:
     branches: [chatforyou_v2]
     paths: ['.github/workflows/gemini-scheduled-triage.yml']
@@ -65,7 +65,7 @@ jobs:
             --state 'open' \
             --search 'no:label OR label:"status/needs-triage"' \
             --json number,title,body \
-            --limit '100' \
+            --limit '20' \
             --repo "${GITHUB_REPOSITORY}" \
           | jq -c '.'
           )"
@@ -75,6 +75,7 @@ jobs:
         id: 'gemini_issue_analysis'
         if: |-
           ${{ steps.find_issues.outputs.issues_to_triage != '[]' }}
+        continue-on-error: true
         uses: 'google-github-actions/run-gemini-cli@v0'
         env:
           GITHUB_TOKEN: ''
@@ -112,12 +113,18 @@ jobs:
       - name: 'Collect triage output'
         id: 'collect_triage_output'
         if: |-
-          ${{ steps.find_issues.outputs.issues_to_triage != '[]' }}
+          ${{ steps.find_issues.outputs.issues_to_triage != '[]' && steps.gemini_issue_analysis.outcome == 'success' }}
         env:
           TRIAGED_ISSUES: '${{ env.TRIAGED_ISSUES }}'
         run: |-
           TRIAGED_ISSUES_COMPACT="$(echo "${TRIAGED_ISSUES:-[]}" | jq -c '.')"
           echo "triaged_issues=${TRIAGED_ISSUES_COMPACT}" >> "${GITHUB_OUTPUT}"
+
+      - name: 'Skip triage after Gemini failure'
+        if: |-
+          ${{ steps.find_issues.outputs.issues_to_triage != '[]' && steps.gemini_issue_analysis.outcome != 'success' }}
+        run: |-
+          echo "triaged_issues=[]" >> "${GITHUB_OUTPUT}"
 
   label:
     runs-on: 'ubuntu-latest'

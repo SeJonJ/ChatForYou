@@ -21,7 +21,7 @@ jobs:
             --label "bug" \
             --state open \
             --json number,title,body,url \
-            --limit 100 \
+            --limit 20 \
             --repo "${GITHUB_REPOSITORY}" \
             --jq 'map({number, title, body, url})' \
           | jq -c '.'
@@ -31,11 +31,6 @@ jobs:
   verify-bug:
     needs: get-issues
     if: needs.get-issues.outputs.issues != '[]'
-    strategy:
-      matrix:
-        issue: ${{ fromJson(needs.get-issues.outputs.issues) }}
-      fail-fast: false
-      max-parallel: 1
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,14 +40,12 @@ jobs:
     steps:
       - name: 'Run Gemini Merge Verification'
         id: 'gemini_verify'
+        continue-on-error: true
         uses: 'google-github-actions/run-gemini-cli@v0'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
-          ISSUE_NUMBER: ${{ matrix.issue.number }}
-          ISSUE_TITLE: ${{ matrix.issue.title }}
-          ISSUE_BODY: ${{ matrix.issue.body }}
-          ISSUE_URL: ${{ matrix.issue.url }}
+          BUG_ISSUES: ${{ needs.get-issues.outputs.issues }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
@@ -76,20 +69,26 @@ jobs:
           prompt: '/gemini-bug-verify'
 
       - name: 'Close merged bug issue'
+        if: |-
+          ${{ steps.gemini_verify.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
-          ISSUE_NUMBER: ${{ matrix.issue.number }}
           AI_OUTPUT: ${{ steps.gemini_verify.outputs.output }}
         run: |-
-          ACTION=$(echo "$AI_OUTPUT" | grep "^action:" | cut -d' ' -f2 | tr -d '\r')
-          COMMENT=$(echo "$AI_OUTPUT" | sed -n '/comment:/,$p' | sed '1d')
+          ACTIONS="$(echo "$AI_OUTPUT" | sed -e 's/^```json$//' -e 's/^```$//' | jq -c '.')"
 
-          if [ "$ACTION" == "close_and_comment" ]; then
-            gh issue close "$ISSUE_NUMBER" \
+          echo "$ACTIONS" | jq -c '.[] | select(.action == "close_and_comment")' | while read -r item; do
+            ISSUE_NUMBER="$(echo "$item" | jq -r '.issue_number')"
+            COMMENT="$(echo "$item" | jq -r '.comment')"
+            gh issue close "${ISSUE_NUMBER}" \
               --repo "$REPOSITORY" \
               --reason "completed" \
               --comment "$COMMENT"
-          else
-            echo "No merged fix evidence found for issue #${ISSUE_NUMBER}."
-          fi
+          done
+
+      - name: 'Skip bug verification after Gemini failure'
+        if: |-
+          ${{ steps.gemini_verify.outcome != 'success' }}
+        run: |-
+          echo "Gemini merge verification skipped because the Gemini step failed or quota was exhausted."
