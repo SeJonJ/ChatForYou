@@ -66,8 +66,9 @@ jobs:
             --search 'no:label OR label:"status/needs-triage"' \
             --json number,title,body \
             --limit '100' \
-            --repo "${GITHUB_REPOSITORY}"
-          | jq -c '.')"
+            --repo "${GITHUB_REPOSITORY}" \
+          | jq -c '.'
+          )"
           echo "issues_to_triage=${ISSUES}" >> "${GITHUB_OUTPUT}"
 
       - name: 'Run Gemini Issue Analysis'

@@ -23,8 +23,9 @@ jobs:
             --json number,title,body,url \
             --limit 100 \
             --repo "${GITHUB_REPOSITORY}" \
-            --jq 'map({number, title, body, url})'
-          | jq -c '.')"
+            --jq 'map({number, title, body, url})' \
+          | jq -c '.'
+          )"
           echo "issues=${ISSUES}" >> "${GITHUB_OUTPUT}"
 
   verify-bug:
