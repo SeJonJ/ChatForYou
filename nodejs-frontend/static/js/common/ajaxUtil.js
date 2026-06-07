@@ -111,8 +111,6 @@ function getCurrentRoomId() {
 
 /**
  * 현재 방 통화 페이지에서 WebSocket 세션이 활성 상태인지 확인한다.
- * A003/R005 갱신 실패 시 redirectToLogin/redirectToRoomList 호출 방지에 사용한다.
- * sessionStorage의 _connected 플래그로 판단 — kurento-service.js 의존 없음.
  * @returns {boolean}
  */
 function isInRoomCallPage() {
@@ -137,7 +135,6 @@ function resolveRoomTokenRecoveryRoomId(requestOptions) {
 
 /**
  * 만료된 room token을 백엔드 refresh API를 통해 갱신한다.
- * X-Room-Token에 만료 토큰을 그대로 전송한다 — validateRefreshable이 허용한다.
  * @param {string} roomId
  * @returns {Promise<string>}
  */
@@ -191,7 +188,6 @@ function shouldRetryAccessTokenRequest(requestOptions, error) {
 
 /**
  * 실패한 요청이 room token refresh 이후 재시도 대상인지 확인한다.
- * 실제 복구 범위는 room page URL 또는 request-level roomId override로 제한한다.
  * @param {{hasRetriedRoomToken?: boolean, skipRoomRecovery?: boolean}} requestOptions
  * @param {{responseJSON?: {code?: string}}} error
  * @returns {boolean}
@@ -218,73 +214,86 @@ function handleTokenAjaxFailure(requestOptions, error) {
 
 /**
  * access token 1회 재시도 규칙을 포함한 보호 API ajax 요청을 수행한다.
- * @param {{url: string, method: string, data?: *, async?: boolean, contentType?: string, roomId?: string, successCallback?: Function, errorCallback?: Function, completeCallback?: Function, hasRetriedAccessToken?: boolean, skipAuthRetry?: boolean}} requestOptions
+ * @param {{url: string, method: string, data?: *, async?: boolean, contentType?: string, roomId?: string, successCallback?: Function, errorCallback?: Function, completeCallback?: Function, hasRetriedAccessToken?: boolean, hasRetriedRoomToken?: boolean, skipAuthRetry?: boolean}} requestOptions
  * @returns {void}
  */
 function executeTokenAjax(requestOptions) {
-    $.ajax({
-        url: requestOptions.url,
-        type: requestOptions.method,
-        data: requestOptions.data,
-        async: requestOptions.async !== undefined ? requestOptions.async : true,
-        contentType: requestOptions.contentType,
-        xhrFields: {
-            withCredentials: true
-        },
-        headers: buildTokenHeaders(),
-        success: function (data) {
-            if (requestOptions.successCallback && typeof requestOptions.successCallback === 'function') {
-                requestOptions.successCallback(data);
-            }
-        },
-        error: function (error) {
-            if (shouldRetryAccessTokenRequest(requestOptions, error)) {
-                getAccessTokenRefreshPromise()
-                    .then(function() {
-                        executeTokenAjax({
-                            ...requestOptions,
-                            hasRetriedAccessToken: true
-                        });
-                    })
-                    .catch(function () {
-                        // 통화 중이면 강제 페이지 이동 없이 경고 toast만 표시 — WebSocket 채널 유지 우선
-                        if (isInRoomCallPage()) {
-                            showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
-                            return;
-                        }
-                        redirectToLogin();
-                    });
-                return;
-            }
+    const isRetry = requestOptions.hasRetriedAccessToken || requestOptions.hasRetriedRoomToken;
+    const effectiveAsync = requestOptions.async !== undefined ? requestOptions.async : true;
 
-            const roomId = resolveRoomTokenRecoveryRoomId(requestOptions);
-            if (shouldRetryRoomTokenRequest(requestOptions, error) && roomId) {
-                getRoomTokenRefreshPromise(roomId)
-                    .then(function() {
-                        executeTokenAjax({
-                            ...requestOptions,
-                            hasRetriedRoomToken: true
+    function sendRequest() {
+        $.ajax({
+            url: requestOptions.url,
+            type: requestOptions.method,
+            data: requestOptions.data,
+            async: effectiveAsync,
+            contentType: requestOptions.contentType,
+            xhrFields: {
+                withCredentials: true
+            },
+            headers: buildTokenHeaders(),
+            success: function (data) {
+                if (requestOptions.successCallback && typeof requestOptions.successCallback === 'function') {
+                    requestOptions.successCallback(data);
+                }
+            },
+            error: function (error) {
+                if (shouldRetryAccessTokenRequest(requestOptions, error)) {
+                    getAccessTokenRefreshPromise()
+                        .then(function() {
+                            executeTokenAjax({
+                                ...requestOptions,
+                                hasRetriedAccessToken: true
+                            });
+                        })
+                        .catch(function () {
+                            // 통화 중이면 페이지 이동 없이 toast만 표시
+                            if (isInRoomCallPage()) {
+                                showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
+                                return;
+                            }
+                            redirectToLogin();
                         });
-                    })
-                    .catch(function() {
-                        // 통화 중이면 방 목록 이동 없이 경고 toast만 표시 — WebSocket 채널 유지 우선
-                        if (isInRoomCallPage()) {
-                            showApiErrorToast('방 접근 토큰이 만료되었습니다. 통화 종료 후 방에 다시 입장해주세요.');
-                            return;
-                        }
-                        redirectToRoomList();
-                    });
-                return;
-            }
+                    return;
+                }
 
-            handleTokenAjaxFailure(requestOptions, error);
-        },
-        complete: function (result) {
-            if (requestOptions.completeCallback && typeof requestOptions.completeCallback === 'function') {
-                requestOptions.completeCallback(result);
+                const roomId = resolveRoomTokenRecoveryRoomId(requestOptions);
+                if (shouldRetryRoomTokenRequest(requestOptions, error) && roomId) {
+                    getRoomTokenRefreshPromise(roomId)
+                        .then(function() {
+                            executeTokenAjax({
+                                ...requestOptions,
+                                hasRetriedRoomToken: true
+                            });
+                        })
+                        .catch(function() {
+                            // 통화 중이면 페이지 이동 없이 toast만 표시
+                            if (isInRoomCallPage()) {
+                                showApiErrorToast('방 접근 토큰이 만료되었습니다. 통화 종료 후 방에 다시 입장해주세요.');
+                                return;
+                            }
+                            redirectToRoomList();
+                        });
+                    return;
+                }
+
+                handleTokenAjaxFailure(requestOptions, error);
+            },
+            complete: function (result) {
+                if (requestOptions.completeCallback && typeof requestOptions.completeCallback === 'function') {
+                    requestOptions.completeCallback(result);
+                }
             }
-        }
-    });
+        });
+    }
+
+    if (isRetry || !effectiveAsync) {
+        sendRequest();
+    } else {
+        ensureFreshAccessTokenIfExpiring().catch(function() {
+            // 선제 갱신 실패는 무시하고 요청을 진행한다
+        }).then(sendRequest);
+    }
 }
 
 /**
@@ -522,60 +531,270 @@ function ajaxToJsonPromise(url, method, data) {
     });
 }
 
-function fileUploadAjax(url, method, async, data, successCallback, errorCallback) {
-    $.ajax({
-        url: url,
-        type: method,
-        data: data,
-        async: async !== undefined ? async : true,
-        processData: false,
-        contentType: false,
-        xhrFields: {
-            withCredentials: true
-        },
-        headers: {
-            'Authorization': localStorage.getItem('access_token') || ''
-        },
-        success: function (data) {
-            if (successCallback && typeof successCallback === 'function') {
-                successCallback(data);
+/**
+ * 파일 다운로드 error 콜백의 blob/responseText 에러 본문을 {code, message}로 정규화한다.
+ * responseType:'blob'이면 에러 본문이 Blob으로 와서 responseJSON이 undefined가 되므로 필요하다.
+ * @param {Object} error - jQuery error 콜백 파라미터 (jqXHR)
+ * @returns {Promise<{code?: string, message?: string}|null>}
+ */
+function normalizeBlobError(error) {
+    if (error && error.responseJSON) {
+        return Promise.resolve(error.responseJSON);
+    }
+
+    const blob = error && error.response;
+    if (blob && typeof Blob !== 'undefined' && blob instanceof Blob) {
+        return blob.text().then(function(text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return null;
             }
-        },
-        error: function (error) {
-            if (errorCallback && typeof errorCallback === 'function') {
-                errorCallback(error);
-            } else {
-                handleApiError(error);
-            }
+        }).catch(function() {
+            return null;
+        });
+    }
+
+    const responseText = error && error.responseText;
+    if (responseText) {
+        try {
+            return Promise.resolve(JSON.parse(responseText));
+        } catch (e) {
+            return Promise.resolve(null);
         }
-    })
+    }
+
+    return Promise.resolve(null);
 }
 
-function fileDownloadAjax(url, method, async, data, successCallback, errorCallback){
-    $.ajax({
-        url: url,
-        type: method,
-        data: data,
-        async: async !== undefined ? async : true,
-        headers: {
-            'Authorization': localStorage.getItem('access_token') || ''
-        },
-        dataType: 'binary', // 파일 다운로드를 위해서는 binary 타입으로 받아야한다.
-        xhrFields: {
-            withCredentials: true,
-            'responseType': 'blob' // 여기도 마찬가지
-        },
-        success: function (data) {
-            if (successCallback && typeof successCallback === 'function') {
-                successCallback(data);
+/**
+ * JWT access_token의 payload를 디코드하여 exp claim(epoch seconds)을 반환한다.
+ * exp 부재/파싱 실패 시 null을 반환하며 예외를 전파하지 않는다.
+ * @param {string} token - Firebase JWT access_token
+ * @returns {number|null} exp(epoch seconds) 또는 null
+ */
+function decodeAccessTokenExp(token) {
+    try {
+        if (!token || typeof token !== 'string') {
+            return null;
+        }
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            return null;
+        }
+        // base64url → base64 변환 후 디코드
+        const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(atob(payload));
+        const exp = decoded && decoded.exp;
+        return (typeof exp === 'number') ? exp : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * access_token이 만료 임박(exp - now < 300초)이면 선제 갱신을 트리거한다.
+ * exp 부재/파싱 실패 시 아무 동작도 하지 않는다.
+ * @returns {Promise<void>}
+ */
+function ensureFreshAccessTokenIfExpiring() {
+    const token = localStorage.getItem('access_token');
+    const exp = decodeAccessTokenExp(token);
+
+    if (exp === null) {
+        return Promise.resolve();
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const secondsRemaining = exp - nowSec;
+
+    if (secondsRemaining < 300) {
+        return getAccessTokenRefreshPromise().catch(function() {
+            // 선제 갱신 실패는 무시한다
+        });
+    }
+
+    return Promise.resolve();
+}
+
+/**
+ * FormData 파일 업로드 요청을 수행한다.
+ * A003(토큰 만료) 수신 시 access token을 1회 갱신 후 재시도한다.
+ * @param {string} url
+ * @param {string} method
+ * @param {boolean} async
+ * @param {FormData} data
+ * @param {Function} successCallback
+ * @param {Function} errorCallback
+ * @param {boolean} [hasRetried=false] - 재시도 여부 (무한 루프 방지 가드)
+ */
+function fileUploadAjax(url, method, async, data, successCallback, errorCallback, hasRetried) {
+    const effectiveAsync = async !== undefined ? async : true;
+
+    function sendRequest() {
+        $.ajax({
+            url: url,
+            type: method,
+            data: data,
+            async: effectiveAsync,
+            processData: false,
+            contentType: false,
+            xhrFields: {
+                withCredentials: true
+            },
+            headers: buildTokenHeaders(),
+            success: function (responseData) {
+                if (successCallback && typeof successCallback === 'function') {
+                    successCallback(responseData);
+                }
+            },
+            error: function (error) {
+                // A003(토큰 만료) 시 1회 갱신 후 재시도
+                if (error && error.responseJSON && error.responseJSON.code === 'A003' && !hasRetried) {
+                    getAccessTokenRefreshPromise()
+                        .then(function() {
+                            fileUploadAjax(url, method, async, data, successCallback, errorCallback, true);
+                        })
+                        .catch(function() {
+                            // 통화 중이면 페이지 이동 없이 toast만 표시
+                            if (isInRoomCallPage()) {
+                                showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
+                                return;
+                            }
+                            redirectToLogin();
+                        });
+                    return;
+                }
+
+                if (errorCallback && typeof errorCallback === 'function') {
+                    errorCallback(error);
+                } else {
+                    handleApiError(error);
+                }
             }
-        },
-        error: function (error) {
-            if (errorCallback && typeof errorCallback === 'function') {
-                errorCallback(error);
-            } else {
-                handleApiError(error);
+        });
+    }
+
+    if (hasRetried || !effectiveAsync) {
+        sendRequest();
+    } else {
+        ensureFreshAccessTokenIfExpiring().catch(function() {
+            // 선제 갱신 실패는 무시하고 요청을 진행한다
+        }).then(sendRequest);
+    }
+}
+
+/**
+ * 파일 다운로드 요청을 수행한다. 성공 콜백은 Blob 객체를 전달한다.
+ * A003(토큰 만료) 감지 시 access token을 1회 갱신 후 재시도한다.
+ * @param {string} url
+ * @param {string} method
+ * @param {boolean} async
+ * @param {Object} data
+ * @param {Function} successCallback - 성공 시 Blob 객체 전달
+ * @param {Function} errorCallback - 실패 시 정규화된 error 전달
+ * @param {boolean} [hasRetried=false] - 재시도 여부 (무한 루프 방지 가드)
+ */
+function fileDownloadAjax(url, method, async, data, successCallback, errorCallback, hasRetried) {
+    const effectiveAsync = async !== undefined ? async : true;
+
+    function sendRequest() {
+        $.ajax({
+            url: url,
+            type: method,
+            data: data,
+            async: effectiveAsync,
+            headers: buildTokenHeaders(),
+            dataType: 'binary', // 파일 다운로드를 위해서는 binary 타입으로 받아야한다.
+            xhrFields: {
+                withCredentials: true,
+                'responseType': 'blob' // 여기도 마찬가지
+            },
+            success: function (blobData) {
+                if (successCallback && typeof successCallback === 'function') {
+                    successCallback(blobData);
+                }
+            },
+            error: function (error) {
+                // blob 에러는 responseJSON이 없으므로 정규화 후 판정
+                normalizeBlobError(error).then(function(errorJson) {
+                    // A003(토큰 만료) 시 1회 갱신 후 재시도
+                    if (errorJson && errorJson.code === 'A003' && !hasRetried) {
+                        getAccessTokenRefreshPromise()
+                            .then(function() {
+                                fileDownloadAjax(url, method, async, data, successCallback, errorCallback, true);
+                            })
+                            .catch(function() {
+                                // 통화 중이면 페이지 이동 없이 toast만 표시
+                                if (isInRoomCallPage()) {
+                                    showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
+                                    return;
+                                }
+                                redirectToLogin();
+                            });
+                        return;
+                    }
+
+                    // 그 외 에러는 정규화된 error를 콜백에 전달
+                    const normalizedError = errorJson
+                        ? { responseJSON: errorJson, status: error.status }
+                        : error;
+
+                    if (errorCallback && typeof errorCallback === 'function') {
+                        errorCallback(normalizedError);
+                    } else {
+                        handleApiError({ responseJSON: errorJson });
+                    }
+                });
             }
+        });
+    }
+
+    if (hasRetried || !effectiveAsync) {
+        sendRequest();
+    } else {
+        ensureFreshAccessTokenIfExpiring().catch(function() {
+            // 선제 갱신 실패는 무시하고 요청을 진행한다
+        }).then(sendRequest);
+    }
+}
+
+// ─── 토큰 자동 갱신 타이머 ───────────────────────────────────────────────────
+
+let _autoRefreshStarted = false;
+
+/**
+ * 방 페이지에서만 60초 간격으로 토큰 만료 임박 여부를 체크하고 선제 갱신한다.
+ * 탭/슬립 복귀(visibilitychange) 시에도 즉시 1회 체크한다.
+ */
+function startAccessTokenAutoRefresh() {
+    if (!getCurrentRoomId()) {
+        return;
+    }
+
+    if (_autoRefreshStarted) {
+        return;
+    }
+    _autoRefreshStarted = true;
+
+    setInterval(function() {
+        ensureFreshAccessTokenIfExpiring();
+    }, 60000);
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            ensureFreshAccessTokenIfExpiring();
         }
     });
 }
+
+// 로드 시 자동 시작
+(function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            startAccessTokenAutoRefresh();
+        });
+    } else {
+        startAccessTokenAutoRefresh();
+    }
+}());

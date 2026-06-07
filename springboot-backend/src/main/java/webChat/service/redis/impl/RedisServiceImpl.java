@@ -564,4 +564,20 @@ public class RedisServiceImpl implements RedisService {
         String redisKey = QR_SESSION_PREFIX.getPrefix() + sessionId;
         return (QRSession) slaveTemplate.opsForValue().get(redisKey);
     }
+
+    @Override
+    public void addRoomMember(String roomId, String email) {
+        masterTemplate.opsForSet().add(ROOM_MEMBERS_PREFIX.getPrefix() + roomId, email);
+    }
+
+    @Override
+    public boolean isRoomMember(String roomId, String email) {
+        Boolean result = slaveTemplate.opsForSet().isMember(ROOM_MEMBERS_PREFIX.getPrefix() + roomId, email);
+        return Boolean.TRUE.equals(result);
+    }
+
+    @Override
+    public void deleteRoomMembers(String roomId) {
+        masterTemplate.delete(ROOM_MEMBERS_PREFIX.getPrefix() + roomId);
+    }
 }

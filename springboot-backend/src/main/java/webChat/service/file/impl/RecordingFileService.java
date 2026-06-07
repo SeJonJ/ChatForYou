@@ -95,6 +95,17 @@ public class RecordingFileService extends AbstractFileService {
         }
     }
 
+    /**
+     * 녹화 파일을 다운로드한다.
+     * 방(KurentoRoom) Redis 생존과 녹화 메타 존재만으로 다운로드를 허용한다.
+     * expiresAt 경과 여부는 더 이상 차단 조건이 아니다. 방 생존 중에는 다운로드를 보장하기 위함이며,
+     * 방 종료 시 Redis 방 정보가 사라져 자연히 차단된다.
+     *
+     * @param roomId 방 ID (Redis 방 생존 판단 기준)
+     * @param fileName 다운로드 파일명
+     * @param fileDir MinIO 객체 경로
+     * @return 녹화 파일 binary 응답
+     */
     public ResponseEntity<byte[]> getObject(String roomId, String fileName, String fileDir) {
         KurentoRoom room = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
 
@@ -103,11 +114,6 @@ public class RecordingFileService extends AbstractFileService {
         }
 
         if(room.getRecordingInfo() == null || room.getRecordingInfo().getRecordingFile() == null) {
-            throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
-
-        // expiresAt 비교
-        if (System.currentTimeMillis() > room.getRecordingInfo().getRecordingFile().getExpiresAt()) {
             throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
