@@ -4,10 +4,10 @@ on:
   schedule:
     - cron: '0 * * * *'
   pull_request:
-    branches: [main]
+    branches: [chatforyou_v2]
     paths: ['.github/workflows/gemini-scheduled-triage.yml']
   push:
-    branches: [main]
+    branches: [chatforyou_v2]
     paths: ['.github/workflows/gemini-scheduled-triage.yml']
   workflow_dispatch:
 
@@ -30,7 +30,7 @@ jobs:
       pull-requests: 'read'
     outputs:
       available_labels: '${{ steps.get_labels.outputs.available_labels }}'
-      triaged_issues: '${{ env.TRIAGED_ISSUES }}'
+      triaged_issues: '${{ steps.collect_triage_output.outputs.triaged_issues }}'
     steps:
       - name: 'Get repository labels'
         id: 'get_labels'
@@ -63,11 +63,11 @@ jobs:
         run: |-
           ISSUES="$(gh issue list \
             --state 'open' \
-            --search 'no:label label:"status/needs-triage"' \
+            --search 'no:label OR label:"status/needs-triage"' \
             --json number,title,body \
             --limit '100' \
             --repo "${GITHUB_REPOSITORY}"
-          )"
+          | jq -c '.')"
           echo "issues_to_triage=${ISSUES}" >> "${GITHUB_OUTPUT}"
 
       - name: 'Run Gemini Issue Analysis'
@@ -108,12 +108,23 @@ jobs:
             }
           prompt: '/gemini-scheduled-triage'
 
+      - name: 'Collect triage output'
+        id: 'collect_triage_output'
+        if: |-
+          ${{ steps.find_issues.outputs.issues_to_triage != '[]' }}
+        env:
+          TRIAGED_ISSUES: '${{ env.TRIAGED_ISSUES }}'
+        run: |-
+          TRIAGED_ISSUES_COMPACT="$(echo "${TRIAGED_ISSUES:-[]}" | jq -c '.')"
+          echo "triaged_issues=${TRIAGED_ISSUES_COMPACT}" >> "${GITHUB_OUTPUT}"
+
   label:
     runs-on: 'ubuntu-latest'
     needs: [triage]
     if: |-
       needs.triage.outputs.available_labels != '' &&
-      needs.triage.outputs.triaged_issues != ''
+      needs.triage.outputs.triaged_issues != '' &&
+      needs.triage.outputs.triaged_issues != '[]'
     permissions:
       contents: 'read'
       issues: 'write'
@@ -143,7 +154,7 @@ jobs:
               .map((label) => label.trim())
               .sort()
 
-            const triagedIssues = (JSON.parse(process.env.TRIAGED_ISSUES || '{}'))
+            const triagedIssues = JSON.parse(process.env.TRIAGED_ISSUES || '[]')
 
             for (const issue of triagedIssues) {
               if (!issue || !issue.issue_number) continue;
