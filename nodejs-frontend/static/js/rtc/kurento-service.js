@@ -82,7 +82,12 @@ const wsMessageHandlers = {
     // ==========================================
     // 1. 참가자 관련
     // ==========================================
-    existingParticipants: (msg) => onExistingParticipants(msg),
+    existingParticipants: (msg) => {
+        // 재연결 성공 판정은 existingParticipants 수신 시점
+        // onopen만으로 리셋하면 JOIN_ROOM 실패 시 폭주 가능하므로 여기서 성공 확정
+        resetReconnectState();
+        onExistingParticipants(msg);
+    },
     newParticipantArrived: (msg) => onNewParticipant(msg),
     participantLeft: (msg) => onParticipantLeft(msg),
     participantSessionReplaced: (msg) => onParticipantSessionReplaced(msg),
@@ -211,6 +216,25 @@ let roomTeardownStarted = false;
 let forcedSessionExitInProgress = false;
 let suppressWebSocketCloseWarning = false;
 
+// ==========================================
+// 자동 재연결 상태 변수
+// ==========================================
+let reconnectAttempt = 0;
+let reconnectInProgress = false;
+let reconnectTimerId = null;
+let waitingForOnline = false;
+let heartbeatTimerId = null;
+let onlineDebounceTimerId = null;
+
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+const RECONNECT_MAX_ATTEMPTS = 8;
+const RECONNECT_JITTER_MS = 500;
+// heartbeat 타이머는 ws.readyState 폴링 주기로만 사용 (idle 능동 close 없음)
+const HEARTBEAT_INTERVAL_MS = 20000;
+// WiFi 토글 시 OS가 online 이벤트를 다발 발화 — 마지막 1회로 흡수해 중복 재연결 방지
+const ONLINE_DEBOUNCE_MS = 400;
+
 function formatModalMessage(message) {
     return (message || '').replace(/\n/g, '<br>');
 }
@@ -249,6 +273,191 @@ function closeWebSocketConnection() {
     }
 }
 
+// ==========================================
+// 자동 재연결 헬퍼 함수
+// ==========================================
+
+/**
+ * 의도적 종료 여부 판정.
+ * 세 가드 중 하나라도 true면 재연결 금지.
+ * @returns {boolean}
+ */
+function isIntentionalClose() {
+    return suppressWebSocketCloseWarning || roomTeardownStarted || forcedSessionExitInProgress;
+}
+
+function stopHeartbeat() {
+    if (heartbeatTimerId !== null) {
+        clearInterval(heartbeatTimerId);
+        heartbeatTimerId = null;
+    }
+}
+
+/**
+ * 진행 중인 재연결 시도를 전부 취소한다.
+ * teardownRoomSession/leaveRoom 진입 시 doReconnect와의 경쟁을 막기 위해 즉시 호출한다.
+ */
+function cancelReconnect() {
+    if (reconnectTimerId !== null) {
+        clearTimeout(reconnectTimerId);
+        reconnectTimerId = null;
+    }
+    if (onlineDebounceTimerId !== null) {
+        clearTimeout(onlineDebounceTimerId);
+        onlineDebounceTimerId = null;
+    }
+    reconnectInProgress = false;
+    waitingForOnline = false;
+    stopHeartbeat();
+}
+
+/**
+ * WebSocket half-open 감지를 위한 경량 heartbeat를 시작한다.
+ * ws.readyState 폴링으로 소켓이 OPEN이 아닐 때 재연결 경로(scheduleReconnect)에 수렴한다.
+ * WHY: idle 기반 능동 close는 정상 통화 중 시그널링 무수신 구간에서 오발 루프를 유발할 수 있어 제거했다.
+ */
+function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimerId = setInterval(function () {
+        if (isIntentionalClose()) {
+            stopHeartbeat();
+            return;
+        }
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            stopHeartbeat();
+            scheduleReconnect();
+        }
+    }, HEARTBEAT_INTERVAL_MS);
+}
+
+/**
+ * 지수 백오프 + jitter로 재연결을 예약한다.
+ * in-flight 중복 방지: reconnectInProgress가 true면 즉시 반환.
+ * offline 상태면 타이머 없이 online 이벤트 대기로 전환.
+ * MAX 도달 시 수동 재입장 모달(GIVE_UP).
+ */
+function scheduleReconnect() {
+    if (isIntentionalClose()) {
+        return;
+    }
+    if (reconnectInProgress) {
+        return;
+    }
+    // 이미 예약된 재연결 타이머가 있으면 중복 예약 금지
+    // RF-1로 reconnectInProgress=false가 풀린 구간에서 heartbeat와 onclose가 동시에 진입할 때 double-schedule 차단
+    // 정상 타이머는 발화 시 reconnectTimerId=null 처리 후 doReconnect를 부르므로(아래 setTimeout 콜백) 단일 사이클은 안 깨진다
+    if (reconnectTimerId !== null) {
+        return;
+    }
+    if (reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+        // heartbeat가 살아있으면 모달 중복 팝업 유발 가능 — GIVE_UP 전에 명시 정리
+        stopHeartbeat();
+        console.warn('[WebSocket:Reconnect] 최대 재시도 횟수 초과, 수동 재입장 필요');
+        showConnectionFailModal({
+            title: '연결 실패',
+            message: '서버와의 연결이 반복적으로 실패했습니다.\n방에 재입장하여 다시 연결해주시기 바랍니다.',
+            dismissible: false,
+            onConfirm: function () {
+                leaveRoom('error');
+                setTimeout(function () { window.location.reload(); }, 20);
+            }
+        });
+        return;
+    }
+    if (!navigator.onLine) {
+        waitingForOnline = true;
+        updateReconnectOverlay('네트워크 연결 끊김. 온라인 복귀 대기 중...');
+        return;
+    }
+    waitingForOnline = false;
+    const baseDelay = Math.min(
+        RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempt),
+        RECONNECT_MAX_DELAY_MS
+    );
+    const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
+    const delay = baseDelay + jitter;
+    console.log('[WebSocket:Reconnect] ' + (reconnectAttempt + 1) + '번째 재시도 예약 (delay=' + delay + 'ms)');
+    updateReconnectOverlay('재연결 중... (' + (reconnectAttempt + 1) + '/' + RECONNECT_MAX_ATTEMPTS + ')');
+    reconnectTimerId = setTimeout(function () {
+        reconnectTimerId = null;
+        doReconnect();
+    }, delay);
+}
+
+/**
+ * 실제 재연결을 실행한다.
+ * 재입장 전 participants 전체를 dispose해 stale PeerConnection/타일 누수를 방지한다.
+ * teardown 플래그는 세우지 않는다 — connectWebSocket이 내부에서 플래그를 리셋하기 때문이다.
+ * 성공 판정은 existingParticipants 수신 시(resetReconnectState 호출).
+ */
+function doReconnect() {
+    if (isIntentionalClose()) {
+        return;
+    }
+    // 두 타이머가 동시에 doReconnect를 호출하는 race 차단
+    // 첫 타이머 진입 시 reconnectInProgress=false라 통과하고 바로 true를 세움
+    // 두 번째 타이머는 true를 보고 여기서 반환 → connectWebSocket 중복 실행 방지
+    if (reconnectInProgress) {
+        return;
+    }
+    reconnectInProgress = true;
+    reconnectAttempt++;
+    console.log('[WebSocket:Reconnect] doReconnect 실행 (attempt=' + reconnectAttempt + ')');
+    Object.keys(participants).forEach(function (pid) {
+        disposeParticipantEntry(pid);
+    });
+    participants = {};
+    // 더미 비디오 캐시 무효화: 위 dispose가 cachedDummyStream 원본 트랙을 stop(→ended→canvas 애니메이션 정지)시키므로,
+    // 캐시를 비우지 않으면 재입장 시 죽은 캐시를 clone해 검정 화면이 된다. 비워서 새 더미가 재생성되게 한다.
+    if (window._cleanupDummyVideo) {
+        window._cleanupDummyVideo();
+    }
+    pendingReconnectTimers.forEach(function (timerId) { clearTimeout(timerId); });
+    pendingReconnectTimers.clear();
+    reconnectMetaCache.clear();
+    stopHeartbeat();
+    // 구 소켓 핸들러 선 detach: 지연 도달하는 구 소켓 이벤트가 새 연결 상태를 오염시키지 못하게 한다.
+    // onclose/onerror: scheduleReconnect 재진입 차단
+    // onmessage: 지연 도달 메시지가 새 연결의 wsMessageHandlers를 잘못 실행하는 것 방지
+    if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+    }
+    closeWebSocketConnection();
+    connectWebSocket();
+}
+
+/**
+ * 재연결 성공 후 재연결 상태를 초기화한다.
+ * onopen만으로 리셋하면 JOIN 실패 시 폭주 가능하므로, existingParticipants 수신을 성공 기준으로 한다.
+ */
+function resetReconnectState() {
+    if (!reconnectInProgress && reconnectAttempt === 0) {
+        return;
+    }
+    reconnectAttempt = 0;
+    reconnectInProgress = false;
+    reconnectTimerId = null;
+    waitingForOnline = false;
+    hideReconnectOverlay();
+    showToast('재연결되었습니다.', 'success');
+    console.log('[WebSocket:Reconnect] 재연결 성공, 상태 초기화');
+}
+
+function updateReconnectOverlay(message) {
+    let $overlay = $('#ws-reconnect-overlay');
+    if ($overlay.length === 0) {
+        $overlay = $('<div id="ws-reconnect-overlay" style="position:fixed;top:0;left:0;width:100%;background:rgba(0,0,0,0.7);color:#fff;text-align:center;padding:8px 0;z-index:9999;font-size:14px;"></div>');
+        $('body').prepend($overlay);
+    }
+    $overlay.text(message).show();
+}
+
+function hideReconnectOverlay() {
+    $('#ws-reconnect-overlay').hide();
+}
+
 function disposeParticipantEntry(participantId) {
     const participant = participants[participantId];
     if (!participant) {
@@ -272,6 +481,9 @@ function teardownRoomSession(options) {
 
     roomTeardownStarted = true;
     forcedSessionExitInProgress = options?.forced === true;
+
+    // in-flight doReconnect와의 경쟁 차단: 재연결 타이머/heartbeat/online 대기 즉시 취소
+    cancelReconnect();
 
     if (options?.sendLeaveRoom) {
         sendMessageToServer({
@@ -318,20 +530,40 @@ function connectWebSocket() {
         console.log('[WebSocket] 연결 성공');
         sessionStorage.setItem(getConnectedKey(), 'true');
         register();
-        initScript();
-        initEvent();
+        // 재연결 경로면 initScript/initEvent 재호출 생략 — 이미 초기화된 모듈 중복 init 방지
+        if (!reconnectInProgress) {
+            initScript();
+            initEvent();
+        }
+        startHeartbeat();
     };
 
     ws.onclose = function (event) {
-        if (suppressWebSocketCloseWarning) {
+        stopHeartbeat();
+        // 의도적 종료(퇴장/강제퇴장/suppress)는 재연결 금지
+        if (isIntentionalClose()) {
             return;
         }
-        console.warn('[WebSocket] 연결 종료:', event.code, event.reason);
+        // guard 미설정 = 비의도적 종료 → close code와 무관하게 재연결한다.
+        // WHY: 재연결 의도는 guard(suppress/teardown/forced — 우리가 세운 플래그)로만 판단하고,
+        //      프로토콜 close code로 추정하지 않는다. 서버 graceful shutdown(재배포)은 ShutdownConfig가
+        //      세션을 code=1000으로 닫지만 redis 방은 CREATED로 보존하므로, 1000을 "재연결 안 함"으로
+        //      처리하면 재배포 후 복구 가능한 통화를 방치하게 된다. 진짜 종료된 방이면 재입장 시 R001 → GIVE_UP으로 수렴.
+        console.warn('[WebSocket] 연결 종료 감지 (code=' + event.code + '), 재연결 시도');
+        clearConnectedSession();
+        // doReconnect() 진행 중에 새 소켓이 existingParticipants 수신 전에 닫히면
+        // reconnectInProgress=true 상태로 scheduleReconnect에 진입해 L347 가드에 막혀 영구 wedge된다.
+        // 여기서 false로 푸는 것은 "실패 후 다음 시도를 허용"하는 것이지 성공 처리가 아니다.
+        // 성공 판정(existingParticipants 수신)은 resetReconnectState()에서만 수행한다.
+        reconnectInProgress = false;
+        scheduleReconnect();
     };
 
     ws.onerror = function (error) {
         console.error('[WebSocket] 에러 발생:', error);
         clearConnectedSession();
+        // onerror는 일반적으로 onclose로 이어져 scheduleReconnect가 호출된다.
+        // scheduleReconnect 내 in-flight 가드로 중복 호출은 차단된다.
     };
 
     ws.onmessage = function (message) {
@@ -373,6 +605,48 @@ $(function () {
         clearConnectedSession();
         connectWebSocket();
     }
+
+    // online/offline 리스너 1회 등록 ($(function(){...}) 단일 진입으로 중복 방지)
+    window.addEventListener('offline', function () {
+        if (reconnectTimerId !== null) {
+            clearTimeout(reconnectTimerId);
+            reconnectTimerId = null;
+        }
+        // 대기 중이던 online 디바운스도 취소 — offline 재진입 시 묵은 재연결 예약 방지
+        if (onlineDebounceTimerId !== null) {
+            clearTimeout(onlineDebounceTimerId);
+            onlineDebounceTimerId = null;
+        }
+        if (!isIntentionalClose()) {
+            waitingForOnline = true;
+            updateReconnectOverlay('네트워크 연결 끊김. 온라인 복귀 대기 중...');
+        }
+    });
+
+    window.addEventListener('online', function () {
+        if (isIntentionalClose()) {
+            return;
+        }
+        if (!waitingForOnline) {
+            return;
+        }
+        // 디바운스: 다발 online 이벤트를 마지막 1회로 흡수. 직전 예약을 취소하고 재설정한다.
+        if (onlineDebounceTimerId !== null) {
+            clearTimeout(onlineDebounceTimerId);
+        }
+        onlineDebounceTimerId = setTimeout(function () {
+            onlineDebounceTimerId = null;
+            // 디바운스 대기 중 offline 복귀/의도적 종료가 발생했으면 재연결하지 않는다
+            if (!waitingForOnline || isIntentionalClose()) {
+                return;
+            }
+            waitingForOnline = false;
+            console.log('[WebSocket:Reconnect] 온라인 복귀 감지, 즉시 재연결 시도');
+            // 빠른 복귀를 위해 attempt 카운터를 낮춤(0 리셋이 아닌 이유: 이전 실패 이력 반영)
+            reconnectAttempt = Math.max(0, reconnectAttempt - 1);
+            scheduleReconnect();
+        }, ONLINE_DEBOUNCE_MS);
+    });
 });
 
 const initTurnServer = function () {
@@ -770,15 +1044,31 @@ function register() {
             }
         };
         const errorCallback = (error) => {
-            clearConnectedSession();
             console.error('방 정보 조회 실패:', error);
             if (isAuthRequiredErrorCode(error?.responseJSON?.code)) {
                 showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
-                redirectToLogin();
+                // 자동 재연결 중(reconnectInProgress=true)이면 redirect 억제 — 통화 컨텍스트 유지
+                // 초기 입장(reconnectInProgress=false)은 그대로 redirectToLogin → 미인증 첫 진입은 로그인으로 보내는 게 맞다
+                if (!reconnectInProgress) {
+                    clearConnectedSession();
+                    redirectToLogin();
+                } else {
+                    // ws.close()로 onclose 유발 → guard 미설정이므로 재연결 경로로 수렴(reconnectInProgress=false → scheduleReconnect)
+                    // 재연결 중 인증 실패는 토큰 갱신 후 다음 attempt에서 성공할 수 있으므로 stuck 방지가 목적
+                    if (ws) { ws.close(); }
+                }
             } else if (isInvalidRoomAccessErrorCode(error?.responseJSON?.code)
                     || error?.responseJSON?.code === 'R001') {
                 showWarningToast(getApiErrorMessage(error.responseJSON, '입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'));
-                redirectToRoomList();
+                // 자동 재연결 중이면 redirect 억제 — 초기 입장에서만 방목록으로 이동
+                if (!reconnectInProgress) {
+                    clearConnectedSession();
+                    redirectToRoomList();
+                } else {
+                    // R001(방 없음)은 재시도해도 성공하지 않으므로 GIVE_UP 경로로 유도
+                    // ws.close() → onclose(guard 미설정) → scheduleReconnect → attempt 누적 → MAX 시 수동 재입장 모달
+                    if (ws) { ws.close(); }
+                }
             }
         };
         // AJAX 요청 실행

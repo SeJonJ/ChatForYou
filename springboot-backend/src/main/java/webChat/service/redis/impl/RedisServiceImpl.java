@@ -176,25 +176,19 @@ public class RedisServiceImpl implements RedisService {
     }
 
     /**
-     * kurentoRoom 에서 유저 카운트를 증가시킨다
-     * @param kurentoRoom
-     * @return
-     */
-    @Override
-    public void incrementUserCount(KurentoRoom kurentoRoom) {
-        kurentoRoom.setUserCount(kurentoRoom.getUserCount() + 1);
-        this.updateChatRoom(kurentoRoom);
-    }
-
-    /**
-     * kurentoRoom 에서 유저 카운트를 감소시킨다
+     * 방의 userCount 를 실제 참가자 수로 동기화한다.
      *
-     * @param kurentoRoom
-     * @return
+     * ±1 산술(increment/decrement) 대신 참가자 맵의 실제 size 를 권위 소스로 그대로 기록한다.
+     * 비원자 read-modify-write 로 인한 lost update 와, 재연결(세션 교체) 시 발생하던
+     * decrement-without-increment 비대칭을 원천 제거한다. 음수 하한이 불필요한 이유는
+     * 입력값이 참가자 맵 size(0 이상)이기 때문이다.
+     *
+     * @param kurentoRoom 동기화 대상 방
+     * @param actualCount 참가자 맵의 실제 참가자 수
      */
     @Override
-    public void decrementUserCount(KurentoRoom kurentoRoom) {
-        kurentoRoom.setUserCount(kurentoRoom.getUserCount() - 1);
+    public void syncUserCount(KurentoRoom kurentoRoom, int actualCount) {
+        kurentoRoom.setUserCount(actualCount);
         this.updateChatRoom(kurentoRoom);
     }
 

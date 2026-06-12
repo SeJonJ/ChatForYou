@@ -36,9 +36,7 @@ public interface RedisService {
 
     long getExpiredByTimeUnit(@NonNull String key, TimeUnit timeUnit);
 
-    void incrementUserCount(KurentoRoom kurentoRoom);
-
-    void decrementUserCount(KurentoRoom kurentoRoom);
+    void syncUserCount(KurentoRoom kurentoRoom, int actualCount);
 
     long increment(String key, long delta);
 

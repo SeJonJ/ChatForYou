@@ -20,6 +20,7 @@ import webChat.service.routing.InstanceProvider;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 
 /**
@@ -50,8 +51,14 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
     /**
      * kurento 연결 객체 및 방 사용자 session 객체 제거 및 close
      * 단 redis 에서 방 직접 삭제는 X
+     *
+     * 방별 정리(userCount 0 초기화·상태 변경·deleteKurentoRoom)는 이 인스턴스가 소유한 방에만 수행한다.
+     * 다중 인스턴스 무중단 rolling 배포에서 내려가는 인스턴스가 타 인스턴스 소유 방의 userCount 를 0 으로
+     * 덮어쓰면 syncUserCount 가 만든 authoritative count 가 파괴되고, 타 인스턴스에만 존재하는 Kurento
+     * 자원을 해제하려는 무의미한 동작이 발생하므로 instanceId 가 다른 방은 건너뛴다.
      */
     private void cleanup() {
+        String currentInstanceId = instanceProvider.getInstanceId();
         RoomSearchCriteria searchCriteria = RoomSearchCriteria.builder()
                 .redisIndex(RedisIndex.CHATROOM)
                 .keyword("")
@@ -67,6 +74,13 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
                 continue;
             }
             KurentoRoom kurentoRoom = (KurentoRoom) allChatRoomData.get("chatroom");
+
+            // owner-scope 가드 — 이 인스턴스 소유 방만 정리하여 타 인스턴스 authoritative count/자원 오염 차단
+            if (!Objects.equals(currentInstanceId, kurentoRoom.getInstanceId())) {
+                log.debug("Skip cleanup for room {} owned by another instance {} (current {})",
+                        kurentoRoom.getRoomId(), kurentoRoom.getInstanceId(), currentInstanceId);
+                continue;
+            }
 
             // redis 에서 해당 방의 유저수 및 방 상태 변경
             kurentoRoom.setUserCount(0); // 유저 count 초기화
