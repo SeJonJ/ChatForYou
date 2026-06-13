@@ -44,7 +44,11 @@ with open(cases_path, encoding='utf-8') as f:
         tmp = tempfile.mkdtemp(prefix='hooktest-')
         try:
             if sandbox:
-                shutil.copytree(os.path.join(sandbox_dir, sandbox), tmp, dirs_exist_ok=True)
+                src = os.path.join(sandbox_dir, sandbox)
+                if os.path.isdir(src):
+                    shutil.copytree(src, tmp, dirs_exist_ok=True)
+                elif sandbox != 'empty':
+                    raise FileNotFoundError(src)
             os.makedirs(os.path.join(tmp, '.claude', 'logs'), exist_ok=True)
             # os.walk 사용 — glob('**')는 .claude 등 숨김 디렉토리를 건너뛴다
             for root, _dirs, files in os.walk(tmp):

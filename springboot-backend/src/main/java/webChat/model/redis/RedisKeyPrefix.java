@@ -14,7 +14,8 @@ public enum RedisKeyPrefix {
     INSTANCE_COOKIE_PREFIX("instance:cookie:"),
     INSTANCE_INFO_PREFIX("instance:info:"),
     OAUTH_PREFIX("oauth:"),
-    QR_SESSION_PREFIX("qr:session:")
+    QR_SESSION_PREFIX("qr:session:"),
+    ROOM_MEMBERS_PREFIX("room:members:")
     ;
 
 

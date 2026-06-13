@@ -92,13 +92,13 @@ nodejs-frontend/src/static/
 
 2. nodejs-frontend/plan_docs/[기능명].md 작성 또는 병합 (MANDATORY)
    - 포함 항목:
-     a. 신규/수정 파일 목록 (신규 생성 / 수정 / 삭제 구분)
-     b. 신규 함수의 완전한 JavaScript 코드 (JSDoc 포함, 조각이 아닌 전체 함수)
-     c. 수정 함수별 Before/After 전체 함수 코드 (error 콜백 조각이 아닌 함수 전체)
-     d. HTML/View 변경 사항 (스크립트 로드 순서, DOM 구조, 이벤트 바인딩 위치 등)
-     e. 체크박스 형식 개발 기능 목록
-     f. 테스트 시나리오 개요 (HTTP / WebSocket / Electron 환경별)
-     g. 코드 컨벤션 체크리스트
+     a. 신규/수정 파일의 full skeleton guide
+     b. 주요 변경 지점별 Before/After 코드
+     c. 파일별 변경 단계 및 핵심 코드 스니펫
+     d. 체크박스 형식 Development feature list
+     e. Test scenarios and validation method (테스트 코드 작성 제외)
+     f. Code conventions 체크리스트
+     g. jQuery 이벤트 바인딩, DOM selector, WebSocket/DataChannel 분기, API 연동 흐름, SCSS 수정 포인트가 있으면 skeleton 또는 Before/After로 명시
 
 3. nodejs-frontend/ 관련 코드 분석 및 개발
 4. 개발 완료 후 frontend-convention-checker로 컨벤션 검증

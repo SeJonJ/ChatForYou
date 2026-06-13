@@ -22,5 +22,5 @@ capture_meta_noise	capture-declared-risk.sh	empty	capture_meta.json	0	-	포착	-
 capture_none	capture-declared-risk.sh	empty	capture_none.json	0	-	포착	-
 post_source_logged	post-tool-logger.sh	empty	post_backend.json	0	-	-	.claude/logs/session-{TODAY}.jsonl::backend-main
 post_nonsource_ignored	post-tool-logger.sh	empty	post_readme.json	0	-	-	-
-stop_with_log	stop-compliance-report.sh	with-session-log	stop.json	0	Compliance report saved	-	.claude/logs/compliance-{TODAY}.md::Activity Summary
+stop_with_log	stop-compliance-report.sh	with-session-log	stop.json	0	Compliance report updated	-	.claude/logs/compliance-{TODAY}.md::Activity Summary
 stop_no_log	stop-compliance-report.sh	empty	stop.json	0	-	Compliance report	-

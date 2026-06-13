@@ -1,5 +1,6 @@
 package webChat.service.kurento;
 
+import com.google.common.util.concurrent.Striped;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
 
 /**
  * Kurento WebRTC WebSocket 메시지 핸들러.
@@ -62,6 +64,12 @@ public class KurentoHandler extends TextWebSocketHandler {
     private final Map<String, List<Long>> peerSetupFailureTimestamps = new ConcurrentHashMap<>();
     private static final int RATE_LIMIT_MAX = 3;
     private static final long RATE_LIMIT_WINDOW_MS = 10_000L;
+
+    // roomId 단위 join/leave 직렬화 lock. 같은 방의 (참가자 맵 변경 + userCount 실제 수 동기화)를
+    // 한 임계영역으로 묶어, 동시 join/leave 가 각자 stale snapshot 을 읽고 어긋난 size 를 쓰는 것을 막는다.
+    // 고정 크기 Striped 풀이라 방 생성/삭제와 무관하게 lock 객체가 누적되지 않는다(무중단 운영 누수 차단).
+    // 서로 다른 방은 다른 stripe 로 분산되어 병렬을 유지한다.
+    private final Striped<Lock> roomLocks = Striped.lock(256);
 
     /**
      * WebSocket 텍스트 메시지를 수신하고 이벤트 유형에 따라 적절한 처리 메서드로 분기한다.
@@ -283,12 +291,12 @@ public class KurentoHandler extends TextWebSocketHandler {
     /**
      * 사용자를 Kurento 방에 입장시킨다.
      *
-     * 처리 순서: Redis에서 방 정보 조회(없으면 예외) 후 비활성 상태이면 KurentoClient 및
-     * MediaPipeline을 초기화하여 활성화한다. 이후 KurentoRoomManager.join을 호출하여
-     * 참가자를 등록한다.
+     * 처리 순서: roomId lock 획득 후 Redis에서 방 정보 조회(없으면 예외), 비활성 상태이면 KurentoClient 및
+     * MediaPipeline을 초기화하여 활성화하고, KurentoRoomManager.join을 호출하여 참가자를 등록한다.
      *
-     * Redis userCount 증감 판단은 KurentoRoomManager.join 결과만 authoritative source 로 사용한다.
-     * 동일 userId의 재접속(탭 새로고침, 중복 접속)은 기존 세션 교체이므로 인원 수는 변하지 않는다.
+     * userCount 는 join 완료 후 실제 참가자 맵 size 를 권위 소스로 동기화한다. 신규 입장이든
+     * 재접속(세션 교체)이든 동일하게 실제 수를 반영하므로 ±1 산술의 비대칭/lost update 가 발생하지 않는다.
+     * 방 조회·참가자 맵 변경·userCount 동기화를 모두 한 lock 안에서 수행하여 stale snapshot 을 막는다.
      *
      * join 완료 후 session 매핑이 없으면 방어적으로 종료한다.
      * 녹화 진행 중이면 신규 참가자에게 recordingInProgress 메시지를 전송한다.
@@ -304,27 +312,36 @@ public class KurentoHandler extends TextWebSocketHandler {
         final String nickName = message.getSenderNickName();
         log.info("PARTICIPANT {}: trying to join room {}", userId, roomId);
 
-        // roomId 를 기준으로 room 을 가져온다
-        KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
-        if (kurentoRoom == null) {
-            throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
-        }
+        // 방 조회부터 userCount 동기화까지를 roomId lock 으로 묶는다. fetch 가 lock 밖이면 동시 leave 가
+        // 변경한 맵 상태와 어긋난 stale snapshot 으로 size 를 잘못 기록할 수 있어, fetch 도 lock 안으로 둔다.
+        final KurentoRoom kurentoRoom;
+        final Lock lock = roomLocks.get(roomId);
+        lock.lock();
+        try {
+            // roomId 를 기준으로 room 을 가져온다
+            kurentoRoom = redisService.getRedisDataByDataType(roomId, DataType.CHATROOM, KurentoRoom.class);
+            if (kurentoRoom == null) {
+                throw new ChatForYouException(ErrorCode.ROOM_NOT_FOUND);
+            }
 
-        // room 을 active 상태로 전환
-        if (kurentoRoom.getKurento() == null) {
-            kurentoRoom.setKurento(kurentoClient);
-        }
+            // room 을 active 상태로 전환
+            if (kurentoRoom.getKurento() == null) {
+                kurentoRoom.setKurento(kurentoClient);
+            }
 
-        if (!kurentoPiplineMap.containsKey(roomId)) {
-            kurentoPiplineMap.put(roomId, kurentoRoom.getKurento().createMediaPipeline());
-        }
+            if (!kurentoPiplineMap.containsKey(roomId)) {
+                kurentoPiplineMap.put(roomId, kurentoRoom.getKurento().createMediaPipeline());
+            }
 
-        kurentoRoom.activate();
-        KurentoJoinResult joinResult = kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
-        if (!joinResult.replacedExistingParticipant()) {
-            redisService.incrementUserCount(kurentoRoom);
+            kurentoRoom.activate();
+            kurentoRoomManager.join(kurentoRoom, userId, nickName, session);
+            // join 으로 맵이 갱신된 직후 실제 참가자 수를 읽어 권위적으로 동기화한다.
+            redisService.syncUserCount(kurentoRoom, participantService.getParticipantCount(roomId));
             chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+        } finally {
+            lock.unlock();
         }
+
         KurentoUserSession user = participantService.getBySessionId(session);
         if (user == null) {
             // join 직후 session 매핑이 없는 경우 — 정상적으로 발생하지 않지만 방어적으로 처리
@@ -365,31 +382,41 @@ public class KurentoHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 현재 세션이 방의 최신 세션인지 확인 — stale disconnect 방지
-        if (!participantService.isCurrentParticipantSession(user.getRoomId(), user.getUserId(), user.getSession())) {
-            // 역색인에서 구세션 항목만 제거하여 신규 세션의 매핑을 보호한다
-            participantService.removeSessionMappingIfMatched(user.getSession(), user);
-            log.debug("Ignoring stale leaveRoom request: roomId={}, userId={}, sessionId={}",
-                    user.getRoomId(), user.getUserId(), user.getSession() != null ? user.getSession().getId() : null);
-            return;
-        }
+        // stale 가드 read 부터 참가자 맵 변경·userCount 동기화 commit 까지를 roomId lock 으로 묶는다.
+        // join 의 replaceParticipant(맵 교체)가 그 사이에 끼어들 수 없으므로, 가드를 통과한 채 신규
+        // 세션을 오삭제하는 race 가 사라지고, leave 후 실제 맵 size 로 동기화하여 정합성을 유지한다.
+        final Lock lock = roomLocks.get(user.getRoomId());
+        lock.lock();
+        try {
+            // 현재 세션이 방의 최신 세션인지 확인 — stale disconnect 방지
+            if (!participantService.isCurrentParticipantSession(user.getRoomId(), user.getUserId(), user.getSession())) {
+                // 역색인에서 구세션 항목만 제거하여 신규 세션의 매핑을 보호한다
+                participantService.removeSessionMappingIfMatched(user.getSession(), user);
+                log.debug("Ignoring stale leaveRoom request: roomId={}, userId={}, sessionId={}",
+                        user.getRoomId(), user.getUserId(), user.getSession() != null ? user.getSession().getId() : null);
+                return;
+            }
 
-        // redis 에서 방 삭제
-        KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(user.getRoomId(), DataType.CHATROOM, KurentoRoom.class);
-        if (kurentoRoom == null) {
-            participantService.removeSessionMappingIfMatched(user.getSession(), user);
-            log.debug("Room already missing during leaveRoom: roomId={}, userId={}", user.getRoomId(), user.getUserId());
-            return;
-        }
+            // redis 에서 방 삭제
+            KurentoRoom kurentoRoom = redisService.getRedisDataByDataType(user.getRoomId(), DataType.CHATROOM, KurentoRoom.class);
+            if (kurentoRoom == null) {
+                participantService.removeSessionMappingIfMatched(user.getSession(), user);
+                log.debug("Room already missing during leaveRoom: roomId={}, userId={}", user.getRoomId(), user.getUserId());
+                return;
+            }
 
-        // 유저가 room 의 participants 에 없다면 return
-        if (!participantService.getParticipantMap(kurentoRoom.getRoomId()).containsKey(user.getUserId())) {
-            return;
-        }
+            // 유저가 room 의 participants 에 없다면 return
+            if (!participantService.getParticipantMap(kurentoRoom.getRoomId()).containsKey(user.getUserId())) {
+                return;
+            }
 
-        kurentoRoomManager.leave(kurentoRoom, user);
-        redisService.decrementUserCount(kurentoRoom);
-        chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+            kurentoRoomManager.leave(kurentoRoom, user);
+            // leave 로 맵에서 제거된 직후 실제 참가자 수를 읽어 권위적으로 동기화한다.
+            redisService.syncUserCount(kurentoRoom, participantService.getParticipantCount(kurentoRoom.getRoomId()));
+            chatKafkaProducer.sendRoomUserCntEvent(kurentoRoom);
+        } finally {
+            lock.unlock();
+        }
 
         // 퇴장한 사용자의 Rate Limit 항목 정리 — sender 및 target 양방향 제거
         final String leavingUserId = user.getUserId();

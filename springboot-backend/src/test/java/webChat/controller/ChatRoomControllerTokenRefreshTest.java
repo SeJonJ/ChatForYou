@@ -16,6 +16,7 @@ import webChat.model.login.OauthRedis;
 import webChat.model.room.ChatRoom;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
 import webChat.service.user.UserService;
@@ -56,6 +57,9 @@ class ChatRoomControllerTokenRefreshTest {
     @Mock
     private JwtRoomProvider jwtRoomProvider;
 
+    @Mock
+    private RedisService redisService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -65,7 +69,8 @@ class ChatRoomControllerTokenRefreshTest {
                 routingService,
                 instanceProvider,
                 userService,
-                jwtRoomProvider
+                jwtRoomProvider,
+                redisService
         );
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)

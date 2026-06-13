@@ -51,7 +51,11 @@ with open(cases_path, encoding="utf-8") as f:
         tmp = tempfile.mkdtemp(prefix="codex-hooktest-")
         try:
             if sandbox:
-                shutil.copytree(os.path.join(sandbox_dir, sandbox), tmp, dirs_exist_ok=True)
+                src = os.path.join(sandbox_dir, sandbox)
+                if os.path.isdir(src):
+                    shutil.copytree(src, tmp, dirs_exist_ok=True)
+                elif sandbox != "empty":
+                    raise FileNotFoundError(src)
             os.makedirs(os.path.join(tmp, ".codex", "logs"), exist_ok=True)
 
             # os.walk includes hidden directories (.codex/logs); glob('**') does not.

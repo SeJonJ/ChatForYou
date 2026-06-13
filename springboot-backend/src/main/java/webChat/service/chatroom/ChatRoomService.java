@@ -184,6 +184,7 @@ public class ChatRoomService {
     public void delChatRoom(KurentoRoom kurentoRoom) {
         try {
             kurentoRoomManager.deleteKurentoRoom(kurentoRoom);
+            redisService.deleteRoomMembers(kurentoRoom.getRoomId());
             redisService.deleteAllChatRoomData(kurentoRoom.getRoomId());
 
             // 채팅방 안에 있는 파일 삭제

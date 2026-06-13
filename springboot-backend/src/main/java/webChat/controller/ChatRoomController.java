@@ -24,6 +24,7 @@ import webChat.model.routing.RoutingCookie;
 import webChat.model.user.UserDto;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
 import webChat.service.user.UserService;
@@ -44,6 +45,7 @@ public class ChatRoomController {
     private final RoutingInstanceProvider instanceProvider;
     private final UserService userService;
     private final JwtRoomProvider jwtRoomProvider;
+    private final RedisService redisService;
 
     /**
      * 새 채팅방을 생성하고 라우팅 쿠키를 설정한다.
@@ -137,6 +139,8 @@ public class ChatRoomController {
         if (ChatType.MSG.equals(chatRoom.getChatType())) {
             return ResponseEntity.ok(ChatForYouResponse.ofSuccess(null));
         }else{
+            // RTC 입장이 확정된 시점에만 멤버십을 기록한다 (녹화 다운로드 권한 검증 기준)
+            redisService.addRoomMember(roomId, oauthRedis.getEmail());
             UserDto userDto = userService.getUserInfo(oauthRedis);
             return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom, userDto));
         }

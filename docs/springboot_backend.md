@@ -209,26 +209,60 @@ log.error(">>>>>>> " + e.getMessage());             // Bad (문자열 연산 금
 ```
 
 ### 7. 주석 규칙
+
+#### 7.1 기본 형식 (간결 우선)
 - **인라인 주석**: WHY가 명확한 한 줄만 허용 (WHAT 설명 금지)
-- **JavaDoc**: 메서드에 작성하되 짧은 평문 우선. 메서드가 무엇을 하는지 1줄로 적고, 순서나 의도가 중요한 경우에만 WHY를 1~2줄 추가
-- **태그 사용**: `<p>`, `<ol>`, `<li>` 같은 HTML 태그형 JavaDoc은 지양. 단계 설명이 필요하면 평문으로 간단히 작성
-- **파라미터/반환값**: `@param`, `@return`은 의미가 있는 경우만 추가. 단순히 이름을 반복하는 설명은 금지
-- **TODO 주석**: 리팩토링 예정 코드에만 허용, 담당자와 이유 명시
+- **JavaDoc 형식**: "무엇을 하는지 **1줄** + 순서/정책/예외가 중요할 때 **WHY 1~2줄**". 길게 쓰지 않는다. 핵심 기능이라도 JavaDoc 본문은 간결하게(what) 유지하고, 상세한 "왜 이 순서/조건인가"는 코드 내부 인라인 WHY로 분리한다.
+- **파라미터/반환값/예외**: `@param`, `@return`, `@throws`는 이름을 반복하면 생략. 호출자가 실제로 알아야 할 제약·예외가 있을 때만 작성한다.
+- **HTML 태그 금지**: `<p>`, `<ol>`, `<li>` 같은 태그형 JavaDoc 금지. 단계 설명이 필요하면 평문으로.
+- **TODO 주석**: 리팩토링 예정 코드에만 허용, 담당자와 이유 명시.
+
+#### 7.2 JavaDoc 작성 범위 (3단계)
+| Tier | 대상 | JavaDoc | 코드 내부 WHY |
+|---|---|---|---|
+| **Tier 1 — 공용 계약** | REST Controller 공개 API / 의미가 코드만으로 불명확한 요청·응답 DTO 필드 / WebSocket·Kurento 메시지 payload / 공통 응답·에러 모델 / 공통 `utils`·공통 서비스 인터페이스 | **필수** (what 1줄) | 정책/예외 있을 때 |
+| **Tier 2 — 핵심·복잡 흐름** | WebRTC / Kurento / WebSocket lifecycle / 토큰 재발급·room token recovery / Redis 방 상태·라우팅·동시성·재시도 | **필수** (what 1줄, 간결) | **필수** — "왜 이 순서/조건이 필요한가" |
+| **Tier 3 — 자명한 보조** | private 헬퍼 / 단순 getter / 짧은 위임 메서드 | **생략 가능** | WHY 있으면 한 줄 |
+
+- 접근제어자 가이드: **public API/계약 = 필수**, **protected 확장 포인트 = 권장**, protected 내부 구현 보조 = 생략, **private = 원칙적 생략**.
+- "JavaDoc을 모두 작성"의 의미는 **Tier 1·2를 빠짐없이**라는 뜻이다. 자명한 Tier 3까지 강제하면 과잉 주석이 되므로 생략을 허용한다.
+
+#### 7.3 자기 완결성 (STRICT)
+WHY 주석은 장려하되, 그 WHY는 **코드/도메인 개념에 근거**해야 한다. 그 파일만 보는 개발자가 **개발 맥락(PDCA 사이클·설계 라벨·과거 의사결정 히스토리)을 몰라도 이해되는 수준**으로만 작성한다. 배경·근거·전략은 코드 주석이 아니라 `plan_docs/02-design`·`06-report`·vault 노트에 남긴다.
+
+**금지 — 맥락 의존 주석 (반드시 제거)**
+- **사이클/설계 라벨 참조**: `D1`, `A1 계획 수용`, `후보 A`, `패턴 B`, `reactive/proactive 전략` 등 PDCA·설계 문서 내부 용어
+- **타 레이어 전략 인용 / 결정 출처 인용**: "WebSocket 채널 유지 우선", "설계에서 결정한 트레이드오프", "codex 가 지적한…" 등
+- **구현 히스토리 나열**: "#127 fix가 누락했던…", "직전 사이클에서…"
+
+> 같은 코드/도메인 근거를 적는 WHY 주석(예: "startup race 를 줄이기 위해 listener 준비 이후 announce")은 **허용**된다. 외부 문서를 봐야만 뜻이 통하는 라벨/인용이 금지 대상이다.
 
 ```java
-// Good: 이유가 담긴 주석
-// WebRTC offer/answer 교환 전 ICE candidate 수집 완료 대기
-private void waitForIceGathering() { ... }
+// Good (Tier 1): 공개 API — what 1줄
+/**
+ * 채팅방에 입장하고 입장 성공 시 멤버십을 기록한다.
+ */
+public ResponseEntity<ChatForYouResponse> joinRoom(...) { ... }
 
+// Good (Tier 2): 핵심 흐름 — JavaDoc은 what 간결, 코드 내부에 "왜 이 순서/조건"
 /**
  * 라우팅 bootstrap 순서를 실행한다.
- * listener 준비 이후에만 announce 를 진행하는 이유는 startup race 를 줄이기 위해서다.
  */
-public void bootstrapRoutingLifecycle() { ... }
+public void bootstrapRoutingLifecycle() {
+    // listener 준비 이후에만 announce 를 진행해 startup race 를 방지
+    ...
+}
 
-// Bad: 코드 그대로 설명
+// Good (Tier 3): 자명한 private 헬퍼 — JavaDoc 생략
+private String cleanKey(String key) { ... }
+
+// Bad: 코드 그대로 설명 (WHAT 주석)
 // 채팅방 생성 메서드
 public ChatRoom createChatRoom() { ... }
+
+// Bad: 맥락 의존 (사이클 라벨 / 결정 출처 인용)
+// 후보 A 설계대로 입장 ledger 기록 — 후보 B(roomUUID)는 별도 사이클
+redisService.addRoomMember(roomId, email);
 ```
 
 ### 8. 객체 생성 패턴
@@ -331,6 +365,9 @@ Optional<ChatRoom> findWithParticipants(@Param("roomId") String roomId);
 - [ ] @Valid 입력 검증 적용
 - [ ] FetchType.LAZY + N+1 방지 확인
 - [ ] 불필요한 주석 없음 (WHAT 설명 주석 제거)
+- [ ] JavaDoc 작성 범위: Tier 1(공용 계약: 공개 API/의미불명 DTO 필드/공통 응답·에러·유틸)·Tier 2(핵심 흐름: WebRTC/Kurento/토큰/Redis) 메서드에 JavaDoc 존재 (§7.2). Tier 2는 코드 내부 WHY("왜 이 순서/조건") 동반
+- [ ] JavaDoc 형식: what 1줄 + 필요시 WHY 1~2줄, 장황하지 않음. `@param`/`@return`/`@throws`는 제약 있을 때만
+- [ ] 주석 자기 완결성: 사이클/설계 라벨(`D1`, `A1 계획 수용`, `후보 A` 등)·결정 출처 인용·구현 히스토리 주석 없음 (§7.3 — 배경은 plan_docs/vault에)
 - [ ] Builder 패턴으로 객체 생성
 ```
 
