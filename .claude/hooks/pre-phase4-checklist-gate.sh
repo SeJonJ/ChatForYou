@@ -9,7 +9,7 @@
 # EXIT 2 → 차단 (미완료 체크리스트 존재)
 # EXIT 0 → 통과
 
-PROJECT_ROOT="/Users/sejon/project/ChatForYou_v2"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | python3 -c "

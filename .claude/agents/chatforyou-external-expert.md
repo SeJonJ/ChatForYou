@@ -97,6 +97,9 @@ color: orange
 
 rework 는 **이미 승인된 설계·범위 내부로 한정**. 신규 요구사항·신규 아키텍처·risky migration 은 `Needs User Approval` 로 분리 (자동 rework 금지).
 
+> **[severity 완화 금지 — 설계 관성 함정]** Codex/외부 검토가 **원리(principle) 수준 결함**(로직 자체가 틀림, 튜닝 부족이 아님)을 지목하면, "이건 이미 승인된 설계의 핵심 구성요소다"를 이유로 severity 를 낮추거나 `기각`/주석교정/Remaining Risk 로 다운그레이드하지 말 것. 핵심 구성요소일수록 원리 결함의 폭발 반경이 크다. severity 를 낮추려면 **(a) 코드/도메인 근거로 "왜 검토자가 틀렸는가"를 입증 + (b) 유저 명시 승인 + 05 기록**이 둘 다 있어야 한다. 원리 결함의 기본 처리는 **해당 구성요소 제거/재설계(`채택`)**, tune 이 아니다.
+> 사례(2026-06 webrtc_ws_auto_reconnect STEP5): Codex 가 heartbeat idle-close 를 "정상 통화 false-positive(원리 결함)"로 지목했으나 "heartbeat 는 A′ 핵심"이라며 주석교정+Remaining Risk(P2)로 완화 → 실환경에서 무한 재연결 루프로 폭발. memory `cross-model-p0-no-downgrade` / `threshold-logic-normal-case` 참조.
+
 #### 3-3단계: 루프 반복 + 종료 조건 (최대 3 iteration)
 
 ```

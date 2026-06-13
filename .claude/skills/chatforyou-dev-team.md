@@ -130,11 +130,12 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 
 STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 
-1. 백엔드/프론트 변경 범위에 대한 컨벤션 검증이 완료되었다.
-2. 각 구현 가이드의 TODO 체크박스가 실제 상태에 맞게 갱신되었다.
-3. 남아 있는 예외 처리 TODO, 로그 상세화 누락이 있으면 `Open Issues` 또는 `Remaining Risks`에 기록되었다.
+1. **결정론 검증 게이트 통과** — `scripts/verify-changes.sh` 를 실행하고, L2 이상에서 필수 검증(build/test/syntax)이 PASS 여야 한다. FAIL(exit 2) 이면 QA로 넘어가지 않고 STEP 2 에서 수정한다. 출력된 `## Verification Evidence` 블록을 `plan_docs/03-implementation/[기능명].md` 에 기록한다. (`docs/agent/verification-protocol.md`)
+2. 백엔드/프론트 변경 범위에 대한 컨벤션 검증이 완료되었다.
+3. 각 구현 가이드의 TODO 체크박스가 실제 상태에 맞게 갱신되었다 (검증이 실제로 돌아간 뒤에만 `[x]`).
+4. 남아 있는 예외 처리 TODO, 로그 상세화 누락이 있으면 `Open Issues` 또는 `Remaining Risks`에 기록되었다.
 
-위 3개 중 하나라도 빠지면 QA 단계로 넘어가지 않는다.
+위 항목 중 하나라도 빠지면 QA 단계로 넘어가지 않는다.
 
 ---
 
@@ -182,6 +183,7 @@ STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 세부 정책의 단일 출처는 `docs/agent/pdca-templates.md` 의 External Consultant Protocol + Phase 05 Template.
 
 **루프 진입 게이트 (반드시 먼저 확인)**:
+- **결정론 검증 선행(필수)**: cross-model 루프 진입 전 `scripts/verify-changes.sh` 가 PASS(또는 L1 advisory) 여야 한다. 필수 검증 FAIL(exit 2) 상태면 추론 단계 진입 금지 — 먼저 03 으로 돌아가 수정한다. 깨진 코드에 리뷰 토큰을 쓰지 않는다. (`docs/agent/verification-protocol.md`)
 - **Risk Level 게이팅**: **L3** = 3-iteration 루프 mandatory + 자동 진행 / **L2** = recommended only → **루프 시작 전 유저 확인** / **L1·L0** = 루프 미사용
 - **Core WebRTC 아키텍처 게이트**: findings/조치가 WebRTC 코어(WebSocket/Signaling/Kurento/ICE/SDP/DataChannel/room lifecycle/media pipeline/signaling contract/reconnect state machine)를 변경하면 **자동 rework 중단 → 유저 사전 승인 먼저**. 이미 승인된 설계 내부 로컬 버그 수정은 게이트 대상 아님.
 

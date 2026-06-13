@@ -1,0 +1,45 @@
+name: 'Hook Regression Tests'
+
+on:
+  push:
+    paths:
+      - '.claude/hooks/**'
+      - '.codex/hooks/**'
+      - 'scripts/verify-changes.sh'
+  pull_request:
+    paths:
+      - '.claude/hooks/**'
+      - '.codex/hooks/**'
+      - 'scripts/verify-changes.sh'
+  workflow_dispatch:
+
+jobs:
+  hook-regression:
+    name: 'Claude Hook Regression (22 cases)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Run hook regression tests'
+        run: |
+          bash .claude/hooks/tests/run-tests.sh
+
+  codex-hook-regression:
+    name: 'Codex Hook Regression (23 cases)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Run Codex hook regression tests'
+        run: |
+          bash .codex/hooks/tests/run-tests.sh
+
+  verify-smoke:
+    name: 'verify-changes.sh Smoke (syntax + L1 + no-changes)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Run verify-changes smoke tests'
+        run: |
+          bash scripts/test-verify-changes.sh

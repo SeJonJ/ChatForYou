@@ -1,0 +1,26 @@
+# Hook 회귀 테스트 케이스 (TAB 구분)
+# name	hook	sandbox	fixture	expected_exit	must_contain	must_not_contain	expect_file
+#   sandbox/must/mustnot/expect_file 에서 "-" = 미적용
+#   expect_file = "상대경로::포함문자열" (포함문자열 "-" = 존재만 확인, {TODAY} 치환됨)
+impl_md_pass	pre-implementation-gate.sh	empty	impl_md.json	0	-	GATE BLOCK	-
+impl_desktop_block	pre-implementation-gate.sh	empty	impl_desktop.json	2	Desktop	-	-
+impl_l3_noplan_block	pre-implementation-gate.sh	empty	impl_kurento.json	2	GATE BLOCK — L3	-	-
+impl_l3_plan_noreview_warn	pre-implementation-gate.sh	with-plan	impl_kurento.json	0	GATE WARN — L3	GATE BLOCK	-
+impl_l3_plan_review_ok	pre-implementation-gate.sh	with-review	impl_kurento.json	0	GATE OK — L3	WARN	-
+impl_l2_noplan_warn	pre-implementation-gate.sh	empty	impl_backend.json	0	GATE WARN — L2	BLOCK	-
+impl_l2_plan_ok	pre-implementation-gate.sh	with-plan	impl_backend.json	0	GATE OK — L2	WARN	-
+impl_l1_pass	pre-implementation-gate.sh	empty	impl_frontend_js.json	0	-	GATE	-
+impl_content_escalation_warn	pre-implementation-gate.sh	empty	impl_frontend_js_webrtc.json	0	ESCALATION	GATE BLOCK	-
+impl_declared_l3_block	pre-implementation-gate.sh	with-declared-l3	impl_frontend_js_declared.json	2	DECLARED	-	-
+impl_parsefail_pass	pre-implementation-gate.sh	empty	impl_empty.json	0	-	-	-
+phase4_incomplete_block	pre-phase4-checklist-gate.sh	phase4-incomplete	phase4_feat.json	2	GATE BLOCK — Phase 3→4	-	-
+phase4_complete_pass	pre-phase4-checklist-gate.sh	phase4-complete	phase4_feat.json	0	GATE OK — Phase 3→4	BLOCK	-
+phase4_noimpl_warn	pre-phase4-checklist-gate.sh	phase4-noimpl	phase4_orphan.json	0	GATE WARN — Phase 3→4	BLOCK	-
+phase4_not04_skip	pre-phase4-checklist-gate.sh	empty	phase4_not04.json	0	-	GATE	-
+capture_l3	capture-declared-risk.sh	empty	capture_l3.json	0	선언 포착	-	.claude/logs/declared-risk-test.json::L3
+capture_meta_noise	capture-declared-risk.sh	empty	capture_meta.json	0	-	포착	-
+capture_none	capture-declared-risk.sh	empty	capture_none.json	0	-	포착	-
+post_source_logged	post-tool-logger.sh	empty	post_backend.json	0	-	-	.claude/logs/session-{TODAY}.jsonl::backend-main
+post_nonsource_ignored	post-tool-logger.sh	empty	post_readme.json	0	-	-	-
+stop_with_log	stop-compliance-report.sh	with-session-log	stop.json	0	Compliance report updated	-	.claude/logs/compliance-{TODAY}.md::Activity Summary
+stop_no_log	stop-compliance-report.sh	empty	stop.json	0	-	Compliance report	-

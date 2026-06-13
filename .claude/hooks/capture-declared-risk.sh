@@ -7,7 +7,7 @@
 #
 # 저장: .claude/logs/declared-risk-<session>.json  ({level, ts, excerpt})
 
-PROJECT_ROOT="/Users/sejon/project/ChatForYou_v2"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.claude/logs"
 mkdir -p "$LOG_DIR"
 

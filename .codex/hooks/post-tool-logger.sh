@@ -2,7 +2,7 @@
 # post-tool-logger.sh
 # PostToolUse hook: apply_patch 완료 시 소스/plan 파일 변경을 세션 로그에 기록.
 
-PROJECT_ROOT="${CODEX_PROJECT_ROOT:-/Users/sejon/project/ChatForYou_v2}"
+PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.codex/logs"
 mkdir -p "$LOG_DIR"
 

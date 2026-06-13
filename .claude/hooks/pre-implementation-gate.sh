@@ -11,7 +11,7 @@
 #   3. 내용 기반 위험도 상향 (Redis/JWT/WebRTC 키워드)
 #   4. 게이트 적용 (L3 filename = BLOCK / 나머지 = WARN)
 
-PROJECT_ROOT="/Users/sejon/project/ChatForYou_v2"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.claude/logs"
 
 INPUT=$(cat)

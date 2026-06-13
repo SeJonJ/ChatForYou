@@ -1,0 +1,1 @@
+{"tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Update File: chatforyou-desktop/src/foo.js\n@@\n+console.log('desktop');\n*** End Patch\n"},"session_id":"test"}

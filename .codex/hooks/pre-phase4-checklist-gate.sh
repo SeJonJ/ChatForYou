@@ -2,7 +2,7 @@
 # pre-phase4-checklist-gate.sh
 # PreToolUse hook (apply_patch): 04-analyze 작성 전 체크리스트 미완료 차단.
 
-PROJECT_ROOT="${CODEX_PROJECT_ROOT:-/Users/sejon/project/ChatForYou_v2}"
+PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 INPUT=$(cat)
 
 CODEX_HOOK_INPUT="$INPUT" python3 - "$PROJECT_ROOT" <<'PYEOF'

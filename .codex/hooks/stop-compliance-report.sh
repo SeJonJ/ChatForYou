@@ -2,7 +2,7 @@
 # stop-compliance-report.sh
 # Stop hook: Codex 세션 종료 시 compliance 리포트 생성.
 
-PROJECT_ROOT="${CODEX_PROJECT_ROOT:-/Users/sejon/project/ChatForYou_v2}"
+PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.codex/logs"
 TODAY=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/session-$TODAY.jsonl"

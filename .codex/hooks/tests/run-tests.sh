@@ -26,6 +26,7 @@ today = datetime.date.today().strftime("%Y-%m-%d")
 cases_path = os.path.join(test_dir, "cases.tsv")
 fixtures_dir = os.path.join(test_dir, "fixtures")
 sandbox_dir = os.path.join(test_dir, "sandbox")
+generated_sandboxes = {"empty", "with-declared-l3", "with-session-log"}
 
 
 def dash(v):
@@ -54,9 +55,16 @@ with open(cases_path, encoding="utf-8") as f:
                 src = os.path.join(sandbox_dir, sandbox)
                 if os.path.isdir(src):
                     shutil.copytree(src, tmp, dirs_exist_ok=True)
-                elif sandbox != "empty":
+                elif sandbox not in generated_sandboxes:
                     raise FileNotFoundError(src)
-            os.makedirs(os.path.join(tmp, ".codex", "logs"), exist_ok=True)
+            log_dir = os.path.join(tmp, ".codex", "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            if sandbox == "with-declared-l3":
+                with open(os.path.join(log_dir, "declared-risk-test.json"), "w", encoding="utf-8") as wf:
+                    wf.write('{"level":"L3","ts":"2026-06-10T00:00:00Z","excerpt":"declared L3"}\n')
+            elif sandbox == "with-session-log":
+                with open(os.path.join(log_dir, "session-TODAY.jsonl"), "w", encoding="utf-8") as wf:
+                    wf.write('{"ts":"2026-06-10T00:00:00Z","tool":"apply_patch","file":"springboot-backend/src/main/java/Foo.java","type":"backend-main","branch":"test","session":"test"}\n')
 
             # os.walk includes hidden directories (.codex/logs); glob('**') does not.
             for root, _dirs, files in os.walk(tmp):

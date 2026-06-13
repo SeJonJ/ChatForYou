@@ -99,7 +99,7 @@ For L1 changes that qualify for lightweight mode, confirm all L1 conditions in Â
 - When the task is explicitly scoped to one component, do not modify other components without notifying the user and receiving approval.
 - Any task that includes code changes, regardless of risk level, must check the vault knowledge capture requirement in `.local/local_agent_guide.md`.
 - Re-read relevant component docs before implementation.
-- Run relevant build, syntax, test, and convention checks after implementation.
+- Run relevant build, syntax, test, and convention checks after implementation. For L2 or higher, run the deterministic gate `scripts/verify-changes.sh` and record its evidence; see `docs/agent/verification-protocol.md`.
 - Update plan or implementation-guide checkboxes only after the corresponding validation actually ran.
 - Remove temporary exception handling, debug traces, and placeholder notes before final delivery, or report them as remaining risks.
 - Use `chatforyou_v2` as the PR base branch when discussing PRs.
@@ -142,6 +142,7 @@ Files under `docs/agent/` are conditionally mandatory, not optional reference li
 | Risk level is unclear, compound, or disputed | `docs/agent/risk-classification.md` |
 | WebRTC / WebSocket / Signaling / Kurento changes | `docs/agent/webrtc-review-protocol.md` |
 | Before git / kubectl / npm / docker / destructive / server commands | `docs/agent/command-safety.md` |
+| Running build/test verification, or entering Phase 05 (L2 or higher) | `docs/agent/verification-protocol.md` |
 | Writing or modifying wrapper docs | `docs/agent/wrapper-contract.md` |
 | Phase documents, vault scan procedure, or external consultant protocol needed | `docs/agent/pdca-templates.md` |
 | Phase 04 gap analysis | `docs/agent/phase04-bug-patterns.md` |
@@ -194,7 +195,7 @@ For L0 documentation-only work, use the L0 report and state why build/test valid
 - No non-negotiable safety boundary was violated.
 - Backend / Frontend / Desktop impact was reviewed.
 - Required plan or phase documents were created or updated when the risk level requires them.
-- Implementation work has relevant build, syntax, test, and convention evidence.
+- Implementation work has relevant build, syntax, test, and convention evidence. For L2 or higher, the deterministic gate (`scripts/verify-changes.sh`, per `docs/agent/verification-protocol.md`) passed or its FAIL was explicitly accepted by the user, and the evidence block is recorded in the Phase 03 document.
 - WebRTC / WebSocket / Signaling / Kurento L3 work has two documented review rounds.
 - Desktop-impacting web work followed the sync policy and avoided direct `chatforyou-desktop/src` edits.
 - Temporary debug code, placeholders, and unfinished cleanup are removed or reported.

@@ -2,7 +2,7 @@
 # capture-declared-risk.sh
 # UserPromptSubmit hook: 유저 프롬프트에서 명시적 risk level 선언을 포착해 세션별 저장.
 
-PROJECT_ROOT="${CODEX_PROJECT_ROOT:-/Users/sejon/project/ChatForYou_v2}"
+PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.codex/logs"
 mkdir -p "$LOG_DIR"
 

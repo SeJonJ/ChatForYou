@@ -2,7 +2,7 @@
 # pre-implementation-gate.sh
 # PreToolUse hook (apply_patch): risk level별 게이트 체크.
 
-PROJECT_ROOT="${CODEX_PROJECT_ROOT:-/Users/sejon/project/ChatForYou_v2}"
+PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 LOG_DIR="$PROJECT_ROOT/.codex/logs"
 
 INPUT=$(cat)
@@ -141,19 +141,83 @@ def find_plan(branch):
     ]
     return sorted(recent)[0] if recent else ""
 
-def find_l3_review():
+def tokens(value):
+    parts = re.split(r"[^A-Za-z0-9가-힣]+", value or "")
+    return {p.lower() for p in parts if len(p) >= 3}
+
+GENERIC_SIGNAL_TOKENS = {
+    "src", "main", "test", "java", "static", "nodejs", "frontend",
+    "springboot", "backend", "service", "controller", "config",
+    "js", "scss", "html", "json", "true", "false",
+    "plan", "plans", "docs", "base", "design", "review",
+}
+
+def specific_tokens(value):
+    return {token for token in tokens(value) if token not in GENERIC_SIGNAL_TOKENS}
+
+def current_feature_signals(branch, plan_path, changed_paths):
+    signals = {"tickets": set(), "plan": set(), "files": set()}
+
+    for m in re.findall(r"[0-9]+", branch or ""):
+        signals["tickets"].add(m)
+
+    if plan_path:
+        stem = os.path.splitext(os.path.basename(plan_path))[0]
+        signals["plan"].update(specific_tokens(stem))
+        try:
+            rel_plan = os.path.relpath(plan_path, root)
+            signals["plan"].update(specific_tokens(rel_plan))
+        except Exception:
+            pass
+
+    for p in changed_paths:
+        short = rel(p)
+        signals["files"].update(specific_tokens(short))
+    return signals
+
+def score_review_candidate(path, content, signals):
+    haystack = f"{os.path.relpath(path, root)}\n{content}".lower()
+    score = 0
+    reasons = []
+
+    for ticket in signals["tickets"]:
+        if ticket and ticket in haystack:
+            score += 4
+            reasons.append(f"branch-ticket:{ticket}")
+
+    plan_hits = sorted(t for t in signals["plan"] if t in haystack)
+    if plan_hits:
+        score += min(4, len(plan_hits) * 2)
+        reasons.append("plan:" + ",".join(plan_hits[:3]))
+
+    file_hits = sorted(t for t in signals["files"] if t in haystack)
+    if file_hits:
+        score += min(3, len(file_hits))
+        reasons.append("files:" + ",".join(file_hits[:3]))
+
+    return score, "; ".join(reasons)
+
+def find_l3_review(branch, plan_path, changed_paths):
     cutoff = time.time() - 30 * 86400
     pat = re.compile(r"Round 1|Round 2|L3.*[Rr]eview|webrtc.*review")
+    signals = current_feature_signals(branch, plan_path, changed_paths)
+    candidates = []
     for path in glob.glob(os.path.join(root, "plan_docs", "**", "*.md"), recursive=True):
         try:
             if os.path.getmtime(path) < cutoff:
                 continue
             with open(path, encoding="utf-8", errors="ignore") as f:
-                if pat.search(f.read()):
-                    return path
+                content = f.read()
+                if pat.search(content):
+                    score, reason = score_review_candidate(path, content, signals)
+                    candidates.append((score, os.path.getmtime(path), path, reason))
         except Exception:
             pass
-    return ""
+    if not candidates:
+        return "", False, ""
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    score, _mtime, path, reason = candidates[0]
+    return path, score < 2, reason or "no current feature signal matched"
 
 def deny(msg):
     print(msg, file=sys.stderr)
@@ -215,10 +279,13 @@ for path in paths:
                 "    2. docs/agent/webrtc-review-protocol.md 2라운드 리뷰",
                 f"  현재 브랜치: {branch}",
             ]))
-        if not find_l3_review():
+        review_path, review_weak, review_reason = find_l3_review(branch, plan_exists, paths)
+        if not review_path:
             messages.append(f"[GATE WARN - L3] WebRTC 관련 변경이지만 2라운드 리뷰 문서 미확인 | 파일: {short} | 근거: {reason}")
+        elif review_weak:
+            messages.append(f"[GATE WARN - L3] 2라운드 리뷰 후보는 있으나 현재 feature/plan과의 매칭이 약함 | review: {os.path.basename(review_path)} | 파일: {short} | 근거: {review_reason}")
         else:
-            messages.append(f"[GATE OK - L3] plan: {os.path.basename(plan_exists) if plan_exists else '?'} | review 확인됨 | {short}")
+            messages.append(f"[GATE OK - L3] plan: {os.path.basename(plan_exists) if plan_exists else '?'} | review: {os.path.basename(review_path)} | 매칭: {review_reason} | {short}")
     elif risk == "L2":
         if not plan_exists:
             messages.append(f"[GATE WARN - L2] 소스/설정 변경인데 관련 plan 문서가 없습니다. 파일: {short} | 근거: {reason} | 브랜치: {branch}")
