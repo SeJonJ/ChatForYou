@@ -1,0 +1,1 @@
+{"tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Update File: notes.md\n@@\n+hello\n*** End Patch\n"},"session_id":"test"}

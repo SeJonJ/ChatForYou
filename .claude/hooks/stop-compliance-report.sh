@@ -8,7 +8,7 @@
 #   3. L3 패턴 파일 수정 감지
 # 결과: .claude/logs/compliance-YYYY-MM-DD.md
 
-PROJECT_ROOT="/Users/sejon/project/ChatForYou_v2"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 LOG_DIR="$PROJECT_ROOT/.claude/logs"
 TODAY=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/session-$TODAY.jsonl"

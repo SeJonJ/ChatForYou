@@ -1,0 +1,57 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PROJECT_ROOT=\"${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CODEX_HOME=\"${CODEX_HOME:-$PROJECT_ROOT/.codex}\"; bash \"$CODEX_HOME/hooks/capture-declared-risk.sh\"'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PROJECT_ROOT=\"${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CODEX_HOME=\"${CODEX_HOME:-$PROJECT_ROOT/.codex}\"; bash \"$CODEX_HOME/hooks/pre-implementation-gate.sh\"'",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'PROJECT_ROOT=\"${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CODEX_HOME=\"${CODEX_HOME:-$PROJECT_ROOT/.codex}\"; bash \"$CODEX_HOME/hooks/pre-phase4-checklist-gate.sh\"'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PROJECT_ROOT=\"${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CODEX_HOME=\"${CODEX_HOME:-$PROJECT_ROOT/.codex}\"; bash \"$CODEX_HOME/hooks/post-tool-logger.sh\"'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PROJECT_ROOT=\"${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CODEX_HOME=\"${CODEX_HOME:-$PROJECT_ROOT/.codex}\"; bash \"$CODEX_HOME/hooks/stop-compliance-report.sh\"'",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

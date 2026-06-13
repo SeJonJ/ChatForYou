@@ -122,11 +122,12 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
 3. springboot-backend/src/main/ 개발
 4. src/test/service/ 에 Service 단위 테스트 작성 (정상 케이스 + 단순 예외)
 5. backend-convention-checker로 자체 검증
-6. 검증 결과에 따라 구현 가이드 체크박스 갱신
+6. 결정론 검증 대상이 있는 경우 `docs/agent/verification-protocol.md` 기준으로 `scripts/verify-changes.sh` 실행 결과를 구현 가이드 또는 03-implementation에 기록
+7. 검증 결과에 따라 구현 가이드 체크박스 갱신
    - `Development feature list`: 실제 구현 완료 후만 `[x]`
-   - `Test scenarios and validation method`: 테스트 코드 또는 검증 절차가 준비된 경우만 `[x]`
+   - `Test scenarios and validation method`: 테스트 코드 또는 검증 절차가 준비되고 필요한 결정론 검증이 `PASS`, `PASS/N/A`, 또는 허용된 `DEGRADE` 로 기록된 경우만 `[x]`
    - `Code conventions`: backend-convention-checker 통과 후만 `[x]`
-7. 잔존 항목이 있으면 구현 가이드 하단 `Open Issues` 또는 `Remaining Risks`에 기록
+8. 잔존 항목이 있으면 구현 가이드 하단 `Open Issues` 또는 `Remaining Risks`에 기록
 
 **프론트 전문가**:
 1. 리더 분석 요약 수신
@@ -142,23 +143,25 @@ description: ChatForYou v2 주요 기능 개발을 위한 5인 에이전트 팀 
      - [ ] Code conventions
 3. nodejs-frontend/ 개발
 4. frontend-convention-checker로 자체 검증
-5. 검증 결과에 따라 구현 가이드 체크박스 갱신
+5. 결정론 검증 대상이 있는 경우 `docs/agent/verification-protocol.md` 기준으로 `scripts/verify-changes.sh` 실행 결과를 구현 가이드 또는 03-implementation에 기록
+6. 검증 결과에 따라 구현 가이드 체크박스 갱신
    - `Development feature list`: 실제 구현 완료 후만 `[x]`
-   - `Test scenarios and validation method`: 테스트 시나리오와 검증 절차가 정리된 경우만 `[x]`
+   - `Test scenarios and validation method`: 테스트 시나리오와 검증 절차가 정리되고 필요한 결정론 검증이 `PASS`, `PASS/N/A`, 또는 허용된 `DEGRADE` 로 기록된 경우만 `[x]`
    - `Code conventions`: frontend-convention-checker 통과 후만 `[x]`
-6. 예외 처리/로그 표시 관련 미해결 항목이 있으면 구현 가이드 하단 `Open Issues` 또는 `Remaining Risks`에 기록
-7. `chatforyou-desktop/src` 직접 수정 금지
-8. 데스크톱 반영이 필요하면 `nodejs-frontend` 기준으로 수정 후 `docs/chatforyou_desktop.md`의 sync 절차로 처리
+7. 예외 처리/로그 표시 관련 미해결 항목이 있으면 구현 가이드 하단 `Open Issues` 또는 `Remaining Risks`에 기록
+8. `chatforyou-desktop/src` 직접 수정 금지
+9. 데스크톱 반영이 필요하면 `nodejs-frontend` 기준으로 수정 후 `docs/chatforyou_desktop.md`의 sync 절차로 처리
 
 ### STEP 2 Exit Gate
 
 STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 
-1. 백엔드/프론트 변경 범위에 대한 컨벤션 검증이 완료되었다.
-2. 각 구현 가이드의 TODO 체크박스가 실제 상태에 맞게 갱신되었다.
-3. 남아 있는 예외 처리 TODO, 로그 상세화 누락, 레거시 예외 흔적이 있으면 문서의 `Open Issues` 또는 `Remaining Risks`에 기록되었다.
+1. **결정론 검증 게이트 통과** — `scripts/verify-changes.sh` 를 실행하고, L2 이상에서 필수 검증(build/test/syntax)이 PASS 여야 한다. FAIL(exit 2) 이면 QA로 넘어가지 않고 STEP 2 에서 수정한다. 출력된 `## Verification Evidence` 블록을 `plan_docs/03-implementation/[기능명].md` 에 기록한다. (`docs/agent/verification-protocol.md`)
+2. 백엔드/프론트 변경 범위에 대한 컨벤션 검증이 완료되었다.
+3. 각 구현 가이드의 TODO 체크박스가 실제 상태에 맞게 갱신되었다 (검증이 실제로 돌아간 뒤에만 `[x]`).
+4. 남아 있는 예외 처리 TODO, 로그 상세화 누락, 레거시 예외 흔적이 있으면 문서의 `Open Issues` 또는 `Remaining Risks`에 기록되었다.
 
-위 3개 중 하나라도 빠지면 QA 단계로 넘어가지 않는다.
+위 항목 중 하나라도 빠지면 QA 단계로 넘어가지 않는다.
 
 ---
 
@@ -201,39 +204,44 @@ STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 `chatforyou-external-expert` agent를 호출하여:
 1. 백엔드/프론트/QA 전원 결과물 + STEP 4 의 04 gap findings 수신
 2. 팀 의견 상충 지점, 누락 위험 요소 분석
-3. **Core WebRTC Architecture Gate**
+3. **결정론 검증 Gate**
+   - Review loop 시작 전에 `docs/agent/verification-protocol.md` 기준으로 `scripts/verify-changes.sh`를 재실행한다.
+   - 결과가 `PASS` 또는 `PASS/N/A`이면 Phase 05 진입 가능하다.
+   - `DEGRADE`는 검증 인프라 부재 사유와 사람이 수용한 근거를 05에 기록한 경우에만 계속 진행한다.
+   - `BLOCK` 또는 필수 검증 FAIL이면 Phase 05 review-rework loop를 시작하지 않고 STEP 2/3 rework로 되돌린다.
+4. **Core WebRTC Architecture Gate**
    - Review loop 시작 전에 WebRTC 코어 기능의 아키텍처 변경 여부를 확인한다.
    - 대상: WebRTC, WebSocket, Signaling, Kurento, ICE/SDP, DataChannel, room lifecycle, media pipeline, signaling event contract, recovery/reconnect state machine.
    - 새 아키텍처 변경이 감지되면 자동 review-rework를 시작하지 않고 유저 사전 확인을 받는다.
    - 단순 버그 수정이나 기존 승인 설계 안의 국소 수정은 이 gate의 사전 확인 대상이 아니다.
-4. **Claude 교차검증 (cross-model independent review) — MANDATORY**
+5. **Claude 교차검증 (cross-model independent review) — MANDATORY**
    - 기본: `$claude consult` 호출
    - 입력은 `plan_docs/00-base_plan/[feature].md`, `01-plan`, `02-design`, `03-implementation`, `04-analyze`, `springboot-backend/plan_docs/[feature]_plan.md`, `nodejs-frontend/plan_docs/[feature]_plan.md`, 구현 파일 목록으로 고정한다.
    - 요청: "설계 기준 구현 정합 + 설계-구현 gap + 누락/엣지/보안/lifecycle 리스크" review
    - 결과를 05 에 `Reviewer: Claude via $claude consult` 로 명시
    - cross-model 동의는 권고이지 결정이 아님 (최종 판단 = external-expert + 유저)
-5. **Risk별 review-rework loop 적용 기준**
+6. **Risk별 review-rework loop 적용 기준**
    - L3: Phase 05에서 3-iteration review-rework loop를 mandatory로 자동 실행한다.
    - L2: review-rework loop는 recommended이며, loop 실행 전 유저 확인을 받는다.
    - L1/L0: review-rework loop를 사용하지 않는다.
    - L3 rework 범위는 원래 승인된 설계와 scope 안의 수정으로 제한한다. 새 요구사항, 새 아키텍처, 위험한 migration은 자동 rework하지 않고 `Needs User Approval`로 분리한다.
-6. **1 iteration의 정의**
+7. **1 iteration의 정의**
    - `$claude consult` 실행
    - Claude Findings 원문 기록
    - `chatforyou-external-expert` + `chatforyou-lead` + 담당 dev-team triage
    - 타당한 피드백 rework
    - `03-implementation` 및 `04-analyze` 갱신
-7. **3-iteration stop rule**
+8. **3-iteration stop rule**
    - L3는 최대 3회까지 자동 반복한다.
    - 3번째 Claude review 결과와 external-expert 종합 판정이 `APPROVED`가 아니면 `plan_docs/05-expert-review/[기능명].md`에 `Final Status: BLOCKED`를 기록한다.
    - 이 경우 STEP 6 진입 금지, `06-report 작성 금지`, 유저 보고 후 종료한다.
-8. `$claude` 실패 시 자동 fallback을 순서대로 시도한다:
+9. `$claude` 실패 시 자동 fallback을 순서대로 시도한다:
    - `$claude consult` 재시도 또는 fresh session
    - context 축약 후 04 Review Context + 01/02/03 + 핵심 구현 파일 중심으로 재시도
    - 유저가 직접 실행할 수 있는 `$claude consult` 또는 raw `claude -p` 프롬프트 출력
-9. L3에서 fallback까지 실패하면 `plan_docs/05-expert-review/[기능명].md` 에 `Final Status: BLOCKED` 를 기록하고, STEP 6 / `06-report 작성 금지`를 명시한다.
-10. L2에서 외부 리뷰가 recommended인 경우에만, 사용자 명시 수용하에 `APPROVED_WITH_RISK` 또는 `DONE_WITH_CONCERNS` 형태를 허용한다.
-11. `plan_docs/05-expert-review/[기능명].md` 작성
+10. L3에서 fallback까지 실패하면 `plan_docs/05-expert-review/[기능명].md` 에 `Final Status: BLOCKED` 를 기록하고, STEP 6 / `06-report 작성 금지`를 명시한다.
+11. L2에서 외부 리뷰가 recommended인 경우에만, 사용자 명시 수용하에 `APPROVED_WITH_RISK` 또는 `DONE_WITH_CONCERNS` 형태를 허용한다.
+12. `plan_docs/05-expert-review/[기능명].md` 작성
    - Critical Findings / Suggestions / 통합 리스크
    - Claude Findings 원문 섹션 (요약 금지)
    - external-expert Interpretation
@@ -300,4 +308,6 @@ STEP 3 QA로 넘어가기 전에 아래 항목이 모두 충족되어야 한다:
 - **구현 시작 전 `AGENT_GUIDE.md`와 관련 `docs/*.md` 재확인 필수**
 - **`chatforyou-desktop/src` 직접 수정 금지** — 웹 공통 변경은 `nodejs-frontend`에서 처리 후 sync
 - 외부 전문가의 Critical 항목은 유저에게 반드시 보고
+- TODO 체크박스는 대응 작업과 결정론 검증 evidence 가 실제로 완료된 뒤에만 `[x]` 로 표시
+- Phase 03 종료와 Phase 05 진입 전 `scripts/verify-changes.sh` 결과를 기록한다 (`docs/agent/verification-protocol.md`)
 - custom agent 위임 시 `.codex/config.toml` 등록 정보와 `.codex/agents/*.toml` 설정을 source of truth로 사용
