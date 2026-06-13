@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
@@ -119,13 +120,13 @@ class KurentoHandlerTest {
 
         // then
         verify(kurentoRoomManager, never()).leave(any(), any());
-        verify(redisService, never()).decrementUserCount(any());
+        verify(redisService, never()).syncUserCount(any(), anyInt());
         verify(chatKafkaProducer, never()).sendRoomUserCntEvent(any());
     }
 
     @Test
-    @DisplayName("동일 사용자의 세션 교체 JOIN_ROOM 은 userCount 를 증가시키지 않는다")
-    void handleTextMessage_동일사용자세션교체join이면_userCount를증가시키지않는다() throws Exception {
+    @DisplayName("동일 사용자의 세션 교체 JOIN_ROOM 은 실제 참가자 수로 userCount 를 동기화한다")
+    void handleTextMessage_동일사용자세션교체join이면_실제참가자수로동기화한다() throws Exception {
         // given
         KurentoHandler handler = createHandler();
         String payload = """
@@ -143,6 +144,8 @@ class KurentoHandlerTest {
         lenient().when(kurentoClient.createMediaPipeline()).thenReturn(mediaPipeline);
         given(kurentoRoomManager.join(kurentoRoom, "user-1", "tester", session))
                 .willReturn(new KurentoJoinResult(activeUser, true));
+        // 세션 교체이므로 참가자 맵의 실제 인원은 1 명 그대로 유지된다
+        given(participantService.getParticipantCount("room-1")).willReturn(1);
         given(participantService.getBySessionId(session)).willReturn(null, activeUser);
 
         // when
@@ -150,13 +153,14 @@ class KurentoHandlerTest {
 
         // then
         verify(kurentoRoomManager).join(kurentoRoom, "user-1", "tester", session);
-        verify(redisService, never()).incrementUserCount(kurentoRoom);
-        verify(chatKafkaProducer, never()).sendRoomUserCntEvent(kurentoRoom);
+        // ±1 산술이 아니라 실제 참가자 수(1)를 그대로 동기화한다 — 세션 교체는 인원 불변
+        verify(redisService).syncUserCount(kurentoRoom, 1);
+        verify(chatKafkaProducer).sendRoomUserCntEvent(kurentoRoom);
     }
 
     @Test
-    @DisplayName("일반 JOIN_ROOM 은 userCount 를 증가시키고 방 인원 이벤트를 발행한다")
-    void handleTextMessage_일반join이면_userCount를증가시킨다() throws Exception {
+    @DisplayName("일반 JOIN_ROOM 은 실제 참가자 수로 userCount 를 동기화하고 방 인원 이벤트를 발행한다")
+    void handleTextMessage_일반join이면_실제참가자수로동기화한다() throws Exception {
         // given
         KurentoHandler handler = createHandler();
         String payload = """
@@ -174,13 +178,15 @@ class KurentoHandlerTest {
         lenient().when(kurentoClient.createMediaPipeline()).thenReturn(mediaPipeline);
         given(kurentoRoomManager.join(kurentoRoom, "user-1", "tester", session))
                 .willReturn(new KurentoJoinResult(activeUser, false));
+        // 신규 입장으로 참가자 맵에는 2 명이 등록된 상태
+        given(participantService.getParticipantCount("room-1")).willReturn(2);
         given(participantService.getBySessionId(session)).willReturn(activeUser);
 
         // when
         handler.handleTextMessage(session, new TextMessage(payload));
 
         // then
-        verify(redisService).incrementUserCount(kurentoRoom);
+        verify(redisService).syncUserCount(kurentoRoom, 2);
         verify(chatKafkaProducer).sendRoomUserCntEvent(kurentoRoom);
     }
 

@@ -195,6 +195,7 @@ nodejs-frontend/.claude
 .codex/logs_*.sqlite
 .codex/logs_*.sqlite-shm
 .codex/logs_*.sqlite-wal
+.codex/logs/
 .codex/agent-memory/
 .codex/memories/
 .codex/rules/

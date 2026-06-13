@@ -15,6 +15,7 @@ import webChat.model.login.OauthRedis;
 import webChat.service.file.impl.MinioFileService;
 import webChat.service.file.impl.RecordingFileService;
 import webChat.service.monitoring.DownloadLogService;
+import webChat.service.redis.RedisService;
 import webChat.service.user.UserService;
 import webChat.utils.ClientUtils;
 import webChat.utils.TokenUtils;
@@ -28,6 +29,7 @@ public class FileController {
     private final RecordingFileService recordingFileService;
     private final UserService userService;
     private final DownloadLogService downloadLogService;
+    private final RedisService redisService;
 
     /**
      * 채팅방 파일을 업로드한다.
@@ -96,6 +98,17 @@ public class FileController {
             if(DownloadLog.DownloadType.FILE.equals(downloadType)){
                 fileData = minioFileService.getObject(fileName, filePath);
             } else if(DownloadLog.DownloadType.RECORDING.equals(downloadType)) {
+                // 녹화 파일은 해당 방에 실제 입장한 참가자만 다운로드할 수 있다
+                if (!redisService.isRoomMember(roomId, oauthRedis.getEmail())) {
+                    downloadLogService.saveDownloadLog(
+                            DownloadLog.of(
+                                    oauthRedis.getIdx(), oauthRedis.getEmail(), roomId,
+                                    downloadType,
+                                    filePath, fileName, ipAddress, userAgent, DownloadLog.DownloadStatus.FAIL
+                            )
+                    );
+                    throw new ChatForYouException(ErrorCode.ACCESS_DENIED);
+                }
                 fileData = recordingFileService.getObject(roomId, fileName, filePath);
             }
 

@@ -36,9 +36,7 @@ public interface RedisService {
 
     long getExpiredByTimeUnit(@NonNull String key, TimeUnit timeUnit);
 
-    void incrementUserCount(KurentoRoom kurentoRoom);
-
-    void decrementUserCount(KurentoRoom kurentoRoom);
+    void syncUserCount(KurentoRoom kurentoRoom, int actualCount);
 
     long increment(String key, long delta);
 
@@ -83,4 +81,21 @@ public interface RedisService {
     void deleteLoginInfo(long idx);
     void insertQRSession(QRSession qrSession);
     QRSession getQRSession(String sessionId);
+
+    /**
+     * 방 입장이 확정된 참가자 email 을 방 멤버십 ledger 에 기록한다.
+     * 녹화 다운로드 권한 검증의 기준 데이터로 사용된다.
+     */
+    void addRoomMember(String roomId, String email);
+
+    /**
+     * 요청자 email 이 해당 방의 멤버십 ledger 에 존재하는지 확인한다.
+     * 키 미존재 또는 비멤버이면 false 를 반환한다.
+     */
+    boolean isRoomMember(String roomId, String email);
+
+    /**
+     * 방 영구 삭제 시 멤버십 ledger 키를 정리한다.
+     */
+    void deleteRoomMembers(String roomId);
 }

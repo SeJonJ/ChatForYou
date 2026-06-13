@@ -311,31 +311,52 @@ init: function() {
 
 ### 7. 주석 규칙
 
+#### 7.1 기본 형식 (간결 우선)
 - **인라인**: WHY가 담긴 한 줄 한글 주석 (WHAT 설명 금지)
-- **JSDoc**: 공통 유틸 함수와 모듈의 공개 진입 함수/상태 전환 함수에 작성, `@param` / `@returns` 포함
-- **TODO**: 리팩토링 예정 코드에만, 이유 명시
+- **JSDoc 형식**: "무엇을 하는지 **1줄** + 순서/정책/예외가 중요할 때 **WHY 1~2줄**". 길게 쓰지 않는다. 핵심 기능이라도 JSDoc 본문은 간결하게(what) 유지하고, 상세한 "왜 이 순서/조건인가"는 코드 내부 인라인 WHY로 분리한다.
+- **`@param` / `@returns`**: 이름을 반복하면 생략. 타입·제약이 호출자에게 의미 있을 때만 작성한다.
+- **TODO**: 리팩토링 예정 코드에만, 이유 명시.
+
+#### 7.2 JSDoc 작성 범위 (3단계)
+| Tier | 대상 | JSDoc | 코드 내부 WHY |
+|---|---|---|---|
+| **Tier 1 — 공용 계약** | `ajaxUtil.js`·`common.js`·파일 유틸처럼 여러 화면에서 재사용되는 공통 함수 / 모듈 공개 진입·상태 전환 함수 / 요청·응답 형태가 코드만으로 불명확한 경우 | **필수** (what 1줄) | 정책/예외 있을 때 |
+| **Tier 2 — 핵심·복잡 흐름** | WebRTC / Kurento / WebSocket lifecycle / 토큰 갱신·재시도·room token recovery / 재연결·동시성 처리 | **필수** (what 1줄, 간결) | **필수** — "왜 이 순서/조건이 필요한가" |
+| **Tier 3 — 자명한 보조** | 내부 로컬 헬퍼 / 짧은 이벤트 핸들러 / 단순 위임 함수 | **생략 가능** | WHY 있으면 한 줄 |
+
+- "JSDoc을 모두 작성"의 의미는 **Tier 1·2를 빠짐없이**라는 뜻이다. 자명한 Tier 3까지 강제하면 과잉 주석이 되므로 생략을 허용한다.
+
+#### 7.3 자기 완결성 (STRICT)
+프론트 주석은 **그 파일만 보는 개발자가 개발 맥락(PDCA 사이클·설계 라벨·과거 의사결정 히스토리)을 몰라도 이해되는 수준**으로만 작성한다. 배경·근거·전략은 코드 주석이 아니라 `plan_docs/02-design`·`06-report`·vault 노트에 남긴다.
+
+**금지 — 맥락 의존 주석 (반드시 제거)**
+- **사이클/설계 라벨 참조**: `D1`, `D2`, `A1 계획 수용`, `후보 A`, `패턴 B`, `reactive/proactive 전략`, `안전망` 같은 PDCA·설계 문서 내부 용어
+- **다른 레이어의 전략 합의 인용**: "WebSocket 채널 유지 우선", "reactive A003 retry가 안전망", "dedup은 모듈 레벨 promise가 보장" 등 설계 결정의 *이유*를 길게 푸는 주석
+- **구현 히스토리/근거 나열**: "#127 fix가 누락했던…", "신규 dedup 메커니즘 없음", base64url 변환 같은 표준 동작의 장황한 설명
+- **코드를 그대로 옮긴 narration**: `// 1순위: …`, `// 2순위: …`처럼 바로 아래 코드가 이미 말하는 내용
 
 ```javascript
-// Good - WHY 주석
-this.handleOpen = this.handleOpen.bind(this);
+// Good (Tier 1): 공통 유틸 — what 1줄
+/**
+ * 토큰 보호 API 요청에 공통으로 사용할 인증 헤더를 구성한다.
+ * @returns {{Authorization: string, 'X-Room-Token'?: string}}
+ */
+function buildTokenHeaders() { ... }
+
+// Good (Tier 2): 핵심 흐름 — JSDoc은 what 간결, 코드 내부에 "왜 이 조건"
 // rtcPeer 콜백으로 전달 시 this가 peer로 변경되는 문제 방지
+this.handleOpen = this.handleOpen.bind(this);
+// 통화 중이면 페이지 이동 없이 toast만 표시
+if (isInRoomCallPage()) { ... }
 
 // Bad - WHAT 주석
 // 이벤트 바인딩 함수
 bindEvents: function() { ... }
 
-// JSDoc 예시 (공통 유틸 / 공개 함수)
-/**
- * Promise를 반환하는 AJAX
- * @param {string} url
- * @param {string} method
- * @param {Object} data
- * @returns {Promise}
- */
-function ajaxToJsonPromise(url, method, data) { ... }
+// Bad - 맥락 의존 주석 (사이클 라벨 + 전략 인용)
+// D1 top-up: 동기 요청 또는 재시도는 기존 타이밍 보존 — 비동기 비재시도만 선제 갱신 적용
+// 선제 갱신 실패해도 기존 요청 시도 — reactive A003 retry가 안전망
 ```
-
-공개 함수라도 내부 로컬 헬퍼, 짧은 이벤트 핸들러는 JSDoc 대신 WHY 주석만 유지한다.
 
 ### 7-1. 성공 응답 처리 규칙
 
@@ -439,6 +460,9 @@ if (recvMessage.type === 'newType') {
 - [ ] 모듈 패턴 (객체 리터럴 + self 또는 화살표 함수로 this 고정)
 - [ ] 에러 처리 존재 (errorCallback / .catch)
 - [ ] 주석: WHY 중심 한글 인라인, WHAT 설명 제거
+- [ ] JSDoc 작성 범위: Tier 1(공통 유틸·공개 진입 함수)·Tier 2(핵심 흐름: WebRTC/Kurento/토큰/재연결) 함수에 JSDoc 존재 (§7.2). Tier 2는 코드 내부 WHY("왜 이 순서/조건") 동반
+- [ ] JSDoc 형식: what 1줄 + 필요시 WHY 1~2줄, 장황하지 않음. `@param`/`@returns`는 제약 있을 때만
+- [ ] 주석 자기 완결성: 사이클/설계 라벨(`D1`, `A1 계획 수용`, `후보 A`, `패턴 B` 등)·타 레이어 전략 인용·구현 히스토리 주석 없음 (§7.3 — 배경은 plan_docs/vault에)
 - [ ] SCSS 미수정 또는 불가피한 수정 시 변수 사용 확인
 - [ ] 유저 미승인 ES6 문법 미사용 (async/await, class, import)
 - [ ] Electron 환경 고려 (isElectron() 분기, window.__CONFIG__ 사용)

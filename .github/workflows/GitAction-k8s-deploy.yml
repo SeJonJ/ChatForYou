@@ -2,7 +2,7 @@ name: CI/CD Pipeline with GitHub Actions for K8S
 
 on:
   push:
-    branches: [ "infra/cicd-test",  "chatforyou_v2", "feat/126"]
+    branches: [ "infra/cicd-test",  "chatforyou_v2", "bug/127"]
 #    branches: [ "master-webrtc-catchmind", "infra/cicd-test" ]
 #  pull_request:
 #    branches: [ "master" ]

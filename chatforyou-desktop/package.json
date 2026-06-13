@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-desktop",
-  "version": "1.0.56",
+  "version": "1.0.58",
   "description": "ChatForYou Desktop Application built with Electron",
   "main": "src/main/electron-main.js",
   "scripts": {

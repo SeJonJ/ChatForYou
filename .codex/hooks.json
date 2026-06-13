@@ -1,0 +1,57 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/sejon/project/ChatForYou_v2/.codex/hooks/capture-declared-risk.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/sejon/project/ChatForYou_v2/.codex/hooks/pre-implementation-gate.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "/Users/sejon/project/ChatForYou_v2/.codex/hooks/pre-phase4-checklist-gate.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/sejon/project/ChatForYou_v2/.codex/hooks/post-tool-logger.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/sejon/project/ChatForYou_v2/.codex/hooks/stop-compliance-report.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
