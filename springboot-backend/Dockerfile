@@ -20,6 +20,10 @@ RUN ./gradlew clean build -x test --no-daemon
 # 런타임 단계
 FROM eclipse-temurin:17-jdk-jammy
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Spring Boot 애플리케이션 실행에 필요한 포트 노출
 EXPOSE 8443
 
