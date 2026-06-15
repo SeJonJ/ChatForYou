@@ -39,6 +39,10 @@ public class HealthController {
      */
     @GetMapping("/readiness")
     public ResponseEntity<String> readiness() {
+        if (instanceProvider.isShuttingDown()) {
+            return ResponseEntity.status(503).body("Server is shutting down");
+        }
+
         if (cookieCheckEvent.isCookieCollected()) {
             return ResponseEntity.ok("READY");
         } else {

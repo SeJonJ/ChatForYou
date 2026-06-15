@@ -10,6 +10,7 @@ import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
+import webChat.model.room.recovery.RoomRecoveryMetadata;
 import webChat.model.routing.RoomRoutingInfo;
 
 import java.util.List;
@@ -65,6 +66,54 @@ public interface RedisService {
      * @param roomRoutingInfo roomId, instanceId, cookie 가 매핑된 객체
      */
     void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo);
+
+    /**
+     * 방 복구 소유권 이전을 위한 Redis claim lock을 획득한다.
+     */
+    boolean tryAcquireRoomClaimLock(String roomId, String instanceId, long ttlMs);
+
+    /**
+     * 현재 인스턴스가 보유한 방 claim lock만 해제한다.
+     */
+    boolean releaseRoomClaimLock(String roomId, String instanceId);
+
+    /**
+     * 종료 중 복구 가능한 방 메타데이터를 TTL과 함께 저장한다.
+     */
+    void saveRoomRecoveryMetadata(RoomRecoveryMetadata metadata, long ttlSeconds);
+
+    /**
+     * 방 복구 메타데이터를 master Redis에서 조회한다.
+     */
+    RoomRecoveryMetadata getRoomRecoveryMetadata(String roomId);
+
+    /**
+     * 방 복구 메타데이터를 삭제한다.
+     */
+    void deleteRoomRecoveryMetadata(String roomId);
+
+    /**
+     * claim 시점의 방 데이터를 master Redis에서 조회한다.
+     */
+    ChatRoom getChatRoomFromMaster(String roomId);
+
+    /**
+     * claim 시점의 라우팅 데이터를 master Redis에서 조회한다.
+     */
+    RoomRoutingInfo getRoomRoutingInfoFromMaster(String roomId);
+
+    /**
+     * 인스턴스 sticky cookie를 master Redis에서 조회한다.
+     */
+    String getInstanceCookieFromMaster(String instanceId);
+
+    /**
+     * 방 복구 성공 시 room owner, routing, recovery metadata를 Redis 트랜잭션으로 함께 갱신한다.
+     */
+    void updateRecoveredRoomRoutingAndMetadata(ChatRoom chatRoom,
+                                               RoomRoutingInfo roomRoutingInfo,
+                                               RoomRecoveryMetadata metadata,
+                                               long metadataTtlSeconds);
 
     long getInstanceRoomCount(String key);
 

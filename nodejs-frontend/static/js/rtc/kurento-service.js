@@ -85,6 +85,7 @@ const wsMessageHandlers = {
     existingParticipants: (msg) => {
         // 재연결 성공 판정은 existingParticipants 수신 시점
         // onopen만으로 리셋하면 JOIN_ROOM 실패 시 폭주 가능하므로 여기서 성공 확정
+        resetRecoveryState();
         resetReconnectState();
         onExistingParticipants(msg);
     },
@@ -225,11 +226,19 @@ let reconnectTimerId = null;
 let waitingForOnline = false;
 let heartbeatTimerId = null;
 let onlineDebounceTimerId = null;
+let recoveryInProgress = false;
+let recoveryRetryCount = 0;
+let recoveryRetryTimerId = null;
+let roomListRedirectInProgress = false;
+let reconnectNoticeMessage = null;
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const RECONNECT_MAX_ATTEMPTS = 8;
 const RECONNECT_JITTER_MS = 500;
+const RECOVERY_MAX_RETRY = 3;
+const RECOVERY_RETRY_DELAY_MS = 500;
+const DEPLOY_RECONNECT_NOTICE = '서버 패치가 진행 중입니다. 잠시 후 자동으로 재연결됩니다.';
 // heartbeat 타이머는 ws.readyState 폴링 주기로만 사용 (idle 능동 close 없음)
 const HEARTBEAT_INTERVAL_MS = 20000;
 // WiFi 토글 시 OS가 online 이벤트를 다발 발화 — 마지막 1회로 흡수해 중복 재연결 방지
@@ -273,6 +282,275 @@ function closeWebSocketConnection() {
     }
 }
 
+/**
+ * 예약된 recovery claim 재시도 타이머를 취소한다.
+ */
+function cancelRecoveryRetry() {
+    if (recoveryRetryTimerId !== null) {
+        clearTimeout(recoveryRetryTimerId);
+        recoveryRetryTimerId = null;
+    }
+}
+
+/**
+ * recovery 진행/재시도 상태를 초기화한다.
+ */
+function resetRecoveryState() {
+    cancelRecoveryRetry();
+    recoveryInProgress = false;
+    recoveryRetryCount = 0;
+}
+
+/**
+ * 자동 재연결 중 사용자에게 보여줄 안내 문구를 정한다.
+ */
+function setReconnectNoticeMessage(message) {
+    reconnectNoticeMessage = message;
+    updateReconnectOverlay(message);
+}
+
+/**
+ * 현재 통화 컨텍스트의 roomId를 런타임 상태 또는 URL에서 가져온다.
+ */
+function getTargetRoomId() {
+    return roomId || new URLSearchParams(window.location.search).get('roomId');
+}
+
+/**
+ * 복구 불가 상태를 단일 room list 이동으로 수렴시킨다.
+ * WHY: recovery/register/onclose가 겹치더라도 redirect는 1회만 발생해야 한다.
+ * @param {string} message
+ */
+function redirectToRoomListOnce(message) {
+    if (roomListRedirectInProgress) {
+        return;
+    }
+
+    roomListRedirectInProgress = true;
+    reconnectNoticeMessage = null;
+    cancelReconnect();
+    resetRecoveryState();
+    clearConnectedSession();
+    if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+    }
+    closeWebSocketConnection();
+
+    if (message) {
+        showWarningToast(message, 3000);
+    }
+
+    setTimeout(function() {
+        window.location.replace(window.__CONFIG__.BASE_URL + '/roomlist.html');
+    }, 2000);
+}
+
+/**
+ * recovery 성공 후 기존 소켓을 정리하고 새 sticky cookie 기준으로 signal 채널을 다시 연다.
+ * WHY: recovery 응답의 Set-Cookie는 이미 열린 WebSocket에는 반영되지 않으므로 새 연결이 필요하다.
+ */
+function reconnectWebSocketAfterRecovery() {
+    reconnectInProgress = true;
+    recoveryInProgress = false;
+    stopHeartbeat();
+
+    if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+    }
+
+    closeWebSocketConnection();
+    connectWebSocket();
+}
+
+/**
+ * reconnect preflight 실패를 기존 WebSocket 재연결 백오프로 되돌린다.
+ */
+function retryReconnectAfterPreflightFailure(error) {
+    if (isIntentionalClose()) {
+        return;
+    }
+
+    const errorCode = error?.responseJSON?.code;
+    if (isAuthRequiredErrorCode(errorCode)) {
+        showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+        if (reconnectInProgress) {
+            // 기존 register()의 reconnect 중 auth 실패 정책과 맞춘다. 즉시 로그인 이동하면 통화 컨텍스트가 먼저 파괴된다.
+            recoveryInProgress = false;
+            reconnectInProgress = false;
+            scheduleReconnect();
+        } else {
+            clearConnectedSession();
+            redirectToLogin();
+        }
+        return;
+    }
+
+    if (isInvalidRoomAccessErrorCode(errorCode) || errorCode === 'R001') {
+        redirectToRoomListOnce(getApiErrorMessage(error?.responseJSON, '입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'));
+        return;
+    }
+
+    console.warn('[WebSocket:Reconnect] room preflight failed, will retry:', error?.status || error?.statusText || error);
+    if (!reconnectNoticeMessage && error?.status === 0) {
+        setReconnectNoticeMessage(DEPLOY_RECONNECT_NOTICE);
+    }
+    recoveryInProgress = false;
+    reconnectInProgress = false;
+    scheduleReconnect();
+}
+
+/**
+ * WebSocket 재오픈 전에 HTTP로 방 상태를 확인해 deploy recovery 필요 여부를 판정한다.
+ */
+function preflightRoomBeforeReconnect() {
+    const targetRoomId = getTargetRoomId();
+    const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + targetRoomId;
+
+    tokenAjax(
+        url,
+        'GET',
+        true,
+        '',
+        function(response) {
+            const { result, data } = response || {};
+
+            if (isIntentionalClose()) {
+                return;
+            }
+
+            if (result === 'REDIRECT_RECOVER') {
+                recoverRoomAndReconnect();
+                return;
+            }
+
+            if (result === 'REDIRECT_DASHBOARD') {
+                redirectToRoomListOnce('현재 방에 참여할 수 없습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
+
+            if (result === 'REDIRECT_ROOM') {
+                resetRecoveryState();
+                clearConnectedSession();
+                console.log('room redirect to : ', data?.roomId);
+                location.reload();
+                return;
+            }
+
+            // WebSocket 연결 자체가 실패하는 배포/재시작 구간에서는 register()까지 도달하지 못한다.
+            // 그래서 재연결 경로만 HTTP로 방 상태를 먼저 확인하고, 복구가 필요 없을 때에만 signal 채널을 연다.
+            connectWebSocket();
+        },
+        retryReconnectAfterPreflightFailure
+    );
+}
+
+/**
+ * REDIRECT_RECOVER 응답 시 room owner recovery API를 선행 호출한 뒤 재연결한다.
+ */
+function recoverRoomAndReconnect() {
+    if (isIntentionalClose()) {
+        return;
+    }
+
+    if (recoveryInProgress) {
+        return;
+    }
+
+    recoveryInProgress = true;
+    cancelRecoveryRetry();
+
+    const targetRoomId = getTargetRoomId();
+    const url = window.__CONFIG__.API_BASE_URL + '/chat/room/' + targetRoomId + '/recover';
+
+    tokenAjax(
+        url,
+        'POST',
+        true,
+        '',
+        function(response) {
+            const { result, data } = response || {};
+
+            if (result === 'SUCCESS') {
+                reconnectWebSocketAfterRecovery();
+                return;
+            }
+
+            if (result === 'REDIRECT_RECOVER'
+                    && (data?.reason === 'CLAIM_IN_PROGRESS' || data?.reason === 'CURRENT_COOKIE_UNAVAILABLE')) {
+                if (recoveryRetryCount >= RECOVERY_MAX_RETRY) {
+                    redirectToRoomListOnce('방 복구가 지연되고 있습니다. 잠시 후 방 목록에서 다시 입장해주세요.');
+                    return;
+                }
+
+                recoveryRetryCount++;
+                recoveryInProgress = false;
+                // claim lock 경합은 짧게 양보해야 여러 브라우저가 동시에 새 WebSocket을 열지 않는다.
+                recoveryRetryTimerId = setTimeout(function() {
+                    recoveryRetryTimerId = null;
+                    recoverRoomAndReconnect();
+                }, data?.retryAfterMs || RECOVERY_RETRY_DELAY_MS);
+                return;
+            }
+
+            if (result === 'REDIRECT_DASHBOARD') {
+                // 서버가 복구 불가로 확정한 뒤에는 reconnect loop보다 room list 이동이 우선이다.
+                redirectToRoomListOnce('현재 방을 복구할 수 없습니다. 방 목록으로 이동합니다.');
+                return;
+            }
+
+            recoveryInProgress = false;
+            if (reconnectInProgress) {
+                reconnectInProgress = false;
+                scheduleReconnect();
+            }
+        },
+        function(error) {
+            const errorCode = error?.responseJSON?.code;
+
+            recoveryInProgress = false;
+
+            if (isAuthRequiredErrorCode(errorCode)) {
+                showWarningToast(getApiErrorMessage(error?.responseJSON, '로그인이 필요한 서비스입니다.'));
+                if (!reconnectInProgress) {
+                    clearConnectedSession();
+                    redirectToLogin();
+                } else if (ws) {
+                    ws.close();
+                } else {
+                    reconnectInProgress = false;
+                    scheduleReconnect();
+                }
+                return;
+            }
+
+            if (isInvalidRoomAccessErrorCode(errorCode) || errorCode === 'R001') {
+                redirectToRoomListOnce(getApiErrorMessage(error?.responseJSON, '입장 정보가 확인되지 않았습니다. 다시 시도해주세요.'));
+                return;
+            }
+
+            if (reconnectInProgress) {
+                console.warn('[WebSocket:Reconnect] room recovery failed, will retry:', error?.status || error?.statusText || error);
+                reconnectInProgress = false;
+                scheduleReconnect();
+                return;
+            }
+
+            handleApiError(error);
+            if (ws) {
+                ws.close();
+            }
+        },
+        null,
+        {
+            roomId: targetRoomId
+        }
+    );
+}
+
 // ==========================================
 // 자동 재연결 헬퍼 함수
 // ==========================================
@@ -308,6 +586,7 @@ function cancelReconnect() {
     }
     reconnectInProgress = false;
     waitingForOnline = false;
+    reconnectNoticeMessage = null;
     stopHeartbeat();
 }
 
@@ -377,7 +656,8 @@ function scheduleReconnect() {
     const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
     const delay = baseDelay + jitter;
     console.log('[WebSocket:Reconnect] ' + (reconnectAttempt + 1) + '번째 재시도 예약 (delay=' + delay + 'ms)');
-    updateReconnectOverlay('재연결 중... (' + (reconnectAttempt + 1) + '/' + RECONNECT_MAX_ATTEMPTS + ')');
+    const reconnectMessage = (reconnectNoticeMessage || '재연결 중...') + ' (' + (reconnectAttempt + 1) + '/' + RECONNECT_MAX_ATTEMPTS + ')';
+    updateReconnectOverlay(reconnectMessage);
     reconnectTimerId = setTimeout(function () {
         reconnectTimerId = null;
         doReconnect();
@@ -425,7 +705,7 @@ function doReconnect() {
         ws.onmessage = null;
     }
     closeWebSocketConnection();
-    connectWebSocket();
+    preflightRoomBeforeReconnect();
 }
 
 /**
@@ -440,6 +720,8 @@ function resetReconnectState() {
     reconnectInProgress = false;
     reconnectTimerId = null;
     waitingForOnline = false;
+    roomListRedirectInProgress = false;
+    reconnectNoticeMessage = null;
     hideReconnectOverlay();
     showToast('재연결되었습니다.', 'success');
     console.log('[WebSocket:Reconnect] 재연결 성공, 상태 초기화');
@@ -484,6 +766,7 @@ function teardownRoomSession(options) {
 
     // in-flight doReconnect와의 경쟁 차단: 재연결 타이머/heartbeat/online 대기 즉시 취소
     cancelReconnect();
+    resetRecoveryState();
 
     if (options?.sendLeaveRoom) {
         sendMessageToServer({
@@ -550,6 +833,9 @@ function connectWebSocket() {
         //      세션을 code=1000으로 닫지만 redis 방은 CREATED로 보존하므로, 1000을 "재연결 안 함"으로
         //      처리하면 재배포 후 복구 가능한 통화를 방치하게 된다. 진짜 종료된 방이면 재입장 시 R001 → GIVE_UP으로 수렴.
         console.warn('[WebSocket] 연결 종료 감지 (code=' + event.code + '), 재연결 시도');
+        if (event.code === 1000) {
+            setReconnectNoticeMessage(DEPLOY_RECONNECT_NOTICE);
+        }
         clearConnectedSession();
         // doReconnect() 진행 중에 새 소켓이 existingParticipants 수신 전에 닫히면
         // reconnectInProgress=true 상태로 scheduleReconnect에 진입해 L347 가드에 막혀 영구 wedge된다.
@@ -992,28 +1278,14 @@ function register() {
         const successCallback = (response) => {
             const { result, data } = response || {};
             if(result === 'REDIRECT_ROOM'){
+                resetRecoveryState();
                 clearConnectedSession();
                 console.log('room redirect to : ', data?.roomId);
                 location.reload();
+            } else if (result === 'REDIRECT_RECOVER') {
+                recoverRoomAndReconnect();
             } else if(result === 'REDIRECT_DASHBOARD'){
-                clearConnectedSession();
-                Toastify({
-                    text: "현재 방에 참여할 수 없습니다. \n 잠시 후 다시 시도해주세요.",
-                    duration: 3000, // 토스트는 3초 유지
-                    newWindow: true,
-                    close: true,
-                    gravity: "top",
-                    position: "center",
-                    stopOnFocus: true,
-                    style: {
-                        background: "linear-gradient(to right, #00b09b, #96c93d)",
-                    },
-                }).showToast();
-            
-                // 2초 후 리다이렉트
-                setTimeout(function() {
-                    location.href = window.__CONFIG__.BASE_URL + '/roomlist.html';
-                }, 2000);
+                redirectToRoomListOnce('현재 방에 참여할 수 없습니다. 잠시 후 다시 시도해주세요.');
             } else {
                 if (data) {
                     kurentoRoomInfo = data;

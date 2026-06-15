@@ -13,10 +13,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import webChat.model.chat.ChatType;
 import webChat.model.login.OauthRedis;
 import webChat.model.room.ChatRoom;
+import webChat.model.room.recovery.RecoveryDecision;
+import webChat.model.room.recovery.RecoveryReason;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.model.user.UserDto;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.chatroom.recovery.ChatRoomRecoveryService;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
@@ -48,6 +51,7 @@ class ChatRoomControllerJoinRoomTest {
     @Mock private UserService userService;
     @Mock private JwtRoomProvider jwtRoomProvider;
     @Mock private RedisService redisService;
+    @Mock private ChatRoomRecoveryService chatRoomRecoveryService;
 
     private MockMvc mockMvc;
 
@@ -59,7 +63,8 @@ class ChatRoomControllerJoinRoomTest {
                 instanceProvider,
                 userService,
                 jwtRoomProvider,
-                redisService
+                redisService,
+                chatRoomRecoveryService
         );
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -108,6 +113,8 @@ class ChatRoomControllerJoinRoomTest {
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
         // 비정상 인스턴스 조건
         given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(false);
+        given(chatRoomRecoveryService.evaluateJoinRecovery(rtcRoom))
+                .willReturn(RecoveryDecision.notRecoverable(RecoveryReason.NOT_RECOVERABLE));
 
         try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
             // when
@@ -151,6 +158,44 @@ class ChatRoomControllerJoinRoomTest {
         // then — 인스턴스 불일치 리다이렉트에서는 SADD 미호출
         // 대상 인스턴스의 joinRoom 재호출 시 거기서 기록됨 (02-design §1.2)
         verify(redisService, never()).addRoomMember(anyString(), anyString());
+    }
+
+    // ── slave 복제 지연 오판 방어 — master 재확인 후 정상 입장 ────────────────
+
+    @Test
+    @DisplayName("stale slave 가 owner-unhealthy 로 오판해도 master 정상 owner 면 복구 없이 RTC 입장한다 (recover-reconnect 루프 방지)")
+    void joinRoom_staleSlaveUnhealthy_masterHealthy_정상입장() throws Exception {
+        // given — slave 는 죽은 owner 를, master 는 복구된 현재 인스턴스를 가리킨다
+        OauthRedis oauthRedis = createOauthRedis();
+        ChatRoom slaveRoom = mock(ChatRoom.class);
+        given(slaveRoom.isSecretChk()).willReturn(false);
+        given(slaveRoom.getInstanceId()).willReturn("instance-dead");
+
+        ChatRoom masterRoom = mock(ChatRoom.class);
+        given(masterRoom.getInstanceId()).willReturn(INSTANCE_ID);
+        given(masterRoom.getChatType()).willReturn(ChatType.RTC);
+
+        UserDto userDto = UserDto.builder().userId(EMAIL).nickName("tester").build();
+
+        given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
+        given(chatRoomService.findRoomById(ROOM_ID)).willReturn(slaveRoom);
+        given(instanceProvider.isHealthy("instance-dead")).willReturn(false);
+        given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
+        given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(true);
+        given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
+        given(userService.getUserInfo(oauthRedis)).willReturn(userDto);
+
+        try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
+            // when
+            mockMvc.perform(get("/chatforyou/api/chat/room/{roomId}", ROOM_ID)
+                            .header("Authorization", AUTHORIZATION))
+                    .andExpect(status().isOk());
+        }
+
+        // then — master 가 정상 owner 를 보이므로 복구 판정/방 삭제 없이 RTC 멤버십을 기록한다
+        verify(chatRoomRecoveryService, never()).evaluateJoinRecovery(any());
+        verify(chatRoomService, never()).delChatRoom(anyString(), anyBoolean());
+        verify(redisService, times(1)).addRoomMember(ROOM_ID, EMAIL);
     }
 
     // ── MSG 타입 분기 — addRoomMember 미호출 ──────────────────────────────

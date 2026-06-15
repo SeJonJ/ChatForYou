@@ -16,6 +16,10 @@ import webChat.model.login.OauthRedis;
 import webChat.model.response.ChatForYouResponseResult;
 import webChat.model.response.common.ChatForYouResponse;
 import webChat.model.room.ChatRoom;
+import webChat.model.room.recovery.ChatRoomRecoveryOutVo;
+import webChat.model.room.recovery.RecoveryDecision;
+import webChat.model.room.recovery.RecoveryReason;
+import webChat.model.room.recovery.RecoveryResult;
 import webChat.model.room.RoomState;
 import webChat.model.room.in.ChatRoomInVo;
 import webChat.model.room.out.ChatRoomOutVo;
@@ -24,6 +28,7 @@ import webChat.model.routing.RoutingCookie;
 import webChat.model.user.UserDto;
 import webChat.security.jwt.JwtRoomProvider;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.chatroom.recovery.ChatRoomRecoveryService;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 import webChat.service.routing.RoutingService;
@@ -46,6 +51,7 @@ public class ChatRoomController {
     private final UserService userService;
     private final JwtRoomProvider jwtRoomProvider;
     private final RedisService redisService;
+    private final ChatRoomRecoveryService chatRoomRecoveryService;
 
     /**
      * 새 채팅방을 생성하고 라우팅 쿠키를 설정한다.
@@ -118,9 +124,24 @@ public class ChatRoomController {
         }
 
         if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
-            // 비정상 인스턴스의 방은 제거 후 대시보드로 우회시킨다.
-            chatRoomService.delChatRoom(roomId, true);
-            return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
+            // slave 복제 지연으로 owner-unhealthy 가 오판될 수 있어 master 기준 owner 를 재확인한다.
+            // WHY: 복구 직후 stale slave 가 죽은 owner 를 계속 반환하면 REDIRECT_RECOVER 가 반복되어
+            //      recover→reconnect 가 상한 없이 도는 루프가 생긴다. master 가 정상 owner 를 보이면 일반 라우팅으로 수렴시킨다.
+            ChatRoom masterRoom = redisService.getChatRoomFromMaster(roomId);
+            if (masterRoom != null
+                    && !StringUtil.isNullOrEmpty(masterRoom.getInstanceId())
+                    && instanceProvider.isHealthy(masterRoom.getInstanceId())) {
+                chatRoom = masterRoom;
+            } else {
+                RecoveryDecision recoveryDecision = chatRoomRecoveryService.evaluateJoinRecovery(chatRoom);
+                if (recoveryDecision.isRecoverable()) {
+                    return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_RECOVER));
+                }
+
+                // recoverable 하지 않은 비정상 인스턴스의 방만 제거 후 대시보드로 우회시킨다.
+                chatRoomService.delChatRoom(roomId, true);
+                return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
+            }
         }
 
 
@@ -144,6 +165,39 @@ public class ChatRoomController {
             UserDto userDto = userService.getUserInfo(oauthRedis);
             return ResponseEntity.ok(ChatForYouResponse.ofJoinRoom(chatRoom, userDto));
         }
+    }
+
+    /**
+     * 종료 중인 방 소유 인스턴스를 현재 인스턴스로 복구한다.
+     *
+     * @param roomId 복구할 채팅방 ID
+     * @param authorization Firebase 인증 토큰
+     * @param roomToken 비밀방 접근 토큰
+     * @param response 복구 후 라우팅 쿠키를 설정할 HTTP 응답
+     * @return 복구 결과와 재시도/대시보드 이동 사유
+     */
+    @PostMapping("/room/{roomId}/recover")
+    public ResponseEntity<ChatForYouResponse> recoverRoom(
+            @PathVariable String roomId,
+            @RequestHeader("Authorization") String authorization,
+            @RequestHeader(value = "X-Room-Token", required = false) String roomToken,
+            HttpServletResponse response) {
+
+        FirebaseToken token = TokenUtils.checkGoogleOAuthToken(authorization);
+        OauthRedis oauthRedis = userService.getValidatedOauthUser(token.getEmail());
+
+        ChatRoom chatRoom = chatRoomService.findRoomById(roomId);
+        if (chatRoom == null) {
+            return toRecoveryResponse(RecoveryResult.redirectDashboard(
+                    ChatRoomRecoveryOutVo.redirectDashboard(roomId, RecoveryReason.ROOM_NOT_FOUND)
+            ));
+        }
+
+        if (chatRoom.isSecretChk()) {
+            jwtRoomProvider.validate(roomToken, chatRoom.getRoomId(), oauthRedis.getEmail());
+        }
+
+        return toRecoveryResponse(chatRoomRecoveryService.recoverRoom(chatRoom, response));
     }
 
     /**
@@ -256,5 +310,12 @@ public class ChatRoomController {
     @GetMapping("/room/chkUserCnt/{roomId}")
     public ResponseEntity<ChatForYouResponse> chUserCnt (@PathVariable String roomId) {
         return ResponseEntity.ok(ChatForYouResponse.ofSuccess(chatRoomService.chkRoomUserCnt(roomId)));
+    }
+
+    private ResponseEntity<ChatForYouResponse> toRecoveryResponse(RecoveryResult recoveryResult) {
+        return ResponseEntity.ok(ChatForYouResponse.builder()
+                .result(recoveryResult.getResult().name())
+                .data(recoveryResult.getData())
+                .build());
     }
 }

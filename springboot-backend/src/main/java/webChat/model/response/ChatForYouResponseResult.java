@@ -6,6 +6,7 @@ import lombok.Getter;
 public enum ChatForYouResponseResult {
     SUCCESS,
     REDIRECT_ROOM,
+    REDIRECT_RECOVER,
     REDIRECT_DASHBOARD,
     ;
 }

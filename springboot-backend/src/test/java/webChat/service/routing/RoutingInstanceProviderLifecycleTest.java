@@ -129,6 +129,19 @@ class RoutingInstanceProviderLifecycleTest {
         verify(redisService, never()).delInstanceInfo(any());
         verify(heartbeatScheduler).shutdown();
         assertThat(instanceProvider.isShutdown()).isTrue();
+        assertThat(instanceProvider.isShuttingDown()).isTrue();
+    }
+
+    @Test
+    @DisplayName("beginShutdown 은 readiness drain 플래그만 세우고 Kafka Redis 정리는 수행하지 않는다")
+    void beginShutdown_readinessDrain플래그만세운다() {
+        // when
+        instanceProvider.beginShutdown();
+
+        // then
+        assertThat(instanceProvider.isShuttingDown()).isTrue();
+        assertThat(instanceProvider.isShutdown()).isFalse();
+        verifyNoInteractions(kafkaTemplate, redisService);
     }
 
     @Test

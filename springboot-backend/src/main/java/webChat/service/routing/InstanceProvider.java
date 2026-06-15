@@ -49,6 +49,7 @@ public abstract class InstanceProvider {
 
     private String instanceId;
     private boolean isShutdown = false;
+    private volatile boolean shuttingDown = false;
     private volatile boolean localRoutingStateInitialized = false;
     private volatile boolean clusterPresenceAnnounced = false;
 
@@ -156,9 +157,21 @@ public abstract class InstanceProvider {
     }
 
     /**
+     * readiness 에서 트래픽 제외를 시작하기 위한 drain 상태를 표시한다.
+     * 실제 SERVER_STOPPED 발행과 Redis 정리는 shutdown()에서 수행한다.
+     */
+    public void beginShutdown() {
+        shuttingDown = true;
+    }
+
+    /**
      * 서버 종료 시 이벤트 처리
      */
     public synchronized void shutdown() {
+        if (isShutdown) {
+            return;
+        }
+        beginShutdown();
         // 종료 시 다른 서버들에게 알림
         if (!StringUtil.isNullOrEmpty(instanceId)) {
             publishServerEvent(ServerEvent.SERVER_STOPPED, instanceId);

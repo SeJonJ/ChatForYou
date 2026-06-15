@@ -80,6 +80,13 @@ public class RoutingServiceImpl implements RoutingService {
         this.setRoomRedirectCookie(response, redirectCount, 60);
     }
 
+    @Override
+    public void setRecoveryRoutingInfo(HttpServletResponse response, String roomId, String nginxCookie) {
+        this.setServerCookie(response, nginxCookie);
+        this.setRoomIdCookie(response, roomId);
+        this.setRoomRedirectCookie(response, 0, 60);
+    }
+
     /**
      * 요청 쿠키에서 현재 리다이렉트 횟수를 조회한다.
      *
