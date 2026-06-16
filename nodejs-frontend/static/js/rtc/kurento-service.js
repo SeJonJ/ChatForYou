@@ -234,8 +234,19 @@ let reconnectNoticeMessage = null;
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
-const RECONNECT_MAX_ATTEMPTS = 8;
 const RECONNECT_JITTER_MS = 500;
+// 자동 재연결 대기 윈도우(ms). 이 시간 동안 DEPLOY_RECONNECT_NOTICE 오버레이를 유지하며 재연결을 시도하고,
+// 초과 시 수동 재입장 모달로 수렴한다. window.__CONFIG__.RECONNECT_WINDOW_MS 로 조정(기본 180000=3분).
+const RECONNECT_WINDOW_MS = (window.__CONFIG__ && Number(window.__CONFIG__.RECONNECT_WINDOW_MS)) || 180000;
+const RECONNECT_MAX_ATTEMPTS = (function () {
+    let elapsed = 0;
+    let attempts = 0;
+    while (elapsed < RECONNECT_WINDOW_MS && attempts < 60) {
+        elapsed += Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, attempts), RECONNECT_MAX_DELAY_MS);
+        attempts++;
+    }
+    return Math.max(attempts, 1);
+})();
 const RECOVERY_MAX_RETRY = 3;
 const RECOVERY_RETRY_DELAY_MS = 500;
 const DEPLOY_RECONNECT_NOTICE = '서버 패치가 진행 중입니다. 잠시 후 자동으로 재연결됩니다.';

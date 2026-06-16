@@ -4,6 +4,7 @@ import io.github.dengliming.redismodule.redisearch.index.Document;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import webChat.model.chat.ChatType;
@@ -36,8 +37,11 @@ import java.util.Map;
 public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
 
     private static final long CLAIM_LOCK_TTL_MS = 30_000L;
-    private static final long RECOVERY_TTL_SECONDS = 180L;
     private static final int CLAIM_RETRY_AFTER_MS = 500;
+
+    // 배포 복구 후보 metadata(room:recovery:{roomId})의 TTL(초). 이 시간 안에 재입장해야 복구된다.
+    @Value("${recovery.room.ttl-seconds:180}")
+    private long recoveryTtlSeconds;
 
     private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
@@ -148,7 +152,7 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
                     masterRoom,
                     RoomRoutingInfo.of(roomId, currentInstanceId, currentCookie, System.currentTimeMillis()),
                     claimedMetadata,
-                    RECOVERY_TTL_SECONDS
+                    recoveryTtlSeconds
             );
 
             instanceProvider.incrementInstanceRoomCount();
@@ -172,7 +176,7 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
     public PreShutdownResult markOwnedRoomsRecoverable() {
         String currentInstanceId = instanceProvider.getInstanceId();
         long now = System.currentTimeMillis();
-        long expiresAt = now + (RECOVERY_TTL_SECONDS * 1000);
+        long expiresAt = now + (recoveryTtlSeconds * 1000);
         List<String> roomIds = new ArrayList<>();
 
         RoomSearchCriteria searchCriteria = RoomSearchCriteria.builder()
@@ -210,7 +214,7 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
                     .expiresAt(expiresAt)
                     .reason("PRE_SHUTDOWN")
                     .status(RecoveryStatus.CANDIDATE)
-                    .build(), RECOVERY_TTL_SECONDS);
+                    .build(), recoveryTtlSeconds);
             roomIds.add(roomId);
         }
 
