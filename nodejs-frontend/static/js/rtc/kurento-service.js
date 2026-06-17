@@ -231,6 +231,9 @@ let recoveryRetryCount = 0;
 let recoveryRetryTimerId = null;
 let roomListRedirectInProgress = false;
 let reconnectNoticeMessage = null;
+// 배포 재연결 안내(DEPLOY_RECONNECT_NOTICE)의 남은 시간 카운트다운 표시용. 성공/취소/퇴장 시 정지해 누수 방지.
+let reconnectCountdownTimerId = null;
+let reconnectCountdownDeadline = null;
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
@@ -317,7 +320,12 @@ function resetRecoveryState() {
  */
 function setReconnectNoticeMessage(message) {
     reconnectNoticeMessage = message;
-    updateReconnectOverlay(message);
+    // 배포 안내일 때는 남은 시간 카운트다운이 오버레이를 갱신한다(중복 표시 방지).
+    if (message === DEPLOY_RECONNECT_NOTICE) {
+        startReconnectCountdown();
+    } else {
+        updateReconnectOverlay(message);
+    }
 }
 
 /**
@@ -598,6 +606,7 @@ function cancelReconnect() {
     reconnectInProgress = false;
     waitingForOnline = false;
     reconnectNoticeMessage = null;
+    stopReconnectCountdown();
     stopHeartbeat();
 }
 
@@ -642,6 +651,7 @@ function scheduleReconnect() {
     if (reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
         // heartbeat가 살아있으면 모달 중복 팝업 유발 가능 — GIVE_UP 전에 명시 정리
         stopHeartbeat();
+        stopReconnectCountdown();
         console.warn('[WebSocket:Reconnect] 최대 재시도 횟수 초과, 수동 재입장 필요');
         showConnectionFailModal({
             title: '연결 실패',
@@ -667,8 +677,11 @@ function scheduleReconnect() {
     const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
     const delay = baseDelay + jitter;
     console.log('[WebSocket:Reconnect] ' + (reconnectAttempt + 1) + '번째 재시도 예약 (delay=' + delay + 'ms)');
-    const reconnectMessage = (reconnectNoticeMessage || '재연결 중...') + ' (' + (reconnectAttempt + 1) + '/' + RECONNECT_MAX_ATTEMPTS + ')';
-    updateReconnectOverlay(reconnectMessage);
+    // 배포 카운트다운이 동작 중이면 오버레이는 카운트다운이 갱신하므로 시도횟수로 덮어쓰지 않는다.
+    if (reconnectCountdownTimerId === null) {
+        const reconnectMessage = (reconnectNoticeMessage || '재연결 중...') + ' (' + (reconnectAttempt + 1) + '/' + RECONNECT_MAX_ATTEMPTS + ')';
+        updateReconnectOverlay(reconnectMessage);
+    }
     reconnectTimerId = setTimeout(function () {
         reconnectTimerId = null;
         doReconnect();
@@ -733,9 +746,51 @@ function resetReconnectState() {
     waitingForOnline = false;
     roomListRedirectInProgress = false;
     reconnectNoticeMessage = null;
+    stopReconnectCountdown();
     hideReconnectOverlay();
     showToast('재연결되었습니다.', 'success');
     console.log('[WebSocket:Reconnect] 재연결 성공, 상태 초기화');
+}
+
+/**
+ * 남은 시간(ms)을 분:초 로 포맷한다.
+ */
+function formatRemainingTime(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min + ':' + (sec < 10 ? '0' + sec : sec);
+}
+
+/**
+ * 배포 재연결 안내 오버레이에 자동 재연결까지 남은 시간을 1초 단위로 표시한다.
+ * 이미 동작 중이면 재시작하지 않아 윈도우 시작 시점을 보존한다. 표시 전용이라 재연결 로직과 무관하다.
+ */
+function startReconnectCountdown() {
+    if (reconnectCountdownTimerId !== null) {
+        return;
+    }
+    reconnectCountdownDeadline = Date.now() + RECONNECT_WINDOW_MS;
+    const render = function () {
+        const remaining = reconnectCountdownDeadline - Date.now();
+        updateReconnectOverlay((reconnectNoticeMessage || DEPLOY_RECONNECT_NOTICE) + ' (남은 시간 ' + formatRemainingTime(remaining) + ')');
+        if (remaining <= 0) {
+            stopReconnectCountdown();
+        }
+    };
+    render();
+    reconnectCountdownTimerId = setInterval(render, 1000);
+}
+
+/**
+ * 카운트다운 타이머를 정지한다(setInterval 누수 방지).
+ */
+function stopReconnectCountdown() {
+    if (reconnectCountdownTimerId !== null) {
+        clearInterval(reconnectCountdownTimerId);
+        reconnectCountdownTimerId = null;
+    }
+    reconnectCountdownDeadline = null;
 }
 
 function updateReconnectOverlay(message) {

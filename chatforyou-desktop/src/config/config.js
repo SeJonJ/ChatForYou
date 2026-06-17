@@ -1,24 +1,24 @@
 // ChatForYou Electron Configuration
-// Auto-generated from web config on 2025-11-09T14:30:26.694Z
+// Auto-generated from web config on 2026-06-16T14:11:55.729Z
 
 window.__CONFIG__ = {
-  "API_BASE_URL": "https://hjproject.kro.kr/chatforyou/api",
+  "API_BASE_URL": "http://localhost:8080/chatforyou/api",
   "BASE_URL": "./templates",
   "PLATFORM": "electron",
   "FILE_PROTOCOL": true,
-  "DEV_MODE": false,
-  "AUTO_UPDATER": true,
+  "DEV_MODE": true,
+  "AUTO_UPDATER": false,
   "GOOGLE_OAUTH": {
     "API_KEY": "AIzaSyAEqUJMfNf_mKZFqWShTDvcGFUSWRgotOM",
     "AUTH_DOMAIN": "chatforyou-77681.firebaseapp.com",
     "PROJECT_ID": "chatforyou-77681+"
   },
-  "WEB_BASE_URL": "https://hjproject.kro.kr/chatforyou",
+  "WEB_BASE_URL": "http://localhost:3000/chatforyou",
   "ELECTRON_VERSION": "unknown",
   "APP_VERSION": "1.0.0",
   "PLATFORM_TYPE": "desktop",
   "CONVERTED_FROM": "web",
-  "CONVERSION_DATE": "2025-11-09T14:30:26.694Z"
+  "CONVERSION_DATE": "2026-06-16T14:11:55.729Z"
 };
 
 // Electron specific utilities
