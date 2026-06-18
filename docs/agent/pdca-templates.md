@@ -134,8 +134,22 @@ External / cross-model expert review is **MANDATORY** for L3 (and recommended fo
 8. Identify the reviewer clearly: `Reviewer: [cross-model tool] via [host agent]`.
 9. Record the opinion under `## External / Cross-model Review` in the **Phase 05** document. Output must be **faithful (no summarization)**.
 10. Cross-model agreement is a recommendation, not a decision — final verdict is external-expert + user.
-11. If mandatory L3 external review cannot be completed after fallback, record `Final Status: BLOCKED` in 05 and do not write 06.
+11. If mandatory L3 external review cannot be completed after fallback, the **Intra-model Adversarial Review Loop** (see below) is the only sanctioned substitute. Without either a completed cross-model review or a completed adversarial loop with user sign-off, record `Final Status: BLOCKED` in 05 and do not write 06.
 12. Propose improvements. Obtain user approval before adding new scope, architecture changes, or risky migration.
+
+### Intra-model Adversarial Review Loop (cross-model UNAVAILABLE only)
+
+Use this **only** when the host cross-model consult path is unavailable and the fallback retries in step 7 have failed. It is a **degraded substitute, not an equivalent** — a single model shares its own blind spots (see the 2026-06 heartbeat P0 case in `docs/agent/webrtc-review-protocol.md`). It therefore can only yield `APPROVED_WITH_RISK`, never a clean `APPROVED`.
+
+Procedure (3–5 iterations):
+1. **Critical review**: invoke `chatforyou-external-expert` (or `external-consultant`) in a **fresh context**. Provide only the phase documents + implementation files — never the author's justification. Each round must use a different adversarial lens so rounds do not echo each other: R1 flow correctness · R2 failure/lifecycle · R3 security/auth · R4 ops/config/deadlock · R5 regression/edge. Output strictly in the `P0/P1/P2 + Decision` format of `docs/agent/webrtc-review-protocol.md`. No summarization.
+2. **Feedback validity verification**: a separate pass (different agent or the lead) checks each finding — is it real, does it cite `file:line` evidence, is the severity correct? The `cross-model-p0-no-downgrade` rule is enforced here: a principle-level P0 must NOT be downgraded because the component is "core" — to lower severity requires code/domain evidence AND recorded user sign-off.
+3. **Apply to code**: accepted findings → rework within the already approved scope. New scope/architecture/risky migration → `Needs User Approval`.
+4. **Stop**: when a round produces no new P0/P1, or at 5 iterations max (3-iteration stop rule of step 6 still applies for declaring no-progress).
+
+Recording in Phase 05:
+- `Reviewer: chatforyou-external-expert (intra-model adversarial loop) — cross-model UNAVAILABLE`. Record every round faithfully (no summarization).
+- Final Status is at best **`APPROVED_WITH_RISK`**, with the explicit risk recorded: "independent cross-model verification not performed; substituted with N-round intra-model adversarial review." This requires **explicit user sign-off recorded in 05** before writing 06. Re-run a real cross-model review once the path is restored.
 
 ---
 

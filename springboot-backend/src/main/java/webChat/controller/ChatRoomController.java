@@ -168,7 +168,7 @@ public class ChatRoomController {
     }
 
     /**
-     * 종료 중인 방 소유 인스턴스를 현재 인스턴스로 복구한다.
+     * 종료된 인스턴스에 있는 방을 현재 인스턴스로 복구한다.
      *
      * @param roomId 복구할 채팅방 ID
      * @param authorization Firebase 인증 토큰

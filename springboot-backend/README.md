@@ -164,3 +164,4 @@ java -jar build/libs/springboot-backend-*.jar
 | [WEBRTC_ROOM_LIFECYCLE.md](./WEBRTC_ROOM_LIFECYCLE.md) | WebRTC/Kurento 방 생명주기 상태 전이 명세 |
 | [ROOM_ROUTING_FLOW.md](./ROOM_ROUTING_FLOW.md) | 다중 인스턴스 방 라우팅 플로우 |
 | [RECORDING_FLOW.md](./RECORDING_FLOW.md) | 녹화 시스템 아키텍처 및 플로우 |
+| [ZERO_DOWNTIME_DEPLOY_FLOW.md](./ZERO_DOWNTIME_DEPLOY_FLOW.md) | K8s Rolling Update 무중단 배포 복구 플로우 |
