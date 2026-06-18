@@ -37,6 +37,7 @@ jobs:
     env:
       K8S_NAMESPACE: chatforyou
       DEPLOYMENT_NAME: chatforyou-v03
+      BACKEND_CONTAINER_NAME: chatforyou-container
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,7 +88,7 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           kubectl set image deployment/$DEPLOYMENT_NAME \
-            chatforyou-container=$IMAGE_URI \
+            $BACKEND_CONTAINER_NAME=$IMAGE_URI \
             -n $K8S_NAMESPACE
           kubectl rollout status deployment/$DEPLOYMENT_NAME -n $K8S_NAMESPACE
 

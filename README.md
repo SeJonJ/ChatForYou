@@ -14,10 +14,13 @@ ChatForYou_v2/
 │   ├── templates/           # HTML 템플릿
 │   ├── config/              # 환경별 설정 파일
 │   └── server.js            # Node.js 서버
-├── springboot-backend/       # Spring Boot 백엔드 API (포트: 8080)
+├── springboot-backend/       # Spring Boot 백엔드 API (포트: 8443)
 │   ├── src/main/java/       # Java 소스 코드
 │   ├── src/main/resources/  # 설정 파일
 │   └── build.gradle         # Gradle 빌드 설정
+├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.0)
+│   ├── src/                 # Electron 소스 코드
+│   └── package.json
 └── README.md
 ```
 
@@ -25,43 +28,66 @@ ChatForYou_v2/
 
 ### Frontend
 - **Node.js** - 프론트엔드 서버
+- **Electron** - 데스크톱 앱 (v39)
 - **jQuery** - DOM 조작 및 AJAX
 - **Bootstrap 5** - UI 프레임워크
 - **WebRTC** - 실시간 화상통신
-- **Socket.IO** - 실시간 통신
 
 ### Backend
 - **Java 17** - 프로그래밍 언어
 - **Spring Boot** - 백엔드 프레임워크
-- **Spring WebSocket** - 실시간 통신
-- **Stomp** - 메시징 프로토콜
-- **Kurento Media Server** - 미디어 서버
+- **Spring WebSocket** - 실시간 통신 (STOMP)
+- **Kurento Media Server** - N:M 미디어 서버
+- **Redis** - 분산 상태 관리 (방·라우팅·복구)
+- **Kafka** - 인스턴스 간 이벤트 전파
+- **MinIO** - 녹화 파일 오브젝트 스토리지
 
 ### Infrastructure
-- **Gradle** - 빌드 도구
 - **Docker** - 컨테이너화
-- **Kubernetes** - 오케스트레이션
-- **Prometheus & Grafana** - 모니터링
+- **Kubernetes** - 오케스트레이션 (RollingUpdate, readinessProbe)
+- **GitHub Actions** - CI/CD 파이프라인
+- **Prometheus & Grafana** - 성능 모니터링
+- **nginx** - TLS sidecar + sticky session 라우팅
 
 ## ✨ 주요 기능
 
 ### 🎯 기본 기능
 - **채팅방 관리**: 채팅방 조회, 생성, 삭제, 수정
-- **무중단 채팅방 관리** : Redis 기반 서버 재배포 시에도 채팅방 유지 관리
+- **무중단 배포 복구**: K8s Rolling Update 중 방 삭제 없이 자동 재입장 ([상세](#-무중단-배포-복구))
 - **보안 기능**: 채팅방 암호화 및 접근 제어
 - **사용자 관리**: 닉네임 중복 검사 및 자동 조정
 - **실시간 메시징**: DataChannel 기반 실시간 채팅
 
+### 🔄 무중단 배포 복구
+
+Kubernetes Rolling Update 중 RTC 방이 삭제되지 않고, 참가자가 자동으로 같은 방에 재입장한다.
+
+**동작 흐름**
+
+| 단계 | 동작 |
+|------|------|
+| SIGTERM | `preStop` hook → `/internal/pre-shutdown` (loopback) → Redis에 복구 후보 메타데이터 저장 |
+| readiness drain | 503 반환 → nginx가 이 Pod를 자동 제외 |
+| WebSocket close | 프론트엔드 자동 재연결 + 배포 안내 카운트다운 오버레이(3분) 표시 |
+| joinRoom() | owner unhealthy + 복구 메타 유효 → `REDIRECT_RECOVER` 반환 (기존 방 삭제 없음) |
+| HTTP Recovery | `POST /chat/room/{roomId}/recover` → Redis claim lock → 신규 Pod로 owner 이전 → `Set-Cookie` 발급 |
+| 재입장 | 새 쿠키로 신규 Pod에 WebSocket 연결 → `JOIN_ROOM` → 영상 복원 |
+
+> `chatforyou-server`(nginx sticky) 쿠키는 HttpOnly라 JS에서 수정 불가. HTTP Recovery API 응답의 `Set-Cookie`로만 갱신된다.
+
+**상세 문서**: `springboot-backend/ZERO_DOWNTIME_DEPLOY_FLOW.md`
+
+---
+
 ### 🎥 화상채팅 기능
-- **WebRTC 화상채팅**: P2P 기반 음성/영상 통화
-- **Kurento Media Server**: N:M 화상채팅 지원
+- **WebRTC 화상채팅**: N:M 음성/영상 통화 (Kurento Media Server)
 - **화면 공유**: 실시간 화면 공유 기능
 - **장비 선택**: 마이크/스피커 선택 기능
 - **DataChannel**: 파일 전송 및 추가 채팅
-- **텍스트 오버레이**: 문자 채팅 내용을 비디오에 표시하는 텍스트 오버레이 기능
+- **텍스트 오버레이**: 문자 채팅 내용을 비디오에 표시
 - **실시간 자막**: 음성을 통한 실시간 자막 기능
-- **SSE 기반 실시간 채팅 목록 확인**: SSE 기반 실시간 채팅 목록 확인 기능
-- **녹화 기능**: 실시간 영상 녹화 및 다운로드 기능
+- **SSE 기반 실시간 채팅 목록**: 서버 사이드 이벤트 기반 실시간 방 목록 갱신
+- **녹화 기능**: 실시간 영상 녹화 및 MinIO 업로드/다운로드
 
 ### 🎮 게임 기능
 - **CatchMind 게임**: N 라운드 그림 맞추기 게임
@@ -77,7 +103,7 @@ ChatForYou_v2/
 - **확장자 제한**: jpg, jpeg, png, gif
 
 ### 📊 시스템 관리
-- **성능 모니터링**: Prometheus & Grafana
+- **성능 모니터링**: Prometheus & Grafana (`/actuator/prometheus` 노출)
 - **접속 차단**: Blacklist IP 관리
 - **배치 작업**: 효율적인 방 관리
 - **RESTful API**: 표준화된 API 설계
@@ -96,7 +122,7 @@ This site is only for studying various functions using WebRTC and WebSocket tech
 
 ## 🚀 구동 방법
 
-### 1. 서버 아키텍쳐
+### 1. 서버 아키텍처
 https://github.com/SeJonJ/ChatForYou/wiki/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90
 
 ### 2. 사전 요구사항
@@ -105,6 +131,8 @@ https://github.com/SeJonJ/ChatForYou/wiki/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%
 - **Kurento Media Server** 설치
 - **TURN Server (coturn)** 설치
 - **Redis** 설치
+- **Kafka** 설치
+- **MinIO** 설치
 
 ### 3. 프론트엔드 실행
 ```bash
@@ -127,35 +155,56 @@ cd springboot-backend
 # Gradle 빌드
 ./gradlew clean build
 
-# JAR 실행 (포트: 8080)
+# JAR 실행 (포트: 8443, SSL)
 java -Dkms.url=ws://[KMS_IP]:[PORT]/kurento -jar build/libs/*.jar
 ```
 
-### 5. 환경 설정
+### 5. 데스크톱 앱 실행
+```bash
+cd chatforyou-desktop
+
+# 의존성 설치
+npm install
+
+# 개발 모드 실행
+npm start
+
+# 프론트엔드 소스 동기화 (nodejs-frontend → desktop)
+npm run sync:frontend
+```
+
+### 6. 환경 설정
 
 #### 프론트엔드 설정 파일
 ```javascript
 // nodejs-frontend/config/config.local.js
 window.__CONFIG__ = {
-  API_BASE_URL: 'http://localhost:8080/chatforyou/api',
+  API_BASE_URL: 'http://localhost:8443/chatforyou/api',
 };
 
 // nodejs-frontend/config/config.prod.js
 window.__CONFIG__ = {
-  API_BASE_URL: {사용자 서비스 도메인},
+  API_BASE_URL: '{사용자 서비스 도메인}',
 };
 ```
 
 #### 백엔드 설정 파일
 ```properties
 # application.properties
-server.port=8080
+server.port=8443
 
 # Kurento Media Server 설정
 kms.url=ws://localhost:8888/kurento
+
+# Redis
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+
+# Kafka
+spring.kafka.bootstrap-servers=localhost:9092
 ```
 
-### 6. Docker 실행
+### 7. Docker 실행
 ```bash
 # 프론트엔드 Docker 빌드
 cd nodejs-frontend

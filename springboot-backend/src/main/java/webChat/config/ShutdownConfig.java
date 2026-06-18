@@ -14,6 +14,8 @@ import webChat.model.redis.RedisIndex;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
+import webChat.model.room.recovery.PreShutdownResult;
+import webChat.service.chatroom.recovery.ChatRoomRecoveryService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.InstanceProvider;
@@ -21,6 +23,7 @@ import webChat.service.routing.InstanceProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
@@ -36,6 +39,8 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
     private final RedisService redisService;
     private final List<RoomState> ALL_ROOM_STATES = Lists.newArrayList(RoomState.ACTIVE, RoomState.CREATED, RoomState.INACTIVE);
     private final InstanceProvider instanceProvider;
+    private final ChatRoomRecoveryService chatRoomRecoveryService;
+    private final AtomicBoolean cleanupStarted = new AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
@@ -58,7 +63,19 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
      * 자원을 해제하려는 무의미한 동작이 발생하므로 instanceId 가 다른 방은 건너뛴다.
      */
     private void cleanup() {
+        if (!cleanupStarted.compareAndSet(false, true)) {
+            log.info("Shutdown cleanup already started. Skip duplicate cleanup invocation.");
+            return;
+        }
+
         String currentInstanceId = instanceProvider.getInstanceId();
+        instanceProvider.beginShutdown();
+        // 방 reset/deleteKurentoRoom 전에 복구 후보를 남겨야 재시작 후 joinRoom 이 실제 삭제와 배포 중단을 구분할 수 있다.
+        // 실패를 삼키고 cleanup을 계속하면 복구 metadata 없이 방 상태만 초기화되어 사용자는 조용히 복구 불가 상태가 된다.
+        PreShutdownResult result = chatRoomRecoveryService.markOwnedRoomsRecoverable();
+        log.info("Pre-shutdown room recovery metadata marked: instanceId={}, roomCount={}",
+                result.getInstanceId(), result.getMarkedRoomCount());
+
         RoomSearchCriteria searchCriteria = RoomSearchCriteria.builder()
                 .redisIndex(RedisIndex.CHATROOM)
                 .keyword("")

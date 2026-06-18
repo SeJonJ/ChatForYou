@@ -50,6 +50,10 @@ public class CookieCheckEvent {
 
     @Value("${cookie.check.domain:}")
     private String cookieCheckDomain;
+    // 쿠키 수집 실패 자가재시작 시 System.exit 전 drain 대기(ms). readinessProbe 의
+    // failureThreshold*periodSeconds(=endpoint 제거 시간) 이상으로 두어 READY 즉사를 막는다.
+    @Value("${routing.cookie.self-restart-drain-wait-ms:10000}")
+    private long selfRestartDrainWaitMs;
     private volatile boolean cookieCollected = false;
     private final String COOKIE_CHECK_PATH = "/chatforyou/api/health/cookie";
 
@@ -307,11 +311,18 @@ public class CookieCheckEvent {
 
     /**
      * 파드 재시작을 위한 애플리케이션 graceful shutdown
+     * System.exit 로 JVM 을 직접 종료하기 전에 drain 을 먼저 시작한다.
+     * readinessProbe 재도입 시 이 경로(쿠키 수집 실패 자가재시작)에서 readiness 가 READY 인 채로
+     * 즉사하면 K8s 가 endpoint 를 제거하기 전에 트래픽이 유입될 수 있으므로, drain wait 동안
+     * readiness 를 503 으로 먼저 전환해 endpoint 제거 시간을 확보한다.
      */
     private void scheduleApplicationShutdown() {
+        // drain 을 즉시 시작 → readiness 503 전환. (SpringApplication.exit 의 ContextClosedEvent 도
+        // beginShutdown 을 호출하지만, 그보다 먼저 drain 을 켜 endpoint 제거 시간을 더 확보한다.)
+        instanceProvider.beginShutdown();
         CompletableFuture.runAsync(() -> {
             try {
-                Thread.sleep(3000); // 3초 대기 (로그 출력 및 정리 시간)
+                Thread.sleep(selfRestartDrainWaitMs);
                 log.info("=== 파드 재시작을 위한 애플리케이션 graceful shutdown 시작 ===");
                 int exitCode = SpringApplication.exit(applicationContext, () -> 1);
                 System.exit(exitCode);

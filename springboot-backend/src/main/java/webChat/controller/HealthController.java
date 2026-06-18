@@ -7,7 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import webChat.service.routing.CookieCheckEvent;
+import webChat.service.routing.ReadinessState;
 import webChat.service.routing.RoutingInstanceProvider;
 
 /**
@@ -19,7 +19,7 @@ import webChat.service.routing.RoutingInstanceProvider;
 @Slf4j
 public class HealthController {
     private final RoutingInstanceProvider instanceProvider;
-    private final CookieCheckEvent cookieCheckEvent;
+    private final ReadinessState readinessState;
 
     /**
      * 자신(pod) 의 cookie 값 및 instanceID return
@@ -34,16 +34,21 @@ public class HealthController {
     }
 
     /**
-     * readinessProbe 시 pod 가 자신의 쿠키를 확보했는지 확인
+     * readinessProbe 판정. 종료 중이면 트래픽을 받지 않도록 drain(503),
+     * 그 외 앱 기동이 완료되면 READY 를 반환한다.
      * @return
      */
     @GetMapping("/readiness")
     public ResponseEntity<String> readiness() {
-        if (cookieCheckEvent.isCookieCollected()) {
-            return ResponseEntity.ok("READY");
-        } else {
-            return ResponseEntity.status(503).body("Cookie not yet collected");
+        if (instanceProvider.isShuttingDown()) {
+            return ResponseEntity.status(503).body("Server is shutting down");
         }
+
+        if (!readinessState.isReady()) {
+            return ResponseEntity.status(503).body("Starting");
+        }
+
+        return ResponseEntity.ok("READY");
     }
 
     /**

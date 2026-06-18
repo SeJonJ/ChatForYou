@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.kurento.client.KurentoClient;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -15,6 +16,8 @@ import org.springframework.context.event.ContextClosedEvent;
 import webChat.model.chat.ChatType;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
+import webChat.model.room.recovery.PreShutdownResult;
+import webChat.service.chatroom.recovery.ChatRoomRecoveryService;
 import webChat.service.kurento.KurentoRoomManager;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.InstanceProvider;
@@ -25,6 +28,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -50,6 +54,8 @@ class ShutdownConfigOwnerScopeTest {
     private RedisService redisService;
     @Mock
     private InstanceProvider instanceProvider;
+    @Mock
+    private ChatRoomRecoveryService chatRoomRecoveryService;
 
     @InjectMocks
     private ShutdownConfig shutdownConfig;
@@ -57,6 +63,11 @@ class ShutdownConfigOwnerScopeTest {
     @BeforeEach
     void setUp() {
         given(instanceProvider.getInstanceId()).willReturn(CURRENT_INSTANCE);
+        given(chatRoomRecoveryService.markOwnedRoomsRecoverable()).willReturn(PreShutdownResult.builder()
+                .instanceId(CURRENT_INSTANCE)
+                .markedRoomCount(0)
+                .roomIds(List.of())
+                .build());
     }
 
     private Document roomDocument(String roomId) {
@@ -102,7 +113,9 @@ class ShutdownConfigOwnerScopeTest {
 
         // then: A 소유 방은 정상 정리
         assertThat(aRoom.getUserCount()).isZero();
-        verify(redisService).updateChatRoom(aRoom);
+        InOrder ordered = inOrder(chatRoomRecoveryService, redisService);
+        ordered.verify(chatRoomRecoveryService).markOwnedRoomsRecoverable();
+        ordered.verify(redisService).updateChatRoom(aRoom);
         verify(kurentoRoomManager).deleteKurentoRoom(aRoom);
     }
 
@@ -130,6 +143,25 @@ class ShutdownConfigOwnerScopeTest {
         assertThat(bRoom.getUserCount()).isEqualTo(1);
         verify(redisService, never()).updateChatRoom(bRoom);
         verify(kurentoRoomManager, never()).deleteKurentoRoom(bRoom);
+    }
+
+    @Test
+    @DisplayName("cleanup 은 ContextClosedEvent 와 JVM hook 중복 호출에도 한 번만 정리한다")
+    void cleanup_중복호출시_한번만정리한다() {
+        // given
+        KurentoRoom aRoom = room("room-A", CURRENT_INSTANCE, 1);
+        given(redisService.searchRoomListByOptions(any())).willReturn(List.of(roomDocument("room-A")));
+        given(redisService.getAllChatRoomData("room-A"))
+                .willReturn(Map.of(DataType.CHATROOM.getType(), aRoom));
+
+        // when
+        shutdownConfig.onApplicationEvent(new ContextClosedEvent(new TestApplicationContext()));
+        shutdownConfig.onApplicationEvent(new ContextClosedEvent(new TestApplicationContext()));
+
+        // then
+        verify(chatRoomRecoveryService).markOwnedRoomsRecoverable();
+        verify(redisService).updateChatRoom(aRoom);
+        verify(kurentoRoomManager).deleteKurentoRoom(aRoom);
     }
 
     /**

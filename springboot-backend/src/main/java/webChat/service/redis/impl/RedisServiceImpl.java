@@ -17,6 +17,7 @@ import webChat.exception.ChatForYouException;
 import webChat.exception.ErrorCode;
 import org.redisson.api.SortOrder;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -27,6 +28,7 @@ import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
 import webChat.model.room.KurentoRoom;
 import webChat.model.room.RoomState;
+import webChat.model.room.recovery.RoomRecoveryMetadata;
 import webChat.model.routing.RoomRoutingInfo;
 import webChat.service.redis.RedisService;
 
@@ -477,6 +479,99 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public void saveRoomRoutingInfo(RoomRoutingInfo roomRoutingInfo) {
         masterTemplate.opsForValue().set(ROOM_ROUTING_PREFIX.getPrefix()+roomRoutingInfo.getRoomId(), roomRoutingInfo);
+    }
+
+    @Override
+    public boolean tryAcquireRoomClaimLock(String roomId, String instanceId, long ttlMs) {
+        return Boolean.TRUE.equals(masterTemplate.opsForValue().setIfAbsent(
+                ROOM_CLAIM_LOCK_PREFIX.getPrefix() + roomId,
+                instanceId,
+                ttlMs,
+                TimeUnit.MILLISECONDS
+        ));
+    }
+
+    @Override
+    public boolean releaseRoomClaimLock(String roomId, String instanceId) {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText("""
+                if redis.call('get', KEYS[1]) == ARGV[1] then
+                    return redis.call('del', KEYS[1])
+                end
+                return 0
+                """);
+        script.setResultType(Long.class);
+
+        Long deleted = masterTemplate.execute(
+                script,
+                Collections.singletonList(ROOM_CLAIM_LOCK_PREFIX.getPrefix() + roomId),
+                instanceId
+        );
+        return deleted != null && deleted > 0;
+    }
+
+    @Override
+    public void saveRoomRecoveryMetadata(RoomRecoveryMetadata metadata, long ttlSeconds) {
+        masterTemplate.opsForValue().set(
+                ROOM_RECOVERY_PREFIX.getPrefix() + metadata.getRoomId(),
+                metadata,
+                ttlSeconds,
+                TimeUnit.SECONDS
+        );
+    }
+
+    @Override
+    public RoomRecoveryMetadata getRoomRecoveryMetadata(String roomId) {
+        return (RoomRecoveryMetadata) masterTemplate.opsForValue().get(ROOM_RECOVERY_PREFIX.getPrefix() + roomId);
+    }
+
+    @Override
+    public void deleteRoomRecoveryMetadata(String roomId) {
+        masterTemplate.delete(ROOM_RECOVERY_PREFIX.getPrefix() + roomId);
+    }
+
+    @Override
+    public ChatRoom getChatRoomFromMaster(String roomId) {
+        return (ChatRoom) masterTemplate.opsForHash().get(makeRedisKey(roomId), DataType.CHATROOM.getType());
+    }
+
+    @Override
+    public RoomRoutingInfo getRoomRoutingInfoFromMaster(String roomId) {
+        return (RoomRoutingInfo) masterTemplate.opsForValue().get(ROOM_ROUTING_PREFIX.getPrefix() + roomId);
+    }
+
+    @Override
+    public String getInstanceCookieFromMaster(String instanceId) {
+        return (String) masterTemplate.opsForValue().get(INSTANCE_COOKIE_PREFIX.getPrefix() + instanceId);
+    }
+
+    @Override
+    public void updateRecoveredRoomRoutingAndMetadata(ChatRoom chatRoom,
+                                                      RoomRoutingInfo roomRoutingInfo,
+                                                      RoomRecoveryMetadata metadata,
+                                                      long metadataTtlSeconds) {
+        List<Object> results = masterTemplate.execute(new SessionCallback<>() {
+            @Override
+            public List<Object> execute(@NotNull RedisOperations operations) {
+                String roomKey = ROOM_ID_PREFIX.getPrefix() + chatRoom.getRoomId();
+                operations.multi();
+                operations.opsForHash().put(roomKey, DataType.CHATROOM.getType(), chatRoom);
+                operations.opsForHash().put(roomKey, "roomName", chatRoom.getRoomName());
+                operations.opsForHash().put(roomKey, "state", chatRoom.getRoomState());
+                operations.opsForValue().set(ROOM_ROUTING_PREFIX.getPrefix() + roomRoutingInfo.getRoomId(), roomRoutingInfo);
+                operations.opsForValue().set(
+                        ROOM_RECOVERY_PREFIX.getPrefix() + metadata.getRoomId(),
+                        metadata,
+                        metadataTtlSeconds,
+                        TimeUnit.SECONDS
+                );
+                return operations.exec();
+            }
+        });
+
+        if (results == null) {
+            throw new IllegalStateException("Recovered room Redis transaction discarded: roomId=" + chatRoom.getRoomId());
+        }
     }
 
     @Override

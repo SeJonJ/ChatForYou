@@ -88,6 +88,16 @@ When a cross-model / external reviewer flags a **principle-level** defect (the l
 
 ---
 
+## Cross-model Unavailable — Intra-model Adversarial Review Fallback
+
+When the host cross-model consult path is unavailable for a Phase 05 L3 review (after the retries in `docs/agent/pdca-templates.md` step 7 fail), the **Intra-model Adversarial Review Loop** is the only sanctioned substitute. It is a **degraded fallback, not an equivalent**: a single model shares its own blind spots, which is exactly how the 2026-06 heartbeat P0 above shipped under internal confidence.
+
+- Run the two-round protocol above 3–5 times via `chatforyou-external-expert` in a fresh context, rotating the adversarial lens each round (R1 flow · R2 failure/lifecycle · R3 security/auth · R4 ops/config/deadlock · R5 regression/edge), then a separate feedback-validity pass.
+- Full procedure and recording rules live in `docs/agent/pdca-templates.md` → "Intra-model Adversarial Review Loop".
+- The loop can only produce **`APPROVED_WITH_RISK`** (never clean `APPROVED`), with the risk "independent cross-model verification not performed" recorded and **explicit user sign-off** required before Phase 06.
+
+---
+
 ## Related Rules
 - `AGENT_GUIDE.md` — WebRTC / WebSocket Changes
 - `AGENT_GUIDE.md` — Risk & Workflow Gate

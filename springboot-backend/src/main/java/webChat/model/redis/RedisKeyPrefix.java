@@ -15,7 +15,9 @@ public enum RedisKeyPrefix {
     INSTANCE_INFO_PREFIX("instance:info:"),
     OAUTH_PREFIX("oauth:"),
     QR_SESSION_PREFIX("qr:session:"),
-    ROOM_MEMBERS_PREFIX("room:members:")
+    ROOM_MEMBERS_PREFIX("room:members:"),
+    ROOM_CLAIM_LOCK_PREFIX("room:claim-lock:"),
+    ROOM_RECOVERY_PREFIX("room:recovery:")
     ;
 
 

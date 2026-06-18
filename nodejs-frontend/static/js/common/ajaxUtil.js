@@ -250,6 +250,9 @@ function executeTokenAjax(requestOptions) {
                             // 통화 중이면 페이지 이동 없이 toast만 표시
                             if (isInRoomCallPage()) {
                                 showApiErrorToast('세션이 만료되었습니다. 통화 종료 후 다시 로그인해주세요.');
+                                if (requestOptions.errorCallback && typeof requestOptions.errorCallback === 'function') {
+                                    requestOptions.errorCallback(error);
+                                }
                                 return;
                             }
                             redirectToLogin();
@@ -270,6 +273,9 @@ function executeTokenAjax(requestOptions) {
                             // 통화 중이면 페이지 이동 없이 toast만 표시
                             if (isInRoomCallPage()) {
                                 showApiErrorToast('방 접근 토큰이 만료되었습니다. 통화 종료 후 방에 다시 입장해주세요.');
+                                if (requestOptions.errorCallback && typeof requestOptions.errorCallback === 'function') {
+                                    requestOptions.errorCallback(error);
+                                }
                                 return;
                             }
                             redirectToRoomList();
