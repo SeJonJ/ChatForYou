@@ -1015,7 +1015,7 @@ const initTurnServer = function () {
     const body = JSON.stringify({ roomId: getTargetRoomId() });
 
     fetchJson(
-        window.__CONFIG__.API_BASE_URL + '/chatforyou/api/turn/credential',
+        window.__CONFIG__.API_BASE_URL + '/turn/credential',
         { method: 'POST', headers: headers, body: body },
         'TURN 자격증명을 발급받지 못했습니다.'
     )
