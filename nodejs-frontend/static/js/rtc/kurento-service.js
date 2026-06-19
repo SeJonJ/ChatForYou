@@ -27,7 +27,7 @@ let roomId = null;
 let roomName = null;
 
 // turn Config
-let turnUrl = null;
+let turnUrls = null;   // string[] — 백엔드 응답 urls 배열을 그대로 수용 (RTCIceServer.urls 는 string[] 허용)
 let turnUser = null;
 let turnPwd = null;
 let peerReconnectTimeoutMs = 5 * 60 * 1000; // 기본 5분, initTurnServer에서 서버 설정값으로 덮어씀
@@ -1001,24 +1001,41 @@ $(function () {
     });
 });
 
+/**
+ * TURN 자격증명을 발급받아 전역 상태에 저장한다.
+ * 입장 시·재연결 경로(register 재호출) 에서 재호출되어 세션 자격증명을 갱신한다.
+ * 인증 없이 정적 평문을 반환하던 /admin/turnconfig 를 대체 — 유출 시 폭발 반경을 TTL 이내로 한정.
+ */
 const initTurnServer = function () {
-    fetchJson(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    }, 'TURN 서버 정보를 불러오지 못했습니다.')
+    const headers = Object.assign(
+        { 'Content-Type': 'application/json' },
+        buildTokenHeaders()  // Authorization + (비밀방이면) X-Room-Token 자동 포함
+    );
+    // getTargetRoomId(): 전역 roomId 세팅 전이어도 URL 파라미터로 roomId 를 보장
+    const body = JSON.stringify({ roomId: getTargetRoomId() });
+
+    fetchJson(
+        window.__CONFIG__.API_BASE_URL + '/chatforyou/api/turn/credential',
+        { method: 'POST', headers: headers, body: body },
+        'TURN 자격증명을 발급받지 못했습니다.'
+    )
         .then(response => {
-            const { data } = response || {};
-            turnUrl = data.url;
+            const { result, data } = response || {};
+            if (result !== 'SUCCESS' || !data) {
+                // 발급 실패 시 reload/재시도 금지 — STUN/host candidate 폴백으로 진행
+                console.warn('[TURN] 자격증명 발급 실패');
+                return;
+            }
+            turnUrls = data.urls;   // string[] — RTCIceServer.urls 에 배열로 주입
             turnUser = data.username;
-            turnPwd = data.credential;
+            turnPwd  = data.credential;  // credential 은 직접 로깅 금지
             if (data.peerReconnectTimeoutMs != null && data.peerReconnectTimeoutMs > 0) {
                 peerReconnectTimeoutMs = data.peerReconnectTimeoutMs;
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // 발급 실패는 연결 차단이 아닌 경고 — turnUrls=null 상태로 STUN/host candidate 폴백
+            console.error('[TURN] 자격증명 발급 오류:', error?.message || error);
         });
 };
 
@@ -1355,8 +1372,7 @@ function register() {
             } else {
                 if (data) {
                     kurentoRoomInfo = data;
-                    
-                        initTurnServer();
+
                         // 방 정보가 있으면 필요한 데이터 할당
                         if (kurentoRoomInfo) {
                             // TODO userId 는 '@' 가 있어서 사용 불가능
@@ -1366,6 +1382,8 @@ function register() {
                             roomName = kurentoRoomInfo.roomName;
                             // 추가 정보: userCount, maxUserCnt, roomPwd, secretChk, roomType 등
                         }
+                        // roomId 할당 후 호출 — body에 확정된 roomId 를 담아 TURN 자격증명 발급
+                        initTurnServer();
     
                         $('#room-header').text('ROOM ' + roomName);
                         $('#room').css('display', 'block');
@@ -1586,7 +1604,7 @@ function onExistingParticipants(msg) {
             configuration: {
                 iceServers: [
                     {
-                        urls: turnUrl,
+                        urls: turnUrls,  // string[] — 백엔드 응답 urls 배열 그대로 주입
                         username: turnUser,
                         credential: turnPwd
                     }
@@ -1666,7 +1684,7 @@ function receiveVideo(sender) {
         configuration: { // 이 부분에서 TURN 서버 연결 설정
             iceServers: [
                 {
-                    urls: turnUrl,
+                    urls: turnUrls,  // string[] — 백엔드 응답 urls 배열 그대로 주입
                     username: turnUser,
                     credential: turnPwd
                 }
