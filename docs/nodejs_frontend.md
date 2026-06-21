@@ -236,17 +236,36 @@ $.ajax({ url: '...', type: 'POST', ... });
 
 ```javascript
 // fetch 허용 케이스 (jQuery 바인딩 없는 초기화 코드)
-fetch(window.__CONFIG__.API_BASE_URL + '/admin/turnconfig', {
+fetch(window.__CONFIG__.API_BASE_URL + '/turn/credential', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId: getTargetRoomId() })
 })
     .then(response => response.json())
     .then(response => {
         const { data } = response || {};
-        turnUrl = data.url;
+        turnUrls = data.urls;
     })
-    .catch(error => console.error('TURN 서버 설정 실패:', error));
+    .catch(error => console.error('TURN 자격증명 발급 실패:', error));
 ```
+
+#### URL 조립 규칙 (STRICT) — prefix 중복 금지
+
+`window.__CONFIG__.API_BASE_URL` 은 **이미 `/chatforyou/api` 를 포함**한다
+(`https://hjproject.kro.kr/chatforyou/api`, 로컬 `http://localhost:8080/chatforyou/api`).
+따라서 뒤에 붙이는 문자열은 **리소스 경로만** 적는다. `/chatforyou/api` 를 다시 붙이면 경로가
+중복(`.../chatforyou/api/chatforyou/api/...`)되어 운영에서 500/404 가 난다.
+
+```javascript
+// Good — 리소스 경로만
+window.__CONFIG__.API_BASE_URL + '/turn/credential'
+window.__CONFIG__.API_BASE_URL + '/chat/room/' + roomId
+
+// Bad — API_BASE_URL 에 이미 있는 /chatforyou/api 를 중복 (실제 #139 운영 500 원인)
+window.__CONFIG__.API_BASE_URL + '/chatforyou/api/turn/credential'
+```
+
+> 형제 호출(`/chat/room/...` 등)이 prefix 를 붙이지 않는 것이 단일 진실이다. 신규 호출도 동일 컨벤션을 따른다.
 
 ---
 
@@ -456,6 +475,7 @@ if (recvMessage.type === 'newType') {
 - [ ] 동적 요소는 document 위임, 정적 요소는 init() 내 .on() 사용
 - [ ] .off().on() 은 init() 재호출 가능성 있을 때만 사용
 - [ ] ajaxUtil.js 래퍼 함수 사용 (직접 $.ajax 금지)
+- [ ] URL 조립 시 API_BASE_URL 뒤에 `/chatforyou/api` 중복 금지 (리소스 경로만 — §4 URL 조립 규칙)
 - [ ] 템플릿 리터럴로 HTML 생성
 - [ ] 모듈 패턴 (객체 리터럴 + self 또는 화살표 함수로 this 고정)
 - [ ] 에러 처리 존재 (errorCallback / .catch)

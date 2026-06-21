@@ -98,6 +98,20 @@ case_l1_force() {
     fi
 }
 
+case_commit_risk_advisory() {
+    # 워킹트리에 있으나 미추적인 소스 파일 → COMMIT-RISK 경보(차단 아님, exit 0)
+    local tmp="$1" out rc
+    printf "console.log('orphan not committed');\n" > "$tmp/nodejs-frontend/static/js/orphan.js"
+    out=$(CODEX_PROJECT_ROOT="$tmp" bash "$SCRIPT" 2>&1); rc=$?
+    if { [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ]; } \
+        && echo "$out" | grep -q "COMMIT-RISK" \
+        && echo "$out" | grep -q "orphan.js"; then
+        record_pass "commit_risk_advisory (exit $rc)"
+    else
+        record_fail "commit_risk_advisory" "exit $rc (expected 0/3 + COMMIT-RISK + orphan.js)" "$out"
+    fi
+}
+
 # ── 1. Syntax check ────────────────────────────────────────────────────────
 check_exit "syntax_ok" 0 bash -n "$SCRIPT"
 
@@ -105,9 +119,55 @@ check_exit "syntax_ok" 0 bash -n "$SCRIPT"
 check_exit "unknown_arg_exits_1" 1 bash "$SCRIPT" --invalid-arg
 
 # ── 3. Behavior in isolated repos ─────────────────────────────────────────
+case_url_prefix_block() {
+    # API_BASE_URL 뒤에 /chatforyou/api 중복 → 레벨 무관 BLOCK(exit 2)
+    local tmp="$1" out rc
+    printf "fetch(window.__CONFIG__.API_BASE_URL + '/chatforyou/api/turn/credential');\n" \
+        >> "$tmp/nodejs-frontend/static/js/app.js"
+    git -C "$tmp" add . >/dev/null 2>&1
+    out=$(CODEX_PROJECT_ROOT="$tmp" bash "$SCRIPT" 2>&1); rc=$?
+    if [ "$rc" -eq 2 ] && echo "$out" | grep -q "url-prefix"; then
+        record_pass "url_prefix_block (exit 2)"
+    else
+        record_fail "url_prefix_block" "exit $rc (expected 2 BLOCK + url-prefix)" "$out"
+    fi
+}
+
+case_url_prefix_template_block() {
+    # 템플릿 리터럴 형태의 prefix 중복 ${API_BASE_URL}/chatforyou/api → BLOCK(exit 2)
+    local tmp="$1" out rc
+    printf 'fetch(`${window.__CONFIG__.API_BASE_URL}/chatforyou/api/turn/credential`);\n' \
+        >> "$tmp/nodejs-frontend/static/js/app.js"
+    git -C "$tmp" add . >/dev/null 2>&1
+    out=$(CODEX_PROJECT_ROOT="$tmp" bash "$SCRIPT" 2>&1); rc=$?
+    if [ "$rc" -eq 2 ] && echo "$out" | grep -q "url-prefix"; then
+        record_pass "url_prefix_template_block (exit 2)"
+    else
+        record_fail "url_prefix_template_block" "exit $rc (expected 2 BLOCK + url-prefix)" "$out"
+    fi
+}
+
+case_url_prefix_ok() {
+    # 올바른 호출(리소스 경로만) → url-prefix PASS, 차단 없음
+    local tmp="$1" out rc
+    printf "fetch(window.__CONFIG__.API_BASE_URL + '/turn/credential');\n" \
+        >> "$tmp/nodejs-frontend/static/js/app.js"
+    git -C "$tmp" add . >/dev/null 2>&1
+    out=$(CODEX_PROJECT_ROOT="$tmp" bash "$SCRIPT" 2>&1); rc=$?
+    if { [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ]; } && ! echo "$out" | grep -q "url-prefix.*FAIL"; then
+        record_pass "url_prefix_ok (exit $rc)"
+    else
+        record_fail "url_prefix_ok" "exit $rc (expected 0/3, no url-prefix FAIL)" "$out"
+    fi
+}
+
 with_repo "no_changes_exit0" case_no_changes
 with_repo "docs_settings_only_exit0" case_docs_only
 with_repo "l1_force_exit0_or_degrade" case_l1_force
+with_repo "commit_risk_advisory" case_commit_risk_advisory
+with_repo "url_prefix_block" case_url_prefix_block
+with_repo "url_prefix_template_block" case_url_prefix_template_block
+with_repo "url_prefix_ok" case_url_prefix_ok
 
 echo ""
 echo "=== verify-changes smoke: $pass passed, $fail failed ==="

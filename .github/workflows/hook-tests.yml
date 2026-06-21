@@ -6,11 +6,19 @@ on:
       - '.claude/hooks/**'
       - '.codex/hooks/**'
       - 'scripts/verify-changes.sh'
+      - 'scripts/verify-committed-tree.sh'
+      - 'scripts/verify-doc-mapping.sh'
+      - 'scripts/test-verify-*.sh'
+      - 'hooks/**'
   pull_request:
     paths:
       - '.claude/hooks/**'
       - '.codex/hooks/**'
       - 'scripts/verify-changes.sh'
+      - 'scripts/verify-committed-tree.sh'
+      - 'scripts/verify-doc-mapping.sh'
+      - 'scripts/test-verify-*.sh'
+      - 'hooks/**'
   workflow_dispatch:
 
 jobs:
@@ -35,7 +43,7 @@ jobs:
           bash .codex/hooks/tests/run-tests.sh
 
   verify-smoke:
-    name: 'verify-changes.sh Smoke (syntax + L1 + no-changes)'
+    name: 'verify gates Smoke (changes + committed-tree + doc-mapping)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,3 +51,11 @@ jobs:
       - name: 'Run verify-changes smoke tests'
         run: |
           bash scripts/test-verify-changes.sh
+
+      - name: 'Run verify-committed-tree smoke tests'
+        run: |
+          bash scripts/test-verify-committed-tree.sh
+
+      - name: 'Run verify-doc-mapping smoke tests'
+        run: |
+          bash scripts/test-verify-doc-mapping.sh

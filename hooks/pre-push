@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# pre-push — push 직전 커밋트리가 독립 컴파일되는지 검증 (CI 재현)
+#
+# WHY: verify-changes.sh 는 워킹트리(untracked 포함)를 검증해 부분 커밋을 못 잡는다.
+#      이 훅은 push 되는 커밋 tip 을 격리 worktree 로 컴파일해, "로컬은 되는데 CI 는
+#      package does not exist 로 깨지는" 사고를 push 단계에서 차단한다.
+#
+# 설치: scripts/install-git-hooks.sh (core.hooksPath 설정)
+# 우회: git push --no-verify  (긴급 시에만)
+#
+# stdin 형식(git): <local ref> <local oid> <remote ref> <remote oid>
+
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+VERIFY="$ROOT/scripts/verify-committed-tree.sh"
+ZERO="0000000000000000000000000000000000000000"
+
+[ -x "$VERIFY" ] || { echo "[pre-push] verify-committed-tree.sh 없음 — 검증 생략"; exit 0; }
+
+# 중복 oid 제거하여 동일 tip 을 여러 번 빌드하지 않음
+declare -a SEEN=()
+seen() { for s in "${SEEN[@]:-}"; do [ "$s" = "$1" ] && return 0; done; return 1; }
+
+rc_total=0
+while read -r local_ref local_oid remote_ref remote_oid; do
+    # 삭제 push(local_oid 가 0) 는 검증 대상 아님
+    [ "$local_oid" = "$ZERO" ] && continue
+    seen "$local_oid" && continue
+    SEEN+=("$local_oid")
+
+    # 원격 tip 이 있으면 그 대비 변경 컴포넌트만 컴파일(빠름), 없으면 존재 컴포넌트 전체.
+    # 배열 대신 문자열 — bash 3.2 는 set -u 에서 빈 배열 [@] 확장 시 unbound 오류.
+    base_oid=""
+    if [ "$remote_oid" != "$ZERO" ] && git rev-parse --verify "${remote_oid}^{commit}" >/dev/null 2>&1; then
+        base_oid="$remote_oid"
+    fi
+
+    echo "[pre-push] 커밋트리 검증: ${local_ref} (${local_oid:0:12})"
+    if [ -n "$base_oid" ]; then
+        bash "$VERIFY" "$local_oid" --base "$base_oid" || rc_total=2
+    else
+        bash "$VERIFY" "$local_oid" || rc_total=2
+    fi
+done
+
+if [ "$rc_total" -ne 0 ]; then
+    echo ""
+    echo "⛔ [pre-push 차단] 커밋트리 컴파일 실패. push 를 중단합니다."
+    echo "   누락된 신규 파일을 커밋했는지 확인하세요. 긴급 우회: git push --no-verify"
+    exit "$rc_total"   # 0 pass / 2 block 계약 유지 (git 은 nonzero 면 차단)
+fi
+
+exit 0

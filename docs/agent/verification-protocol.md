@@ -96,8 +96,37 @@ the corresponding checkboxes be marked `[x]` (`AGENT_GUIDE.md` §4.1).
 
 ---
 
+## 7. Working tree vs committed tree — "local PASS ≠ shippable"
+
+`scripts/verify-changes.sh` verifies the **working tree, including untracked files**
+(`git ls-files --others`). This is intentional: it catches "forgot to *create* a file."
+But it has a structural blind spot — it **cannot** catch "created a file but forgot to *commit* it"
+(a partial `git add`). The working tree compiles green because the file is physically present;
+CI checks out only the committed tree (clean clone) and fails with `package … does not exist`.
+
+These are opposite failure modes. The defense is layered:
+
+| Layer | Tool | When | Strength |
+|---|---|---|---|
+| Early advisory | `verify-changes.sh` → `[COMMIT-RISK]` | every gate run | warns if untracked `.java`/`.js` source remains under `src/` — does not block |
+| Hard gate | `scripts/verify-committed-tree.sh` | `git push` via `hooks/pre-push` | checks out the pushed commit into an isolated worktree and compiles it = CI clean-checkout equivalent; **blocks push** on FAIL (exit 2) |
+
+- The committed-tree gate is what mirrors CI. Run it manually any time: `scripts/verify-committed-tree.sh [ref]`.
+- Install the pre-push hook once per clone: `scripts/install-git-hooks.sh` (sets `core.hooksPath`).
+- Emergency bypass: `git push --no-verify` (use only when knowingly safe).
+- Regression evidence: the gate BLOCKs the real incident commit `297e46f` (missing `TurnCredentialOutVo.java`)
+  and PASSes the fix commit `bb4eddc`.
+
+**Rule:** a local `verify-changes.sh` PASS means the working tree is sound, not that what you committed is.
+For anything being pushed, the committed-tree gate (pre-push hook) is the source of truth.
+
+---
+
 ## Related Rules
 - `AGENT_GUIDE.md` — Risk & Workflow Gate, Definition of Done
 - `docs/agent/webrtc-review-protocol.md` — L3 two-round review (the inferential L3 requirement)
 - `docs/agent/pdca-templates.md` — Phase 03 / Phase 05 templates
-- `scripts/verify-changes.sh` — the runner
+- `scripts/verify-changes.sh` — working-tree runner (advisory COMMIT-RISK layer)
+- `scripts/verify-committed-tree.sh` — committed-tree runner (CI-equivalent)
+- `hooks/pre-push` + `scripts/install-git-hooks.sh` — push-time hard gate
+- `scripts/verify-doc-mapping.sh` — 00-base Document Mapping ↔ 실제 파일 대조 게이트 (06-report 진입 전)

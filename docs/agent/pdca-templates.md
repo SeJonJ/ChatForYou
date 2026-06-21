@@ -181,6 +181,11 @@ Recording in Phase 05:
 ## 5. Document Mapping (Checklist)
 ```
 
+> **Document Mapping 규칙 (STRICT)**
+> - 매핑 경로는 **파일 생성 후 실제 경로로 확정**한다. 생성 전 예측 경로(예: `…-gap.md` 로 적고 실제는 `….md` 로 만드는 것)는 금지 — 자동 대조가 경로 불일치로 BLOCK 한다.
+> - 작업 완료 시 해당 박스를 **즉시 `[x]`** 로 갱신한다. "작업 완료인데 미체크"는 06-report 진입 전 정리한다.
+> - 검증 게이트: `scripts/verify-doc-mapping.sh [base-plan.md]` — 매핑↔파일을 4상태(OK/WARN 미체크/ERROR 허위체크/ERROR 경로불일치)로 분류. ERROR(exit 2)는 경로 교정 후 통과해야 한다. 06-report 진입 전 1회 실행 권장.
+
 ---
 
 ## [Phase 01: Plan Template]
