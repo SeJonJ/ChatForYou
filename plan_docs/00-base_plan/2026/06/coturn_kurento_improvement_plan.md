@@ -250,11 +250,11 @@ Response (ChatForYouResponse<T>):
 - [x] 요구사항 및 데이터: `plan_docs/01-plan/coturn_kurento_improvement.md`
 - [x] 인터페이스 및 시퀀스: `plan_docs/02-design/coturn_kurento_improvement-spec.md`
 - [x] 구현 가이드: `plan_docs/03-implementation/coturn_kurento_improvement-guide.md`
-- [ ] 백엔드 구현 가이드: `springboot-backend/plan_docs/turn_credential.md` (백엔드 전문가 작성 중)
-- [ ] 프론트 구현 가이드: `nodejs-frontend/plan_docs/turn_credential.md` (프론트 전문가 작성 중)
-- [ ] 갭 분석: `plan_docs/04-analyze/coturn_kurento_improvement-gap.md` (구현 후)
+- [x] 백엔드 구현 가이드: `springboot-backend/plan_docs/turn_credential.md`
+- [x] 프론트 구현 가이드: `nodejs-frontend/plan_docs/turn_credential.md`
+- [x] 갭 분석: `plan_docs/04-analyze/coturn_kurento_improvement.md`
 - [x] 전문가 리뷰: `plan_docs/05-expert-review/coturn_kurento_improvement-review.md` (설계 라운드 — 코드 리뷰/codex는 구현 후)
-- [ ] 최종 보고서: `plan_docs/06-report/coturn_kurento_improvement.md` (구현·APPROVED 후)
+- [x] 최종 보고서: `plan_docs/06-report/coturn_kurento_improvement.md`
 
 ---
 

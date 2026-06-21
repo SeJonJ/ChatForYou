@@ -1022,7 +1022,7 @@ const initTurnServer = function () {
         .then(response => {
             const { result, data } = response || {};
             if (result !== 'SUCCESS' || !data) {
-                // 발급 실패 시 reload/재시도 금지 — STUN/host candidate 폴백으로 진행
+                // 발급 실패 시 reload/재시도 금지 — turnUrls=null 유지, buildIceServers 가 TURN 엔트리 제외
                 console.warn('[TURN] 자격증명 발급 실패');
                 return;
             }
@@ -1034,10 +1034,24 @@ const initTurnServer = function () {
             }
         })
         .catch(error => {
-            // 발급 실패는 연결 차단이 아닌 경고 — turnUrls=null 상태로 STUN/host candidate 폴백
+            // 발급 실패는 연결 차단이 아닌 경고 — turnUrls=null 유지(buildIceServers 가 host/srflx 로 진행)
             console.error('[TURN] 자격증명 발급 오류:', error?.message || error);
         });
 };
+
+/**
+ * RTCPeerConnection 의 iceServers 배열을 구성한다.
+ * turnUrls 가 유효한 비어있지 않은 배열일 때만 TURN 엔트리를 포함하고,
+ * 미발급(null)이면 빈 배열을 반환한다 — {urls:null} 주입 시 RTCPeerConnection 이
+ * "'null' is not a valid URL" 로 동기 throw 하므로 그 크래시를 차단하기 위함.
+ * 빈 배열이면 브라우저는 host/srflx candidate 로 연결을 시도한다(relay 부재 = degrade, 크래시 아님).
+ */
+function buildIceServers() {
+    if (Array.isArray(turnUrls) && turnUrls.length > 0) {
+        return [{ urls: turnUrls, username: turnUser, credential: turnPwd }];
+    }
+    return [];
+}
 
 let initScript = function () {
     dataChannel.init();
@@ -1602,31 +1616,31 @@ function onExistingParticipants(msg) {
                 onerror : dataChannel.handleDataChannelError
             },
             configuration: {
-                iceServers: [
-                    {
-                        urls: turnUrls,  // string[] — 백엔드 응답 urls 배열 그대로 주입
-                        username: turnUser,
-                        credential: turnPwd
-                    }
-                ]
+                iceServers: buildIceServers()  // turnUrls=null 시 [] 반환 → RTCPeerConnection 크래시 방지
             }
         };
 
-        participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
-            function(error) {
-                if (error) {
-                    // 본인 송수신 peer 생성 실패 → 강제 퇴장
-                    return handlePeerSetupError({
-                        participantId: userId,
-                        role: 'self',
-                        phase: 'create',
-                        error
-                    });
-                }
+        try {
+            participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
+                function(error) {
+                    if (error) {
+                        // 본인 송수신 peer 생성 실패 → 강제 퇴장
+                        return handlePeerSetupError({
+                            participantId: userId,
+                            role: 'self',
+                            phase: 'create',
+                            error
+                        });
+                    }
 
-                this.generateOffer(participant.offerToReceiveVideo.bind(participant));
-                mediaDevice.init(); // video 와 audio 장비를 모두 가져온 후 mediaDvice 장비 영역 세팅
-            });
+                    this.generateOffer(participant.offerToReceiveVideo.bind(participant));
+                    mediaDevice.init(); // video 와 audio 장비를 모두 가져온 후 mediaDvice 장비 영역 세팅
+                });
+        } catch (e) {
+            // RTCPeerConnection 동기 throw(잘못된 iceServers 등)는 비동기 콜백으로 오지 않는다.
+            // getUserMedia 의 catch 로 새어 audio 오류로 오분류되지 않도록 여기서 peer 오류로 처리.
+            return handlePeerSetupError({ participantId: userId, role: 'self', phase: 'create', error: e });
+        }
         msg.data.forEach(function(sender) {
             // JOIN 직후 상대방이 동시에 퇴장하는 경쟁 조건 방어:
             // rtcPeer가 이미 존재하면 기존 연결이 유효하므로 중복 생성을 방지한다.
@@ -1682,29 +1696,28 @@ function receiveVideo(sender) {
             onerror : dataChannel.handleDataChannelError
         },
         configuration: { // 이 부분에서 TURN 서버 연결 설정
-            iceServers: [
-                {
-                    urls: turnUrls,  // string[] — 백엔드 응답 urls 배열 그대로 주입
-                    username: turnUser,
-                    credential: turnPwd
-                }
-            ]
+            iceServers: buildIceServers()  // turnUrls=null 시 [] 반환 → RTCPeerConnection 크래시 방지
         }
     }
 
-    participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
-        function (error) {
-            if (error) {
-                // 상대 수신 peer 생성 실패 → Toast + 재연결 버튼
-                return handlePeerSetupError({
-                    participantId: sender.userId,
-                    role: 'remote',
-                    phase: 'create',
-                    error
-                });
-            }
-            this.generateOffer(participant.offerToReceiveVideo.bind(participant));
-        });
+    try {
+        participant.rtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options,
+            function (error) {
+                if (error) {
+                    // 상대 수신 peer 생성 실패 → Toast + 재연결 버튼
+                    return handlePeerSetupError({
+                        participantId: sender.userId,
+                        role: 'remote',
+                        phase: 'create',
+                        error
+                    });
+                }
+                this.generateOffer(participant.offerToReceiveVideo.bind(participant));
+            });
+    } catch (e) {
+        // RTCPeerConnection 동기 throw → 비동기 콜백 미경유. peer 오류로 분류(audio 모달 방지).
+        return handlePeerSetupError({ participantId: sender.userId, role: 'remote', phase: 'create', error: e });
+    }
 
     participant.rtcPeer.peerConnection.onaddstream = function(event) {
         const audioTracks = event.stream.getAudioTracks();
