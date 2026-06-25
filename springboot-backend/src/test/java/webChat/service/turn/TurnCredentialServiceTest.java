@@ -32,7 +32,7 @@ class TurnCredentialServiceTest {
     private static final int PORT = 33488;
     private static final long TTL = 3600L;
     private static final long PEER_RECONNECT_MS = 300000L;
-    private static final long COTURN_EXPIRY_CEILING = 4_294_967_295L;
+    private static final long KURENTO_EXPIRY_SEC = 1576800000L; // 50년(프로덕션 기본값과 동일)
 
     private TurnCredentialService turnCredentialService;
 
@@ -44,6 +44,7 @@ class TurnCredentialServiceTest {
         ReflectionTestUtils.setField(turnCredentialService, "turnPort", PORT);
         ReflectionTestUtils.setField(turnCredentialService, "ttlSeconds", TTL);
         ReflectionTestUtils.setField(turnCredentialService, "peerReconnectTimeoutMs", PEER_RECONNECT_MS);
+        ReflectionTestUtils.setField(turnCredentialService, "kurentoExpirySec", KURENTO_EXPIRY_SEC);
     }
 
     @Test
@@ -113,7 +114,6 @@ class TurnCredentialServiceTest {
     @DisplayName("issueForKurento_정상발급_만료ts는 now+50년이며 2^32 미만이다")
     void issueForKurento_normal_expiryIsFiftyYearsBelowCeiling() {
         // given
-        long fiftyYearsSec = 50L * 365L * 24L * 3600L;
         long before = Instant.now().getEpochSecond();
 
         // when
@@ -122,8 +122,8 @@ class TurnCredentialServiceTest {
         // then
         long after = Instant.now().getEpochSecond();
         long exp = Long.parseLong(result.split(":", 2)[0]);
-        assertThat(exp).isBetween(before + fiftyYearsSec, after + fiftyYearsSec);
-        assertThat(exp).isLessThan(COTURN_EXPIRY_CEILING);
+        assertThat(exp).isBetween(before + KURENTO_EXPIRY_SEC, after + KURENTO_EXPIRY_SEC);
+        assertThat(exp).isLessThan(TurnCredentialService.COTURN_EXPIRY_CEILING);
     }
 
     @Test
@@ -152,7 +152,7 @@ class TurnCredentialServiceTest {
     @DisplayName("issueForBrowser_만료ts가 coturn 상한(2^32) 이상_INTERNAL_SERVER_ERROR 예외")
     void issueForBrowser_expiryAtOrAboveCeiling_throwsException() {
         // given
-        TurnCredentialService spyService = spyWithFixedEpoch(COTURN_EXPIRY_CEILING);
+        TurnCredentialService spyService = spyWithFixedEpoch(TurnCredentialService.COTURN_EXPIRY_CEILING);
 
         // when & then
         assertThatThrownBy(() -> spyService.issueForBrowser("user@example.com"))
@@ -165,8 +165,7 @@ class TurnCredentialServiceTest {
     @DisplayName("issueForKurento_만료ts가 coturn 상한(2^32) 이상_INTERNAL_SERVER_ERROR 예외")
     void issueForKurento_expiryAtOrAboveCeiling_throwsException() {
         // given
-        long fiftyYearsSec = 50L * 365L * 24L * 3600L;
-        TurnCredentialService spyService = spyWithFixedEpoch(COTURN_EXPIRY_CEILING - fiftyYearsSec);
+        TurnCredentialService spyService = spyWithFixedEpoch(TurnCredentialService.COTURN_EXPIRY_CEILING - KURENTO_EXPIRY_SEC);
 
         // when & then
         assertThatThrownBy(spyService::issueForKurento)
@@ -182,6 +181,7 @@ class TurnCredentialServiceTest {
         ReflectionTestUtils.setField(spyService, "turnPort", PORT);
         ReflectionTestUtils.setField(spyService, "ttlSeconds", TTL);
         ReflectionTestUtils.setField(spyService, "peerReconnectTimeoutMs", PEER_RECONNECT_MS);
+        ReflectionTestUtils.setField(spyService, "kurentoExpirySec", KURENTO_EXPIRY_SEC);
         given(spyService.currentEpochSecond()).willReturn(epochSecond);
         return spyService;
     }

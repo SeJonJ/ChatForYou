@@ -61,14 +61,20 @@ fi
 backend_target=false
 frontend_target=false
 
-if [ -n "$BASE_REF" ] && git -C "$PROJECT_ROOT" rev-parse --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
-    CHANGED="$(git -C "$PROJECT_ROOT" diff --name-only "${BASE_REF}..${RESOLVED}" 2>/dev/null || true)"
-    case "$CHANGED" in
-        *springboot-backend/*) backend_target=true ;;
-    esac
-    case "$CHANGED" in
-        *nodejs-frontend/*) frontend_target=true ;;
-    esac
+if [ -n "$BASE_REF" ]; then
+    if git -C "$PROJECT_ROOT" rev-parse --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
+        CHANGED="$(git -C "$PROJECT_ROOT" diff --name-only "${BASE_REF}..${RESOLVED}" 2>/dev/null || true)"
+        case "$CHANGED" in
+            *springboot-backend/*) backend_target=true ;;
+        esac
+        case "$CHANGED" in
+            *nodejs-frontend/*) frontend_target=true ;;
+        esac
+    else
+        echo "⚠️  BASE_REF('$BASE_REF')를 커밋으로 해석하지 못했습니다. 전체 트리 기반 검증으로 fallback합니다." >&2
+        [ -d "$WT/springboot-backend/src/main" ] && backend_target=true
+        [ -d "$WT/nodejs-frontend/static/js" ] && frontend_target=true
+    fi
 else
     [ -d "$WT/springboot-backend/src/main" ] && backend_target=true
     [ -d "$WT/nodejs-frontend/static/js" ] && frontend_target=true

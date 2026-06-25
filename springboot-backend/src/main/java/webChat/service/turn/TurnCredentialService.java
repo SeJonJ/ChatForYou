@@ -26,10 +26,7 @@ public class TurnCredentialService {
     private static final String HMAC_ALGO = "HmacSHA1";
 
     // coturn 4.6.2 는 만료 EpochSec 가 2^32 이상이면 allocate 를 401 로 거부한다(실측). 모든 만료값은 이 미만이어야 한다.
-    private static final long COTURN_EXPIRY_CEILING = 4_294_967_295L;
-
-    // Kurento turnURL 은 재발급 경로가 없어 정적 장기값을 쓴다. 50년이면 now 기준 2^32 미만이라 coturn 이 통과시킨다.
-    private static final long FIFTY_YEARS_SEC = 50L * 365L * 24L * 3600L;
+    static final long COTURN_EXPIRY_CEILING = 4_294_967_295L;
 
     @Value("${turn.static-auth-secret}")
     private String staticAuthSecret;
@@ -42,6 +39,9 @@ public class TurnCredentialService {
 
     @Value("${turn.credential.ttl-seconds:3600}")
     private long ttlSeconds;
+
+    @Value("${turn.credential.kurento-expiry-seconds:1576800000}")
+    private long kurentoExpirySec;
 
     @Value("${server.rtc.peer.reconnect-fallback-timeout-ms:300000}")
     private long peerReconnectTimeoutMs;
@@ -75,7 +75,7 @@ public class TurnCredentialService {
      * Kurento ConfigMap 의 turnURL 에 임베드할 장기(50년) 자격증명 "ts:cred" 를 생성한다(런타임 API 아님, secret 로테이션 보조).
      */
     public String issueForKurento() {
-        long exp = currentEpochSecond() + FIFTY_YEARS_SEC;
+        long exp = currentEpochSecond() + kurentoExpirySec;
         guardExpiryCeiling(exp);
 
         // turnURL 의 "user:pass@host:port" 파서가 username 내부 ':' 를 잘못 쪼개므로 userId 없이 timestamp-only 로 둔다.
