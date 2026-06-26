@@ -62,7 +62,7 @@ jspm_packages/
 # ========================================
 dist/
 build/
-out/
+/out/
 .cache
 .parcel-cache
 .next

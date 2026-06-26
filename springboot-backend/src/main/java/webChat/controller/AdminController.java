@@ -2,7 +2,6 @@ package webChat.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import webChat.exception.ChatForYouException;
@@ -17,9 +16,7 @@ import webChat.service.redis.RedisService;
 import webChat.utils.JwtUtil;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,18 +27,6 @@ public class AdminController {
     private final ChatRoomService chatRoomService;
     private final JwtUtil jwtUtil;
     private final RedisService redisService;
-
-    @Value("${turn.server.urls}")
-    private String turnServerUrl;
-
-    @Value("${turn.server.username}")
-    private String turnServerUserName;
-
-    @Value("${turn.server.credential}")
-    private String turnServerCredential;
-
-    @Value("${server.rtc.peer.reconnect-fallback-timeout-ms:300000}")
-    private long peerReconnectFallbackTimeoutMs;
 
     /**
      * 관리자용 JWT 토큰을 발급한다.
@@ -115,22 +100,5 @@ public class AdminController {
                 .result("SUCCESS")
                 .message("Success to delete room [ " + roomId + " ] with all related data.")
                 .build());
-    }
-
-    /**
-     * 프론트 WebRTC 연결에 필요한 TURN 서버 설정을 반환한다.
-     *
-     * @return TURN 서버 설정값
-     */
-    @PostMapping("/turnconfig")
-    @ResponseBody
-    public ResponseEntity<ChatForYouResponse> turnServerConfig(){
-        Map<String, Object> turnServerConfig = new HashMap<>();
-        turnServerConfig.put("url", turnServerUrl);
-        turnServerConfig.put("username", turnServerUserName);
-        turnServerConfig.put("credential", turnServerCredential);
-        turnServerConfig.put("peerReconnectTimeoutMs", peerReconnectFallbackTimeoutMs);
-
-        return ResponseEntity.ok(ChatForYouResponse.ofSuccess(turnServerConfig));
     }
 }

@@ -49,6 +49,13 @@ collect_changes() {
 }
 CHANGED=$(collect_changes | sort -u | grep -v '^$' || true)
 
+# ─── 커밋 누락 조기경보 (advisory) ─────────────────────────────
+# 워킹트리엔 있으나 아직 git 에 add 되지 않은 소스 파일 탐지.
+# 부분 커밋(파일 생성 후 커밋 누락) → CI 컴파일 실패의 조기 신호.
+# 차단하지 않음 — push 단계의 pre-push 훅(verify-committed-tree.sh)이 최종 차단.
+UNTRACKED_SRC=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null \
+    | grep -E '^(springboot-backend/src/.*\.java|nodejs-frontend/(static/js/.*\.js|server\.js))$' || true)
+
 if [ -z "$CHANGED" ]; then
     echo "## Verification Evidence (deterministic gate)"
     echo ""
@@ -132,7 +139,7 @@ if $backend_changed; then
     fi
 fi
 
-# frontend JS: node --check (구문)
+# frontend JS: node --check (구문) + URL prefix 중복 린트
 if [ ${#frontend_js_files[@]} -gt 0 ]; then
     if ! command -v node >/dev/null 2>&1; then
         add_result "frontend:syntax" "DEGRADE" "node 부재 → 검증 불가 (V6)"; infra_missing=true
@@ -140,6 +147,19 @@ if [ ${#frontend_js_files[@]} -gt 0 ]; then
         for jf in "${frontend_js_files[@]}"; do
             run_check "frontend:syntax:$(basename "$jf")" node --check "$jf"
         done
+    fi
+    # API_BASE_URL 뒤에 /chatforyou/api 중복 금지 (BASE 에 이미 포함 — #139 운영 500 원인).
+    # 형제 호출은 리소스 경로만 붙인다(`+ '/chat/room/...'`). docs/nodejs_frontend.md §4.
+    # 두 형태 모두 탐지: 직접 concat(`API_BASE_URL + '/chatforyou/api`) + 템플릿 리터럴(`${API_BASE_URL}/chatforyou/api`).
+    url_dup=""
+    for jf in "${frontend_js_files[@]}"; do
+        hits=$(grep -nE "(API_BASE_URL[[:space:]]*\+[[:space:]]*['\"]/chatforyou/api|\\\$\{[^}]*API_BASE_URL[^}]*\}/chatforyou/api)" "$jf" 2>/dev/null || true)
+        [ -n "$hits" ] && url_dup="${url_dup}$(basename "$jf"): ${hits} | "
+    done
+    if [ -n "$url_dup" ]; then
+        add_result "frontend:url-prefix" "FAIL" "API_BASE_URL + '/chatforyou/api' 중복 → ${url_dup}"
+    else
+        add_result "frontend:url-prefix" "PASS" "prefix 중복 없음"
     fi
 fi
 
@@ -155,10 +175,14 @@ fi
 # ─── 판정 (레벨별 차등 — A2-a) ─────────────────────────────────
 # 필수(block) 대상: L2/L3 = backend compile/test + frontend syntax
 # advisory: L1 전체, scss 전체
+# 예외: frontend:url-prefix 는 레벨 무관 항상 block (명백한 correctness 버그, 오탐 0 — #139 운영 500)
 required_fail=false
 advisory_fail=false
 
 is_required() {
+    case "$1" in
+        frontend:url-prefix) return 0 ;;
+    esac
     case "$LEVEL" in
         L2|L3)
             case "$1" in
@@ -185,6 +209,12 @@ echo "- 시각: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "- 감지 레벨: ${detected_level}${FORCE_LEVEL:+ (강제 지정 $FORCE_LEVEL)}  → 적용 레벨: $LEVEL"
 echo "- 강제 정책: L1=advisory / L2·L3=block(build+test+syntax 필수)"
 echo "- 변경 컴포넌트: backend=$backend_changed, frontend_js=${#frontend_js_files[@]}건, scss=$scss_changed"
+if [ -n "$UNTRACKED_SRC" ]; then
+    echo ""
+    echo "> ⚠️ **[COMMIT-RISK]** 아직 git 에 추적되지 않은 소스 파일이 있습니다. 커밋 시 빠뜨리면 CI 컴파일이 실패합니다 (부분 커밋):"
+    while IFS= read -r u; do [ -n "$u" ] && echo ">   - \`$u\`"; done <<< "$UNTRACKED_SRC"
+    echo "> → 커밋 전 \`git add\` 확인. push 시 pre-push 훅이 커밋트리를 최종 검증합니다."
+fi
 echo ""
 echo "| 검사 | 결과 | 비고 |"
 echo "|------|------|------|"
