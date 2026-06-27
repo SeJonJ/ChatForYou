@@ -997,6 +997,38 @@ const recording = {
         // 토스트 알림
         self.showToast(parseMessage.message);
     },
+    /**
+     * 서버 배포/종료로 인한 녹화 강제 중단 알림 처리.
+     * 재입장 시점에 per-user로 수신. FE 녹화 상태를 idle로 정합화하고 재시작 안내를 표시한다.
+     * @param {Object} msg - WS 메시지 (message 필드 포함 가능)
+     */
+    handleRecordingInterruptedByServer: function(msg) {
+        let self = this;
+
+        // 재입장 시 BE가 이미 상태를 reset했으나 FE 인메모리가 '녹화중'으로 남을 수 있어 방어적 정합화
+        self.isRecordingInProgress = false;
+        self.hasRecordedOnce = false;
+        self.isOtherRecordingInProgress = false;
+        self.serverRecordingId = null;
+
+        // 오디오 믹서가 활성 상태이면 해제 (이전 세션 잔여 상태 방어)
+        self.stopAudioMixing();
+
+        // 녹화로 인해 자막이 비활성화된 경우 복원
+        if (typeof speechRecognitionUtils !== 'undefined' && speechRecognitionUtils.handlingSubtitleByRecording) {
+            speechRecognitionUtils.handlingSubtitleByRecording(false);
+        }
+
+        // UI를 idle로 전환 — 재시작 가능 상태
+        self.updateUI('idle');
+
+        // 재시작 안내 경고 토스트 (duration 5000ms — 안내 문장이 길어 3초론 읽기 어려움)
+        self.showToast(
+            '서버와의 연결 종료로 녹화가 중지됩니다. 서버 재연결 후 녹화를 재시작해주세요.',
+            5000,
+            'warning'
+        );
+    },
     participantRecordingError : function({
         name = '',
         message = ''

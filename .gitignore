@@ -239,3 +239,8 @@ nodejs-frontend/plan_docs/*
 .local/.codegraph/
 .codegraph/
 .local/local_agent_guide.md
+
+# ========================================
+# 로컬 워크트리
+# ========================================
+.claude/worktrees/

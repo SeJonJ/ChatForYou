@@ -135,6 +135,20 @@ public class KurentoRoom extends ChatRoom implements Closeable {
     this.kurento = null;
   }
 
+  /**
+   * 배포/종료로 녹화가 중단된 방을 정합한 stopped 상태로 되돌린다.
+   * 녹화 상태 3필드만 in-memory 로 초기화하며 Kurento 자원(RecorderEndpoint/HubPort/Composite)은
+   * 건드리지 않는다. 자원은 죽은 Pod 에서 이미 소멸했고 새 owner 의 KurentoRecorderMap 에는 존재하지
+   * 않으므로 stopRoomRecording 경로를 타면 의미 없는 조회만 발생한다. recordingInfo 를 통째로 null 로
+   * 비워 어떤 필드도 읽지 않으므로 recordingInfo null 여부와 무관하게 NPE 가 불가능하다.
+   * 호출자는 이 메서드 호출 전에 partial 마커를 먼저 기록해야 파일 식별 정보를 잃지 않는다.
+   */
+  public void resetRecordingState() {
+    this.isRecordingInProgress = false;
+    this.hasRecordedOnce = false;
+    this.recordingInfo = null;
+  }
+
   public void initUserHubPort(){
     if (KurentoCompositeMap.getComposite(this.getRoomId()) != null) {
       log.debug("Composite already exists for room: {}", this.getRoomId());

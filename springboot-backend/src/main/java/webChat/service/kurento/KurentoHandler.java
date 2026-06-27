@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.IceCandidate;
 import org.kurento.client.KurentoClient;
 import org.kurento.client.MediaPipeline;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -16,6 +17,7 @@ import webChat.exception.ChatForYouException;
 import webChat.exception.ErrorCode;
 import webChat.model.kurento.*;
 import webChat.model.record.RecordingInfo;
+import webChat.model.record.RecordingPartialMarker;
 import webChat.model.redis.DataType;
 import webChat.model.room.KurentoRoom;
 import webChat.repository.kurento.KurentoPipelineMap;
@@ -70,6 +72,10 @@ public class KurentoHandler extends TextWebSocketHandler {
     // 고정 크기 Striped 풀이라 방 생성/삭제와 무관하게 lock 객체가 누적되지 않는다(무중단 운영 누수 차단).
     // 서로 다른 방은 다른 stripe 로 분산되어 병렬을 유지한다.
     private final Striped<Lock> roomLocks = Striped.lock(256);
+
+    // 중단 부분 녹화 마커(room:recording:partial:{roomId})의 TTL(초). notified=true 재저장 시 refresh 한다.
+    @Value("${recording.partial.marker.ttl-seconds:21600}")
+    private long partialMarkerTtlSeconds;
 
     /**
      * WebSocket 텍스트 메시지를 수신하고 이벤트 유형에 따라 적절한 처리 메서드로 분기한다.
@@ -360,7 +366,27 @@ public class KurentoHandler extends TextWebSocketHandler {
         } else if (kurentoRoom.isHasRecordedOnce()) {  // 방 새로고침 시 이미 녹화 파일이 있는지 확인
             kurentoMessageSender.sendToUser(user,
                     KurentoMessageBuilder.recordingFileExistsError());
+        } else {
+            // 배포로 중단·정리된 방은 isRecordingInProgress/isHasRecordedOnce 가 모두 false 라 이 분기에서만
+            // 마커를 확인한다. 정상 녹화 중인 방(첫 분기)에는 마커가 없어 분기 위치가 서로 간섭하지 않는다.
+            notifyRecordingInterruptedIfMarked(kurentoRoom.getRoomId(), user);
         }
+    }
+
+    /**
+     * 배포/종료로 녹화가 중단·정리된 방에 재입장한 사용자에게 안내를 1회 전송한다.
+     * 브로드캐스트는 실행 pod 의 in-memory 세션으로만 가 영향 참가자에게 도달하지 못하므로,
+     * 재입장 시점에 그 사용자에게 sendToUser 로 보낸다. 마커 수명(부분 파일 정리 작업)과 메시지
+     * 수명을 분리하기 위해 notified 플래그로 게이트하며, 전송 후 notified=true 로 마커를 다시 저장해
+     * 같은 방 재입장 토스트 반복을 막는다. 마커는 별도 정리 작업이 삭제하므로 여기서는 삭제하지 않는다.
+     */
+    private void notifyRecordingInterruptedIfMarked(String roomId, KurentoUserSession user) {
+        RecordingPartialMarker marker = redisService.getRecordingPartialMarker(roomId);
+        if (marker == null || marker.isNotified()) {
+            return;
+        }
+        kurentoMessageSender.sendToUser(user, KurentoMessageBuilder.recordingInterrupted());
+        redisService.saveRecordingPartialMarker(marker.markNotified(), partialMarkerTtlSeconds);
     }
 
     /**

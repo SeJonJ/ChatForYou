@@ -158,6 +158,7 @@ const wsMessageHandlers = {
     },
     recordingInProgress: (msg) => recording.recordingInProgress(msg),
     participantRecordingError: (msg) => recording.participantRecordingError(msg),
+    recordingInterrupted: (msg) => recording.handleRecordingInterruptedByServer(msg),
 
     // ==========================================
     // 5. 녹화 에러 그룹 (공통 처리)

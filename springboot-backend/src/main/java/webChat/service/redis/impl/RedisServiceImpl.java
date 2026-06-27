@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import webChat.model.login.OauthRedis;
 import webChat.model.login.QRSession;
+import webChat.model.record.RecordingPartialMarker;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
@@ -528,6 +529,27 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public void deleteRoomRecoveryMetadata(String roomId) {
         masterTemplate.delete(ROOM_RECOVERY_PREFIX.getPrefix() + roomId);
+    }
+
+    @Override
+    public void saveRecordingPartialMarker(RecordingPartialMarker marker, long ttlSeconds) {
+        masterTemplate.opsForValue().set(
+                RECORDING_PARTIAL_PREFIX.getPrefix() + marker.getRoomId(),
+                marker,
+                ttlSeconds,
+                TimeUnit.SECONDS
+        );
+    }
+
+    @Override
+    public RecordingPartialMarker getRecordingPartialMarker(String roomId) {
+        return (RecordingPartialMarker) masterTemplate.opsForValue()
+                .get(RECORDING_PARTIAL_PREFIX.getPrefix() + roomId);
+    }
+
+    @Override
+    public void deleteRecordingPartialMarker(String roomId) {
+        masterTemplate.delete(RECORDING_PARTIAL_PREFIX.getPrefix() + roomId);
     }
 
     @Override

@@ -8,10 +8,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import webChat.model.chat.ChatType;
+import webChat.model.record.RecordingPartialMarker;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisIndex;
 import webChat.model.redis.RoomSearchCriteria;
 import webChat.model.room.ChatRoom;
+import webChat.model.room.KurentoRoom;
 import webChat.model.room.recovery.ChatRoomRecoveryOutVo;
 import webChat.model.room.recovery.PreShutdownResult;
 import webChat.model.room.recovery.RecoveryDecision;
@@ -42,6 +44,10 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
     // 배포 복구 후보 metadata(room:recovery:{roomId})의 TTL(초). 이 시간 안에 재입장해야 복구된다.
     @Value("${recovery.room.ttl-seconds:180}")
     private long recoveryTtlSeconds;
+
+    // 중단 부분 녹화 마커(room:recording:partial:{roomId})의 TTL(초).
+    @Value("${recording.partial.marker.ttl-seconds:21600}")
+    private long partialMarkerTtlSeconds;
 
     private final RedisService redisService;
     private final RoutingInstanceProvider instanceProvider;
@@ -140,6 +146,17 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
             }
 
             masterRoom.setInstanceId(currentInstanceId);
+
+            // 새 owner 는 RecorderEndpoint 를 갖지 않으므로 중단된 녹화 상태를 정합 stopped 로 정리한다.
+            // graceful cleanup 이 이미 정리했다면 isRecordingInProgress 가 false 라 marker 중복 기록을 건너뛴다.
+            // 순서 불변: marker 를 먼저 기록해야 reset 으로 사라지는 파일 식별 정보를 보존한다.
+            // 정리된 masterRoom 은 아래 updateRecoveredRoomRoutingAndMetadata 가 Redis 에 영속한다.
+            if (masterRoom instanceof KurentoRoom recoveredRoom && recoveredRoom.isRecordingInProgress()) {
+                redisService.saveRecordingPartialMarker(
+                        RecordingPartialMarker.fromRoom(recoveredRoom), partialMarkerTtlSeconds);
+                recoveredRoom.resetRecordingState();
+            }
+
             RoomRecoveryMetadata claimedMetadata = RoomRecoveryMetadata.builder()
                     .roomId(roomId)
                     .previousInstanceId(metadata.getPreviousInstanceId())

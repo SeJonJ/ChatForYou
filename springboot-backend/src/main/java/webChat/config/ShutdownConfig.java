@@ -6,9 +6,11 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kurento.client.KurentoClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextClosedEvent;
+import webChat.model.record.RecordingPartialMarker;
 import webChat.model.redis.DataType;
 import webChat.model.redis.RedisIndex;
 import webChat.model.redis.RoomSearchCriteria;
@@ -41,6 +43,10 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
     private final InstanceProvider instanceProvider;
     private final ChatRoomRecoveryService chatRoomRecoveryService;
     private final AtomicBoolean cleanupStarted = new AtomicBoolean(false);
+
+    // 중단 부분 녹화 마커(room:recording:partial:{roomId})의 TTL(초).
+    @Value("${recording.partial.marker.ttl-seconds:21600}")
+    private long partialMarkerTtlSeconds;
 
     @PostConstruct
     public void init() {
@@ -97,6 +103,17 @@ public class ShutdownConfig implements ApplicationListener<ContextClosedEvent> {
                 log.debug("Skip cleanup for room {} owned by another instance {} (current {})",
                         kurentoRoom.getRoomId(), kurentoRoom.getInstanceId(), currentInstanceId);
                 continue;
+            }
+
+            // owner 방을 Redis 에 다시 쓰기 전, 진행 중이던 녹화만 정합 stopped 로 정리한다.
+            // updateChatRoom 이 isRecordingInProgress=true 를 그대로 영속하면 복구 후 stale 시그널이 남는다.
+            // 정상 완료된 녹화 방(isRecordingInProgress=false, 파일은 보존)까지 reset 하면 hasRecordedOnce 가
+            // 풀려 동일 방 재녹화 차단이 사라지므로, marker 기록과 reset 을 같은 in-progress 게이트 안에 함께 둔다.
+            // 순서 불변: marker 를 먼저 기록해야 reset 으로 사라지는 파일 식별 정보를 보존한다.
+            if (kurentoRoom.isRecordingInProgress()) {
+                redisService.saveRecordingPartialMarker(
+                        RecordingPartialMarker.fromRoom(kurentoRoom), partialMarkerTtlSeconds);
+                kurentoRoom.resetRecordingState();
             }
 
             // redis 에서 해당 방의 유저수 및 방 상태 변경

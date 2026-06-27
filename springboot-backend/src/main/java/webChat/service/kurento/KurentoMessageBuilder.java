@@ -91,6 +91,13 @@ public class KurentoMessageBuilder {
     }
 
     /**
+     * 배포/종료로 녹화가 비정상 중단된 방 재입장 안내 메시지
+     */
+    public static KurentoMessageBuilder recordingInterrupted() {
+        return new KurentoMessageBuilder(KurentoMessageType.RECORDING_INTERRUPTED);
+    }
+
+    /**
      * 녹화 중이 아님 에러 메시지
      */
     public static KurentoMessageBuilder notRecordingError() {
