@@ -1,6 +1,6 @@
 {
   "sage": {
-    "required_version": "0.9.80"
+    "required_version": "1.1.1"
   },
   "project": {
     "name": "ChatForYou v2",
@@ -472,6 +472,10 @@
     "report_phase": "06",
     "approve_phase": "05",
     "approve_marker": "APPROVED",
+    "base_plan": {
+      "done_criteria_gate": "enforce"
+    },
+    "cycle_binding_visibility": "all",
     "review_loop": {
       "enabled": true,
       "lenses": [
@@ -498,7 +502,35 @@
       ],
       "architecture_escalation": "from_risk.l3",
       "termination_enforce": "advisory",
-      "report_gate_enforce": "advisory"
+      "report_gate_enforce": "advisory",
+      "early_completion": {
+        "enabled": true
+      }
+    },
+    "fast_cycle": {
+      "enabled": true,
+      "reason_required": true,
+      "minimum_rounds": {
+        "L2": 1,
+        "L3": 1
+      },
+      "minimum_lenses": {
+        "L2": 2,
+        "L3": 2
+      },
+      "lenses": {
+        "L2": [
+          "correctness",
+          "error_handling",
+          "convention"
+        ],
+        "L3": [
+          "correctness",
+          "security",
+          "data_integrity",
+          "concurrency"
+        ]
+      }
     },
     "retro": {
       "report_gate_enforce": "enforce"

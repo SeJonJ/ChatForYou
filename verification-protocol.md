@@ -1,7 +1,7 @@
 # verification-protocol.md
 
 Gate policy for L1/L2/L3 changes. Concrete commands come from
-`profile.verification` and `scripts/verify-changes.sh`; this document defines
+`profile.verification` and `sage_harness/verify-changes.sh`; this document defines
 the policy that hooks enforce.
 
 | Level | Checks | Mode |

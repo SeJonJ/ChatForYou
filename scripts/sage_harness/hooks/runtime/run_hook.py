@@ -10,7 +10,7 @@ import argparse
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))   # .../scripts/sage_harness/hooks/runtime
+HERE = os.path.dirname(os.path.abspath(__file__))   # .../<sage 트리>/hooks/runtime
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 import hook_runtime as hr   # noqa: E402

@@ -6,46 +6,60 @@ runtime_bindings:
   codex: { event: PreToolUse, matcher: "apply_patch", timeout: 10 }
 ---
 ## intent
-04-analyze 문서 작성(Phase 3→4 전환 신호) 시, 해당 기능의 03-implementation + 컴포넌트 plan_docs
-체크리스트에 미완료(- [ ])가 있으면 차단한다. EXIT 2=차단 / 0=통과(또는 03 미발견 경고).
+When a 04-analyze document is written — the signal that Phase 3 is turning into Phase 4 — block
+if the feature's 03-implementation or component plan_docs checklists still hold an unchecked
+item (`- [ ]`). Exit 2 blocks; exit 0 passes, including the warning when no 03 is found.
 
 ## runtime_bindings
 - claude: { event: PreToolUse, matcher: "Write|Edit|MultiEdit", input: tool_input.file_path }
-- codex:  { event: PreToolUse, matcher: "apply_patch", input: 파일 블록 단위 — Add/Update targets,
-  Move 는 목적지로 대체(원본 미포함 — move-out 오탐 방지), Delete 제외 }
-- output: block=메시지+exit2 (양 host stderr — host 가 차단 사유를 읽는 채널),
-  warn·ok=메시지+exit0 + hookSpecificOutput.additionalContext (양 host)
+- codex:  { event: PreToolUse, matcher: "apply_patch", input: per file block — Add and Update
+  targets; a Move is represented by its destination only, excluding the source so a move-out is
+  not misread; Delete is excluded }
+- output: block = message + exit 2 on stderr for both hosts, the channel a host reads a block
+  reason from; warn and ok = message + exit 0 plus hookSpecificOutput.additionalContext, both hosts.
 
-## canonical (IO-bound gate — 2단계 pure core)
-scripts/sage_harness/hooks/pre_phase4_checklist_gate_core.py
-- `plan_reads(event, profile) -> {base, globs, exact}`  : 읽을 후보 산출 (fs 접근 0)
-- adapter 가 globs 로 fs_snapshot 생성 (glob_results + files, root-상대)
-- `decide(event, profile, snapshot) -> decision`        : 게이트 판정 (fs/time 의존 0)
-- core 는 완전 순수 — 모든 IO 는 adapter 가 snapshot 으로 주입 (replay/drift 비교 용이).
+## canonical — an IO-bound gate with a two-stage pure core
+sage_harness/hooks/pre_phase4_checklist_gate_core.py
+- `plan_reads(event, profile) -> {base, globs, exact}` produces the read candidates with no
+  filesystem access.
+- The adapter builds an fs_snapshot from those globs (glob_results plus files, root-relative).
+- `decide(event, profile, snapshot) -> decision` reaches the gate verdict with no filesystem or
+  clock dependency.
+- The core is fully pure: every IO is injected by the adapter as a snapshot, which keeps replay
+  and drift comparison straightforward.
 
 ## adapter_contract
 - contract_version: "1"
-- 표준 event: { hook_id, hook_event_name, runtime, session_id, changes:[{path(rel), op}] }
-  op: claude=write · codex=add|update|move (Move 는 목적지만 — 원본은 문서가 생기는 경로가 아님, Delete 제외)
-- fs_snapshot: { glob_results: {glob: [path...]}, files: {path: text|null} }  (root-상대 경로)
+- Standard event: { hook_id, hook_event_name, runtime, session_id, changes:[{path(rel), op}] }
+  op: claude = write; codex = add | update | move. A Move contributes its destination only,
+  since the source is not where the document comes into being; Delete is excluded.
+- fs_snapshot: { glob_results: {glob: [path...]}, files: {path: text|null} }, root-relative paths.
 - decision: { kind, status(block|warn|ok|skip), exit_code, base, total_unchecked, evidence[], message_key }
-- adapter 책임: 입력추출(file_path / apply_patch) + fs_adapter(glob/read→snapshot) + 출력렌더 + 경로바인딩
+- Adapter responsibilities: extract input (file_path or apply_patch), run the fs adapter
+  (glob and read into a snapshot), render output, and bind paths across hosts.
 
-## profile_bound (8범주 중)
+## profile_bound (of the eight categories)
 - phase4_trigger_glob: "*plan_docs/04-analyze/*.md"
-- checklist_scan_targets: [{label, glob, is_impl?}] — 03-implementation + 컴포넌트 plan_docs (§7 I11)
-- suffixes: PDCA 산출물 네이밍 = framework 기본(DEFAULT_SUFFIXES) + profile override 가능
+- checklist_scan_targets: [{label, glob, is_impl?}] — 03-implementation plus component plan_docs.
+- suffixes: the naming of PDCA artifacts — the framework default (DEFAULT_SUFFIXES), overridable
+  by the profile.
 
-## reverse_extract 분류
-- structural_io_adapter: file_path 단일 vs apply_patch 파일 블록(Move 는 목적지로 대체)
-- output_adapter: WARN/OK 렌더(양 host hookSpecificOutput — 문구 표기만 런타임별), block 채널
-- token_adapter: PROJECT_ROOT env, 경로
-- profile_bound: 트리거/타겟/suffixes
-- algorithm(공유, core): base 추출(suffix 반복제거), find_match(exact우선+prefix양방향), 미완료 스캔, 판정
-- **algorithm_delta 없음** (claude/codex 알고리즘 동일)
-- read_error: evidence 추적만, block 판정엔 미반영(원본 동작 유지)
+## reverse_extract classification
+- structural_io_adapter: a single file_path versus apply_patch file blocks, with a Move
+  represented by its destination.
+- output_adapter: the WARN and OK render — both hosts use hookSpecificOutput and only the wording
+  differs per runtime — and the block channel.
+- token_adapter: the PROJECT_ROOT env var and paths.
+- profile_bound: trigger, targets and suffixes.
+- algorithm (shared, core): base extraction with repeated suffix stripping, find_match (exact
+  first, then prefix in both directions), the unchecked-item scan, and the verdict.
+- **No algorithm_delta** — claude and codex run the identical algorithm.
+- read_error: tracked in evidence only; it does not feed the block verdict, preserving the
+  original behavior.
 
 ## tests
-scripts/sage_harness/hooks/tests/test_pre_phase4_checklist_gate.py (15 PASS)
-- core(in-memory snapshot): ok/warn/block(03·backend)/suffix/exact우선/read_error
-- adapter(temp tree): claude·codex block·ok 동일 exit, Move 로 생긴 04 문서 트리거, block 사유의 채널
+sage_harness/hooks/tests/test_pre_phase4_checklist_gate.py (15 PASS)
+- Core against an in-memory snapshot: ok, warn, block for both 03 and backend, suffix handling,
+  exact-match precedence, read_error.
+- Adapter against a temp tree: claude and codex produce the same exit for block and ok, a 04
+  document created by a Move triggers the gate, and the block reason lands on the right channel.

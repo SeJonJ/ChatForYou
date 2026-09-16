@@ -19,6 +19,12 @@ L2/L3 code is written. Hands back an ownership map; `/sage-team` drives 03–06.
 - Invoked by `/sage-cycle` as the 00–02 half of the full-cycle umbrella
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read `sage/project-profile.yaml` — confirm the project is bootstrapped
    (`project.name` non-empty, `risk` and `components` set). If not, block and
    direct to `/sage-init`.
@@ -31,6 +37,12 @@ L2/L3 code is written. Hands back an ownership map; `/sage-team` drives 03–06.
    On a resumed session with a user-supplied packet, first run
    `sage context restore --snapshot <path>` and read the generated briefing. A restore
    failure is a hard stop; never fall back to an unverified packet.
+   Settle the cycle's document language in the same pass: Phase 00's `Document-Language:`
+   line if that document exists, else `document_language` in `.sage/cycle.json`, else ask
+   the user and record it with `sage cycle set <stem> --document-language <ko|en>`. Every
+   phase document carries that one line outside any code fence and is written in that
+   language, fixed for the whole cycle. It is independent of the conversation language —
+   see `docs/agent/language-policy.md`.
 4. If `knowledge_capture.scan_before_dev: true` and `knowledge_capture.vault_path`
    is set, write the task scope to `.sage/knowledge_query.txt` and run
    `python -m sage knowledge scan --query-file .sage/knowledge_query.txt`. The
@@ -45,12 +57,16 @@ L2/L3 code is written. Hands back an ownership map; `/sage-team` drives 03–06.
       of the user-declared level and the glob-implied risk; later gates and write-back
       use it as the durable cycle tier). Record exactly one declaration outside code
       fences and never leave the `<L1|L2|L3>` placeholder.
-   c. Distribute file ownership to implementer-a / implementer-b by component.
-   d. State the integration point where the two implementers connect.
+   c. Record `Done-Criteria-Revision: 1` and one exact `## 5. Done Criteria`
+      section. Convert the confirmed user outcomes into concrete `[ ]` items; do not
+      mark implementation results complete during planning and do not leave TODO.
+   d. Distribute file ownership to implementer-a / implementer-b by component.
+   e. State the integration point where the two implementers connect.
 6. Verify the plan doc exists before handing off:
    check that the file under `paths.plan_docs` is non-empty and references
    the feature scope, and that 00 carries exactly one filled `Risk Level: L[123]`
-   line outside code fences (not the `<L1|L2|L3>` placeholder), and that every file basename equals its
+   line outside code fences (not the `<L1|L2|L3>` placeholder), that the Done Criteria
+   contract is valid with revision 1 and at least one concrete `[ ]` item, and that every file basename equals its
    single `Cycle-Stem` declaration — if missing/unfilled/mismatched, block and have the
    leader set it.
 7. Report the ownership map to the user and confirm they are ready to proceed

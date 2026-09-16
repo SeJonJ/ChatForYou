@@ -18,7 +18,7 @@ ChatForYou_v2/
 │   ├── src/main/java/       # Java 소스 코드
 │   ├── src/main/resources/  # 설정 파일
 │   └── build.gradle         # Gradle 빌드 설정
-├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.0)
+├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.3)
 │   ├── src/                 # Electron 소스 코드
 │   └── package.json
 └── README.md
@@ -86,6 +86,7 @@ Kubernetes Rolling Update 중 RTC 방이 삭제되지 않고, 참가자가 자�
 - **DataChannel**: 파일 전송 및 추가 채팅
 - **텍스트 오버레이**: 문자 채팅 내용을 비디오에 표시
 - **실시간 자막**: 음성을 통한 실시간 자막 기능
+- **발화자 하이라이트**: 현재 말하고 있는 참가자의 비디오 타일을 실시간으로 강조 표시
 - **SSE 기반 실시간 채팅 목록**: 서버 사이드 이벤트 기반 실시간 방 목록 갱신
 - **녹화 기능**: 실시간 영상 녹화 및 MinIO 업로드/다운로드
 
@@ -249,6 +250,41 @@ codegraph start
 
 > `.codegraph/` 디렉토리는 `.gitignore`에 등록되어 있으므로 각자 로컬에서 생성해야 합니다.
 > 대규모 리팩토링 후 인덱스가 오래된 경우 `codegraph index --force` 로 재생성합니다.
+
+---
+
+### SAGE — PDCA 거버넌스 하네스
+
+SAGE는 기능 개발을 00(기본 계획)~06(완료 보고) 단계로 강제하는 PDCA 거버넌스 프레임워크입니다.
+Claude Code와 Codex 양쪽에서 동일하게 동작하며, 위험도(L0~L3)에 따라 필수 phase 문서·리뷰
+루프·컨벤션 검증을 훅으로 강제합니다. 팀원 모두 로컬에 CLI를 설치해야 합니다.
+
+**설치**
+
+```bash
+# CLI 설치 (pipx 권장)
+pipx install "sage-harness[schema]"
+
+# Claude Code 훅/스킬 설치 (이미 부트스트랩된 프로젝트에 합류하는 경우)
+sage install --host claude --force
+
+# Codex 훅 설치 (전역 스킬 scope)
+sage install --host codex --skill-scope global --force
+
+# 설치/버전/게이트 상태 확인
+sage doctor
+```
+
+**주요 명령**
+
+| 명령 | 설명 |
+|------|------|
+| `sage cycle set <stem>` | 현재 작업의 PDCA 사이클(Cycle-Stem) 선언 |
+| `sage validate --schema --kind all --strict` | profile/자산 전체 구조 검증 |
+| `sage review-loop open/round/close` | Phase-05 리뷰 루프 감사 기록 |
+| `sage retro` | 사이클 완료 후 회고·자산 개선 제안 |
+
+자세한 사용법은 `AGENT_GUIDE.md`와 `docs/sage_harness/` 스펙 문서를 참고하세요.
 
 ---
 

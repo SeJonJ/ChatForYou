@@ -275,6 +275,7 @@ venv/
 !/.sage/override.jsonl
 !/.sage/acceptance-waivers.jsonl
 !/.sage/loop_audit.jsonl
+!/.sage/fast_cycle.jsonl
 # <<< SAGE LOCAL STATE
 # ChatForYou project policy: keep Loop A audit local even though SAGE shares it by default.
 /.sage/loop_audit.jsonl

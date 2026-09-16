@@ -6,42 +6,47 @@ runtime_bindings:
   codex: { event: PostToolUse, matcher: "apply_patch", timeout: 5 }
 ---
 ## intent
-Write/Edit(Claude) 또는 apply_patch(Codex) 완료 시 tracked 소스/plan 파일 변경을
-세션 JSONL 로그에 기록한다. stop-compliance-report 가 이 로그를 집계한다.
+On completion of Write/Edit (Claude) or apply_patch (Codex), record changes to tracked source
+and plan files in the session JSONL log. stop-compliance-report aggregates that log.
 
 ## runtime_bindings
-- claude: { event: PostToolUse, matcher: "Write|Edit|MultiEdit", input: tool_input.file_path(단일) }
-- codex:  { event: PostToolUse, matcher: "apply_patch", input: command 본문 다중파일 파싱 }
-- output: 없음(파일 append only). on_fail: 없음(항상 exit 0)
+- claude: { event: PostToolUse, matcher: "Write|Edit|MultiEdit", input: tool_input.file_path, single }
+- codex:  { event: PostToolUse, matcher: "apply_patch", input: multi-file parse of the command body }
+- output: none — append only. on_fail: none; always exits 0.
 
 ## canonical
-scripts/sage_harness/hooks/post_tool_logger_core.py  →  decide(event, profile) -> decision
-- core 도메인 기본값 0. profile(file_type_map) 외부주입 필수.
+sage_harness/hooks/post_tool_logger_core.py  →  decide(event, profile) -> decision
+- The core defaults to zero domains. The profile (file_type_map) must be injected from outside.
 
 ## adapter_contract
 - contract_version: "1"
-- 표준 event: { hook_id, hook_event_name, runtime, session_id, tool, branch, now_utc, changes:[{path(rel), op}] }
-- 표준 decision: { kind, action(log|noop), log_file, log_entries:[{ts,tool,file,type,branch,session}], exit_code }
-- profile(2번째 인자): { file_type_map:[{glob,type}](첫매치), skip_untyped, log_schema_version }
-- adapter 책임: 입력추출(claude file_path 단일 → changes[1] / codex apply_patch → changes[N]) +
-  branch·now_utc 관측 주입 + profile 로드($SAGE_PROFILE) + JSONL append IO + 경로바인딩(.claude↔.codex)
+- Standard event: { hook_id, hook_event_name, runtime, session_id, tool, branch, now_utc, changes:[{path(rel), op}] }
+- Standard decision: { kind, action(log|noop), log_file, log_entries:[{ts,tool,file,type,branch,session}], exit_code }
+- Profile (second argument): { file_type_map:[{glob,type}] first match wins, skip_untyped, log_schema_version }
+- Adapter responsibilities: extract input (claude single file_path → changes[1]; codex apply_patch
+  → changes[N]), inject the observed branch and now_utc, load the profile from $SAGE_PROFILE,
+  append JSONL, and bind paths across `.claude` and `.codex`.
 
-## reverse_extract 분류 (8범주 — profile_bound 신설)
-- structural_io_adapter: 입력추출 (Claude 단일 file_path vs Codex apply_patch 다중파일 정규식)
-- profile_bound (신설): file_type_map 경로글롭(백엔드 소스 경로 등) = 프로젝트 선언값 → profile (§7 I2). core엔 없음
-- token_adapter: PROJECT_ROOT env명, 로그경로(.claude↔.codex)
-- algorithm(공유, core): changes[] → profile 분류 → 로그엔트리. skip_untyped.
-- noise(정규화): 주석, 따옴표, import 정렬
+## reverse_extract classification (8 categories, profile_bound added)
+- structural_io_adapter: input extraction — a single Claude file_path versus the Codex
+  apply_patch multi-file regex.
+- profile_bound (new): file_type_map path globs such as backend source paths are project-declared
+  values and belong to the profile. They do not exist in the core.
+- token_adapter: the PROJECT_ROOT env var name and the log path (`.claude` versus `.codex`).
+- algorithm (shared, core): changes[] → profile classification → log entries, honouring skip_untyped.
+- noise (normalized away): comments, quoting, import order.
 
-## unresolved (drift 표면화 — 사람 확인)
-1. **plan-doc 글롭 drift**: Claude `*/plan_docs/*`(어디든) vs Codex `^plan_docs/`(루트만).
-   컴포넌트 plan_docs({component}/plan_docs) 처리가 갈림. canonical = `*plan_docs/*`(둘 다 매칭)
-   채택 — §7 I11(plan_docs + {comp}/plan_docs) 의도에 부합. **사람 확인 필요**.
-2. **type=other 기록 drift**: Claude 는 미분류도 type=other 로 기록, Codex 는 skip.
-   canonical = skip(skip_untyped:true) — "tracked type만 기록" 의도. Claude other 기록은 회귀로 봄. **사람 확인 필요**.
+## unresolved — surfaced drift, needs a human decision
+1. **plan-doc glob drift**: Claude uses `*/plan_docs/*` (anywhere), Codex uses `^plan_docs/`
+   (root only). They diverge on component plan_docs ({component}/plan_docs). Canonical is
+   `*plan_docs/*`, which matches both and fits the intent of covering plan_docs and
+   {component}/plan_docs. **Needs human confirmation.**
+2. **type=other logging drift**: Claude records unclassified files as type=other; Codex skips
+   them. Canonical is to skip (skip_untyped: true), matching the intent of logging tracked types
+   only. The Claude behavior is treated as a regression. **Needs human confirmation.**
 
 ## tests
-scripts/sage_harness/hooks/tests/test_post_tool_logger.py (7 PASS)
-- core classification(6 type + plan-doc drift canonical) / skip_untyped / multi_changes
-- adapter e2e(claude 단일·codex 다중) / skip parity / behavior parity
-- now_utc·branch 고정으로 결정론
+sage_harness/hooks/tests/test_post_tool_logger.py (7 PASS)
+- Core classification across the six types plus the canonical plan-doc drift; skip_untyped; multi_changes.
+- Adapter end to end for a single Claude change and multiple Codex changes; skip parity; behavior parity.
+- Determinism is held by pinning now_utc and branch.

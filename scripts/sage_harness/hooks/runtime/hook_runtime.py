@@ -28,6 +28,7 @@ HOOKS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if HOOKS_DIR not in sys.path:
     sys.path.insert(0, HOOKS_DIR)
 import cycle_binding
+import risk_declaration
 import checklist_contract
 import cycle_state
 
@@ -70,7 +71,7 @@ def load_profile_fail_open(hook_id):
         return None
 
 
-def load_profile_fail_closed(hook_id):
+def load_profile_fail_closed(hook_id, root=None):
     """Load a required compiled profile and preserve absence as the legacy no-op policy."""
     prof_path = os.environ.get("SAGE_PROFILE", "")
     if not prof_path or not os.path.exists(prof_path):
@@ -85,7 +86,7 @@ def load_profile_fail_closed(hook_id):
         raise ProfileLoadError("compiled profile 루트는 mapping이어야 함")
     issues = checklist_contract.checklist_target_issues(profile)
     if issues:
-        raise ProfileLoadError("; ".join(issues))
+        raise ProfileLoadError("; ".join(_overlay_say(root, issue) for issue in issues))
     return profile
 
 
@@ -176,6 +177,27 @@ def build_snapshot(profile, root, rel):
                 docs.append({"path": rel(p), "content": cc, "recent": (now - os.path.getmtime(p)) <= 7 * 86400})
             phase_docs[pid] = docs
 
+        # Fast Cycle uses one physical 00 document as deterministic virtual 01..04 documents.
+        # The shared parser is also used by the CLI and server-side consumers.
+        try:
+            from fast_cycle_contract import parse_fast_plan
+            for doc in list(phase_docs.get("00") or []):
+                plan, issues = parse_fast_plan(doc.get("content") or "")
+                if plan is None or issues or plan.metadata.get("Cycle-Mode") != "FAST":
+                    continue
+                header = (f"Cycle-Stem: `{plan.metadata.get('Cycle-Stem', '')}`\n"
+                          f"Risk Level: {plan.metadata.get('Risk Level', '')}\n")
+                for virtual_id in ("01", "02", "03", "04"):
+                    phase_docs.setdefault(virtual_id, []).append({
+                        "path": doc.get("path"),
+                        "content": header + plan.sections.get(virtual_id, ""),
+                        "recent": doc.get("recent", False),
+                        "virtual_fast": True,
+                    })
+        except Exception:
+            # Core receives parser/audit failures separately and closes only active Fast runs.
+            pass
+
     # 9.5 report←approve audit 증거: loop_audit 요약을 core 에 주입(2층 — adapter 가 .sage 읽기, core 순수).
     # fail-open: audit 없음/손상이어도 빈 요약(게이트가 advisory/enforce 로 처리, snapshot 빌드는 안 깸).
     try:
@@ -189,6 +211,15 @@ def build_snapshot(profile, root, rel):
             "has_any_records": False,
             "file_ok": False,
             "file_issues": [],
+            "snapshot_error": f"{type(exc).__name__}: {exc}",
+        }
+    try:
+        import fast_cycle_audit
+        fast_audit = fast_cycle_audit.audit_summary(root)
+    except Exception as exc:
+        fast_audit = {
+            "runs": {}, "active": [], "has_any_records": False,
+            "file_ok": False, "file_issues": [],
             "snapshot_error": f"{type(exc).__name__}: {exc}",
         }
     acceptance = ((profile.get("verification") or {}).get("acceptance") or {})
@@ -205,7 +236,7 @@ def build_snapshot(profile, root, rel):
         acceptance_waivers = {"valid": True, "active": [], "issues": [], "has_any_records": False}
     return {"plan_files": plan_files, "review_candidates": review_candidates,
             "l3_review_docs": l3_review_docs,
-            "phase_docs": phase_docs, "loop_audit": la,
+            "phase_docs": phase_docs, "loop_audit": la, "fast_cycle_audit": fast_audit,
             "acceptance_waivers": acceptance_waivers}
 
 
@@ -265,10 +296,16 @@ _NON_OVERRIDABLE_BLOCKS = {
     "block_cycle_risk_reconciliation",
     "block_report_without_acceptance",
     "block_report_waiver_audit_failure",
+    "block_invalid_done_criteria",
+    "block_phase00_mixed_evidence",
+    "block_report_without_done_criteria",
+    "block_stale_done_criteria_revision",
+    "block_stale_done_criteria_approval",
     "block_gate_runtime_error",
     # 감사 기록 실패로 생긴 BLOCK 은 override 대상이 아니다 — override 는 그 자체가 감사에 남는 우회인데,
     # 감사를 못 쓰는 상태에서 감사로 우회한다는 건 성립하지 않는다. waiver 기록 실패와 같은 취급.
     "block_cycle_stem_audit_failure",
+    "block_fast_cycle_audit",
 }
 
 
@@ -294,8 +331,12 @@ def _maybe_override(hook_id, root, decision, changes):
     try:
         grants = ov.active_grants(root, gate=hook_id)
     except Exception as exc:
-        print(f"⚠️  [{hook_id}] override 조회 실패 → 우회 없이 원래 판정을 유지합니다: "
-              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        # override_audit 은 sage.i18n 을 import 할 수 없어(엔진 없이 단독 실행) 진단을 code+arguments
+        # dict 로 올린다(StateHomeError.diagnostic) — 있으면 hook catalog 로 렌더, 없으면(범용
+        # 예외) 원문 그대로. 감싸는 문장 자체는 이 파일의 다른 fail-safe 안내와 같이 고정 한국어다.
+        detail = _overlay_say(root, exc.diagnostic) if hasattr(exc, "diagnostic") else f"{type(exc).__name__}: {exc}"
+        print(f"⚠️  [{hook_id}] override 조회 실패 → 우회 없이 원래 판정을 유지합니다: {detail}",
+              file=sys.stderr)
         return False
     if not grants:
         return False
@@ -423,6 +464,218 @@ def _build_feedback_state(profile, root, changes):
     return {"enabled": True, "targets": targets}
 
 
+EOF_SENTINEL = "*** End of File"
+
+
+def _apply_edits(image, edits):
+    """치환쌍(Claude Edit/MultiEdit)을 순서대로 적용한 결과. 되짚을 수 없으면 None.
+
+    `replace_all` 은 host 가 실제로 하는 동작이다 — 첫 하나만 바꾼 결과를 최종 문서라고 넘기면,
+    모든 한국어를 걷어내는 편집이 "아직 한국어가 남아 있다" 로 읽혀 구조 이상을 놓친다.
+    """
+    for edit in edits:
+        old = edit.get("old") or ""
+        if not old or old not in image:
+            return None
+        image = image.replace(old, edit.get("new") or "", -1 if edit.get("all") else 1)
+    return image
+
+
+
+def _split_hunks(body):
+    """apply_patch(v4a) update 본문 → [(anchors, before_lines, after_lines, at_eof)].
+
+    `@@ <text>` 는 hunk 경계이자 **위치 지정자**다. 경계로만 쓰고 text 를 버리면 같은 문맥이
+    여러 번 나오는 문서에서 패치가 엉뚱한 자리에 붙는다 — 그렇게 만든 post-image 는 실제 결과가
+    아니므로 그걸로 내리는 판정은 전부 근거가 없다. `*** End of File` 도 같은 이유로 보존한다:
+    "파일 끝" 이라는 위치 정보를 버리면 반복 문맥에서 앞쪽 일치를 골라 엉뚱한 문서를 만든다.
+
+    접두사 없는 빈 줄은 빈 문맥줄로 읽는다(생성기가 후행 공백을 지우는 경우가 흔하다). 그 밖의
+    접두사 없는 줄은 형식을 모르는 상태이므로 되짚기를 포기한다.
+    """
+    hunks, anchors, before, after, at_eof = [], [], [], [], False
+    for line in body:
+        if line == EOF_SENTINEL:
+            at_eof = True
+        elif line.startswith("@@"):
+            if before or after:
+                hunks.append((anchors, before, after, at_eof))
+                anchors, before, after, at_eof = [], [], [], False
+            text = line[2:].strip()
+            if text:
+                anchors.append(text)          # 연속 @@ 는 바깥→안쪽 순서로 좁혀 간다
+        elif line.startswith("+"):
+            after.append(line[1:])
+        elif line.startswith("-"):
+            before.append(line[1:])
+        elif line.startswith(" ") or line == "":
+            before.append(line[1:])
+            after.append(line[1:])
+        else:
+            return None
+    if before or after or at_eof:
+        hunks.append((anchors, before, after, at_eof))
+    return hunks
+
+
+def _find_block(lines, block, start):
+    """`start` 이후에서 block 이 통째로 일치하는 첫 위치(없으면 None)."""
+    span = len(block)
+    for index in range(max(start, 0), len(lines) - span + 1):
+        if lines[index:index + span] == block:
+            return index
+    return None
+
+
+
+def _find_anchor(lines, anchor, start):
+    """`@@ <text>` 가 가리키는 줄의 위치. 정확히 일치하는 줄이 없으면 공백을 무시하고 찾는다."""
+    for index in range(max(start, 0), len(lines)):
+        if lines[index] == anchor or lines[index].strip() == anchor:
+            return index
+    return None
+
+
+def _apply_hunks(image, body):
+    """디스크 원본에 update hunk 를 적용한 결과. 위치를 확정할 수 없으면 None.
+
+    위치를 확정한다는 것은 셋 중 하나다. anchor 가 있으면 그 줄 **뒤에서만** 문맥을 찾고,
+    `*** End of File` 이 있으면 파일 끝에서만 찾으며, 둘 다 없으면 남은 구간에서 그 문맥이
+    **유일해야** 한다. 어느 쪽도 아니면 "아마 여기일 것" 이 되는데, 그렇게 만든 문서로 내리는
+    판정은 정상 편집을 막는 쪽으로도 틀린다(fence 복구 패치 오차단).
+
+    문맥줄 없는 순수 추가는 anchor 나 EOF 가 자리를 잡아줄 때만 받는다 — 그때는 붙는 자리가
+    확정되므로, 쓸 수 있는 패치를 거절할 이유가 없다.
+    """
+    hunks = _split_hunks(body)
+    if not hunks:
+        return None
+    lines = image.split("\n")
+    cursor = 0
+    for anchors, before, after, at_eof in hunks:
+        start = cursor
+        for anchor in anchors:
+            # anchor 는 존재·순서 확인과 탐색 하한으로만 쓴다. 최종 위치를 정하는 것은
+            # EOF 표시가 있으면 EOF 고, 없으면 문맥이다.
+            index = _find_anchor(lines, anchor, start)
+            if index is None:
+                return None                  # anchor 불일치 — 이 patch 는 이 원본에 맞지 않는다
+            start = index + 1
+        if at_eof:
+            # EOF 패치는 파일 끝에서 **역산**해 자리를 정한다. 앞에서부터 첫 문맥을 찾으면
+            # 반복 문맥에서 엉뚱한 자리를 잡거나, 끝이 아니라며 쓸 수 있는 패치를 거절한다.
+            end = len(lines) - 1 if lines and lines[-1] == "" else len(lines)
+            found = end - len(before)
+            if found < start or lines[found:end] != before:
+                return None
+            lines[found:end] = after
+            cursor = found + len(after)
+            continue
+        if not before:
+            if not anchors:
+                return None                  # 붙는 자리를 잡아주는 것이 아무것도 없다
+            lines[start:start] = after
+            cursor = start + len(after)
+            continue
+        found = _find_block(lines, before, start)
+        if found is None:
+            return None                      # 문맥 불일치
+        if not anchors and _find_block(lines, before, found + 1) is not None:
+            return None                      # 자리를 잡아줄 것 없이 반복되는 문맥
+        lines[found:found + len(before)] = after
+        cursor = found + len(after)
+    return "\n".join(lines)
+
+
+def _read_text(root, rel_path):
+    """root 상대 경로의 텍스트. 없거나 텍스트가 아니면 None."""
+    try:
+        with open(os.path.join(root, rel_path), encoding="utf-8") as handle:
+            return handle.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _image_targets(changes):
+    """되짚기 비용을 낼 경로 집합 — 판정 대상인 `.md` 와 그 이동의 원본뿐.
+
+    Markdown 여부를 보기 전에 모든 update 파일을 되짚으면, 이 게이트가 판정하지도 않는 큰
+    소스·데이터 파일 편집이 hook 예산을 통째로 쓴다.
+    """
+    targets = set()
+    for change in changes or []:
+        if not isinstance(change, dict):
+            continue
+        path = change.get("path") or ""
+        if not path.endswith(".md"):
+            continue
+        targets.add(path)
+        if change.get("op") == "move" and change.get("source_path"):
+            # 목적지가 판정 대상이면 원본도 읽어야 한다 — 원본 확장자가 무엇이든.
+            targets.add(change["source_path"])
+    return targets
+
+
+def _attach_post_image(root, changes):
+    """판정에 필요한 **변경 전·후 전체 본문**을 싣는다.
+
+    `pre_image` 는 그 경로에 지금 있는 내용(없으면 빈 문자열)이고, `post_image` 는 이번 변경이
+    끝난 뒤의 내용이다. 판정은 둘을 비교해 **이번 변경이 늘린 부채**만 본다 — 새로 추가된 줄만
+    보면 Markdown 구문을 지워 기존 한국어가 prose 로 드러나는 경우를 통째로 놓치고, 반대로
+    전체만 보면 legacy 문서 하나가 이후 모든 편집을 막는다.
+
+    Write / apply_patch Add File 은 content 가 곧 post-image 다(`full_content`). 부분 diff 는
+    디스크 원본에 적용해 되짚고, 성립하지 않으면 조용히 넘기지 않고 `post_image_error` 를 남긴다.
+    """
+    targets = _image_targets(changes)
+    for change in changes or []:
+        if not isinstance(change, dict):
+            continue
+        rel_path = change.get("path") or ""
+        if rel_path not in targets:
+            continue
+        change["pre_image"] = _read_text(root, rel_path) or ""
+        if change.get("full_content") or change.get("op") != "update":
+            continue
+        source = _read_text(root, rel_path)
+        if source is None:
+            change["post_image_error"] = "unreadable"
+            continue
+        edits, body = change.get("edits"), change.get("patch_body")
+        if not edits and not body:
+            # hunk 없는 `Update File` + `Move to` — 내용은 그대로 목적지로 간다.
+            change["post_image"] = source
+            continue
+        result = _apply_edits(source, edits) if edits else _apply_hunks(source, body)
+        if result is None:
+            change["post_image_error"] = "unreconstructible"
+        else:
+            change["post_image"] = result
+    _forward_post_image_to_move_targets(changes)
+
+
+def _forward_post_image_to_move_targets(changes):
+    """이동 목적지에 원본에서 되짚은 결과를 넘긴다.
+
+    `Update File` + `Move to` 는 source(update)와 destination(move) 두 변경으로 갈라진다.
+    되짚기를 update 에서만 하고 끝내면, 판정은 목적지 경로·stem 으로 하는데 그 변경에는
+    post-image 가 없어 문서 검사를 건너뛴다 — 이동과 수정을 한 번에 하면 검사가 통째로 빠진다.
+    `pre_image` 는 넘기지 않는다: 부채의 기준선은 **목적지에 지금 있는 것**이라, 사이클 안으로
+    새로 들어오는 문서는 그 내용 전체가 새 부채다.
+    """
+    by_path = {change["path"]: change for change in changes or []
+               if isinstance(change, dict) and change.get("path")}
+    for change in changes or []:
+        if not isinstance(change, dict) or change.get("op") != "move":
+            continue
+        source = by_path.get(change.get("source_path") or "")
+        if source is None or change.get("full_content"):
+            continue
+        for key in ("post_image", "post_image_error"):
+            if key in source:
+                change[key] = source[key]
+
+
 def run_pre_implementation_gate(io, root, core_dir, raw_text):
     """pre-implementation-gate 오케스트레이터. io = io_claude | io_codex (런타임별 IO만 위임)."""
     hid = "pre-implementation-gate"
@@ -437,14 +690,21 @@ def run_pre_implementation_gate(io, root, core_dir, raw_text):
 
     rel = make_rel(root)
     changes = io.extract_changes(raw, rel)       # ← 런타임별 (file_path vs apply_patch)
+    _attach_post_image(root, changes)
     declared = io.read_declared_level(raw, root)  # ← 런타임별 ($host/logs)
     # 선언은 env(SAGE_CYCLE_STEM) 와 `<root>/.sage/cycle.json` 두 통로다. 기원을 함께 실어야
     # 표시·감사가 "어느 통로로 읽었는지" 를 갈라 말할 수 있다 — env 가 이기는데 화면이
     # "파일 선언" 이라고 적으면 확정적으로 거짓이 된다.
     cycle_stem, cycle_origin, cycle_error = cycle_state.resolve_stem(root)
+    # 문서 언어 미러는 **선언 파일이 이긴 stem 일 때만** 실린다. env 가 다른 stem 으로 이기면
+    # 파일의 언어는 다른 사이클의 값이고, 그걸 실으면 게이트가 남의 사이클 선언과 대조한다.
+    declaration = cycle_state.read_declaration_record(root)
+    document_language = (declaration.document_language
+                         if declaration.stem and declaration.stem == cycle_stem else None)
     event = {"hook_id": hid, "hook_event_name": "PreToolUse", "runtime": io.RUNTIME,
              "session_id": raw.get("session_id", "") or "", "branch": resolve_branch(root, ""),
              "cycle_stem": cycle_stem, "cycle_stem_origin": cycle_origin,
+             "cycle_document_language": document_language,
              "declared_max": declared, "changes": changes}
     snapshot = build_snapshot(profile, root, rel)
     feedback_state = _build_feedback_state(profile, root, changes)
@@ -465,7 +725,53 @@ def run_pre_implementation_gate(io, root, core_dir, raw_text):
         decision["cycle_declaration_error"] = cycle_error
     if _maybe_override(hid, root, decision, changes):   # P1-5: 활성 override 면 BLOCK 우회(감사 기록)
         return 0
-    return io.render_gate(decision, profile)     # ← 런타임별 채널/포맷/exit
+    return io.render_gate(decision, profile, root)   # ← 런타임별 채널/포맷/exit
+
+
+def _runtime_block(hook_id, code, detail):
+    """런타임 직접 BLOCK 한 줄 — code 와 다음 행동을 함께 낸다.
+
+    게이트 결정이 아니라 게이트를 **세우지 못한** 실패라 `gate_text` 를 지나지 않는다.
+    그래서 여기서 직접 붙인다. 이 자리를 비워 두면 가장 깨진 상태의 사용자가 가장 적은
+    정보를 받는다 — code 도 없어 검색조차 못 한다.
+    """
+    # 두 번째 import 도 실패할 수 있다 — 그때 예외가 그대로 올라가면 아래 fallback 에
+    # 도달하지 못하고, 가장 손상된 설치에서 사용자가 아무 다음 행동도 받지 못한다.
+    # 최소 보장은 표가 없어도 살아남아야 한다.
+    _recovery = None
+    for _load in (lambda: __import__("importlib").import_module(".recovery", __package__),
+                  lambda: __import__("recovery")):
+        try:
+            _recovery = _load()
+            break
+        except Exception:
+            continue
+    if _recovery is None:
+        return f"⛔ BLOCK [{code}] [{hook_id}] {detail}\nNext: sage status"
+    try:
+        from . import messages as _messages
+    except Exception:
+        try:
+            import messages as _messages
+        except Exception:
+            return f"⛔ BLOCK [{code}] [{hook_id}] {detail}\nNext: sage status"
+    try:
+        # 설치본은 flat import 로도 로드된다. 상대 import 하나만 시도하면 그 경로에서
+        # 번역이 통째로 꺼지고, 사용자 화면에 catalog 키가 그대로 나간다.
+        try:
+            from . import i18n as _i18n
+        except ImportError:
+            import i18n as _i18n
+        language = _messages.display_language()
+        translate = lambda key: _i18n.frag(language, key) or key   # noqa: E731
+    except Exception:
+        translate = lambda key: key                                # noqa: E731
+    lines = [f"⛔ BLOCK [{code}] [{hook_id}] {detail}"]
+    try:
+        lines.extend(_recovery.render(code, translate, host="<host>"))
+    except Exception:
+        lines.append("Next: sage status")
+    return "\n".join(lines)
 
 
 def run_generated_artifact_write_guard(raw_text, core_dir, direct_path=None):
@@ -475,13 +781,26 @@ def run_generated_artifact_write_guard(raw_text, core_dir, direct_path=None):
             sys.path.insert(0, core_dir)
         core = importlib.import_module("generated_artifact_write_guard_core")
         decision = core.decide_input(raw_text or "", direct_path=direct_path)
-        message = decision.get("message") or ""
+        # 표시 언어는 렌더 직전에만 닿는다. 판정(`code`·`exit_code`)은 이미 언어 중립으로
+        # 확정돼 있고 여기서 바꾸는 것은 사람이 읽는 문장뿐이다.
+        code = decision.get("code")
+        if code:
+            # 이 모듈은 설치본에서 flat import 로도 로드된다. 상대 import 하나가 그 경로를
+            # 끊으므로 두 형태를 모두 받는다 — `messages.py` 가 i18n 을 받는 방식과 같다.
+            try:
+                from . import messages as _messages
+            except ImportError:
+                import messages as _messages
+            message = core.block_message(decision.get("path") or "",
+                                         _messages.display_language())
+        else:
+            message = decision.get("message") or ""
         if message:
             print(message, file=sys.stderr)
         return int(decision.get("exit_code", 2))
     except Exception as exc:
-        print("⛔ [generated-artifact-write-guard] Python core failure → "
-              f"fail-closed BLOCK: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(_runtime_block("generated-artifact-write-guard", "runtime.core_failure",
+                             f"{type(exc).__name__}: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -620,7 +939,7 @@ def run_pre_phase4_checklist_gate(io, root, core_dir, raw_text):
     if io.should_skip(raw):
         return 0
     try:
-        profile = load_profile_fail_closed(hid)
+        profile = load_profile_fail_closed(hid, root)
         if profile is None:
             return 0
 
@@ -632,8 +951,10 @@ def run_pre_phase4_checklist_gate(io, root, core_dir, raw_text):
         snapshot = build_checklist_snapshot(core, event, profile, root)
         decision = core.decide(event, profile, snapshot)
     except Exception as exc:
-        print(f"⛔ [{hid}] profile/snapshot 계약 오류 → fail-closed BLOCK: "
-              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        # profile/snapshot 계약 오류는 저작자가 고칠 수 있다. core 내부 실패와 같은 code 로
+        # 묶으면 SAGE 버그처럼 보여 고칠 곳을 못 찾는다.
+        print(_runtime_block(hid, "runtime.profile_contract",
+                             f"{type(exc).__name__}: {exc}"), file=sys.stderr)
         return 2
 
     if _maybe_override(hid, root, decision, event["changes"]):   # P1-5: 활성 override 면 BLOCK 우회(감사 기록)
@@ -671,7 +992,14 @@ def _project_manifest_entry(root, hook_id):
 def _load_project_core(root, hook_id, expected_version):
     if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", hook_id) is None:
         raise ProjectHookError("project hook id is not strict lowercase kebab-case")
-    project_hooks = os.path.join(root, "scripts", "sage_harness", "hooks")
+    # 소비 프로젝트의 SAGE 트리. hook 트리는 엔진(`sage.asset_paths`)을 import 하지 않으므로
+    # 이름을 여기서 안다 — 대신 **구 레이아웃도 읽는다.** 이행 전이거나 이행이 중간에 멈춘
+    # 프로젝트에서 프로젝트 hook 이 조용히 사라지면, 그것은 게이트가 사라지는 것과 같다.
+    project_hooks = os.path.join(root, "sage_harness", "hooks")
+    if not os.path.isdir(project_hooks):
+        legacy = os.path.join(root, "scripts", "sage_harness", "hooks")
+        if os.path.isdir(legacy):
+            project_hooks = legacy
     hooks_real = os.path.realpath(project_hooks)
     path = os.path.join(project_hooks, f"{hook_id.replace('-', '_')}_core.py")
     if not os.path.isfile(path) or os.path.islink(path):
@@ -720,7 +1048,7 @@ def _project_snapshot(core, event, profile, root):
     for pattern in globs:
         issue = checklist_contract.unsafe_glob(pattern)
         if issue:
-            raise ProjectHookError(f"unsafe project plan_reads glob {pattern!r}: {issue}")
+            raise ProjectHookError(f"unsafe project plan_reads glob {pattern!r}: {_overlay_say(root, issue)}")
         matches = []
         for path in glob.glob(os.path.join(root, pattern), recursive=True):
             path_real = os.path.realpath(path)
@@ -777,7 +1105,7 @@ def run_project_hook(io, root, core_dir, hook_id, raw_text):
             raise ProjectHookError("hook input must be a JSON object")
         if io.should_skip(raw):
             return 0
-        profile = load_profile_fail_closed(hook_id)
+        profile = load_profile_fail_closed(hook_id, root)
         if profile is None:
             raise ProjectHookError("registered project hook compiled profile is missing")
         rel = make_rel(root)
@@ -793,14 +1121,17 @@ def run_project_hook(io, root, core_dir, hook_id, raw_text):
     except ProfileLoadError as exc:
         # 저작자가 고칠 수 있는 profile 계약 오류다. internal dispatch failure 로 묶으면
         # SAGE 내부 버그처럼 보여 고칠 곳을 못 찾는다.
-        print(f"⛔ [{hook_id}] project hook profile contract failure: {exc}", file=sys.stderr)
+        print(_runtime_block(hook_id, "runtime.profile_contract",
+                             f"profile contract failure: {exc}"), file=sys.stderr)
         return 2
     except ProjectHookError as exc:
-        print(f"⛔ [{hook_id}] project hook contract failure: {exc}", file=sys.stderr)
+        print(_runtime_block(hook_id, "runtime.project_hook_contract",
+                             f"contract failure: {exc}"), file=sys.stderr)
         return 2
     except Exception as exc:
-        print(f"⛔ [{hook_id}] project hook internal dispatch failure: "
-              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        print(_runtime_block(hook_id, "runtime.core_failure",
+                             f"internal dispatch failure: {type(exc).__name__}: {exc}"),
+              file=sys.stderr)
         return 2
 
 
@@ -1018,7 +1349,6 @@ def _retro_gate_active(profile, root):
     return mode in ("advisory", "enforce") and notes_enabled
 
 
-_RISK_LEVEL_RE = re.compile(r"\s*Risk Level:\s*(L[0-3])\b", re.I)   # 00/06 헤더의 사이클 risk tier
 _DEPTH_REVIEW_RE = re.compile(r"\s*Depth-Self-Review:\s*(\S+)", re.I)   # 06 의 self-review 자기선언
 # 제로폭/BOM 포맷 문자(유니코드 Cf) — `\s` 는 이들을 매치하지 못해, 라인 앞에 끼면 정규식이 선언을 놓친다
 # (BOM'd `Risk Level: L3` 이 무시돼 낮은 tier 로 under-read, codex R7 P1). 스캔 전 전역 제거로 봉쇄한다.
@@ -1033,7 +1363,7 @@ def _header_fields_06(content):
     performed`·`Risk Level:` 예시 라인이 실제 선언으로 오인돼 게이트가 조용히 OK 되는 걸 막는다.
     tier ∈ {"L1","L2","L3"} 또는 None(미기재). declared 는 'performed' 선언이 있고 'skipped' 선언은
     없을 때만 True — performed/skipped 상충이나 skipped 우회는 미선언(fail-closed)으로 본다."""
-    tier = None
+    tier = _doc_risk_tier(content)   # tier 해석은 공용 파서 단일 정본
     performed = False
     skipped = False
     in_fence = None   # None 또는 연 펜스 마커("```"/"~~~") — 같은 종류로만 닫는다(혼합 펜스 우회 방지)
@@ -1049,10 +1379,6 @@ def _header_fields_06(content):
             continue
         if _H2_PLUS_RE.match(stripped):
             break
-        if tier is None:
-            m = _RISK_LEVEL_RE.match(line)
-            if m:
-                tier = m.group(1).upper()
         m = _DEPTH_REVIEW_RE.match(line)
         if m:
             v = m.group(1).strip().casefold()
@@ -1069,30 +1395,25 @@ _TIER_RANK = {"L0": 0, "L1": 1, "L2": 2, "L3": 3}   # _RISK_LEVEL_RE 가 L0 도 
 def _doc_risk_tier(content):
     """문서 **헤더 메타블록**(첫 H2 이상 헤딩 전)의 Risk Level 최대 tier(L0<L1<L2<L3). 없으면 None.
 
-    _header_fields_06 와 동일하게 첫 H2 에서 멈춘다 — 본문의 산문/루브릭 라인('escalation rejected —
-    Risk Level: L3' 등)을 tier 로 오독해 실제 L1 사이클을 하드 BLOCK 하는 false-positive 를 막는다.
-    Risk Level 은 규약상 헤더 필드다. 펜스 코드블록(``` / ~~~ 종류별)과 제로폭/BOM 은 이미 제거·제외."""
-    rank = _TIER_RANK
-    best = None
-    in_fence = None
-    for line in content.translate(_ZERO_WIDTH_STRIP).splitlines():
-        stripped = line.lstrip()
-        fence = "```" if stripped.startswith("```") else ("~~~" if stripped.startswith("~~~") else None)
-        if in_fence is not None:
-            if fence == in_fence:
-                in_fence = None
-            continue
-        if fence is not None:
-            in_fence = fence
-            continue
-        if _H2_PLUS_RE.match(stripped):
-            break   # 헤더 블록 종료 — 본문 산문의 Risk Level 을 tier 로 읽지 않는다
-        m = _RISK_LEVEL_RE.match(line)
-        if m:
-            t = m.group(1).upper()
-            if best is None or rank[t] > rank[best]:
-                best = t
-    return best
+    무엇이 선언인지는 `risk_declaration` 이 소유한다 — 게이트와 각자 정규식을 들고 있던 탓에 같은
+    문서에 다른 tier 가 나왔다. 본문 산문('escalation rejected — Risk Level: L3' 등)을 tier 로 오독해
+    실제 L1 사이클을 하드 BLOCK 하던 false-positive 봉쇄는 그 모듈의 헤더 한정 규칙이 이어받는다.
+
+    **여기서 최대를 취하는 것이 fail-closed 다.** 선언 하나를 놓치면 tier 가 낮게 읽혀 06 검증이
+    얕아진다(BOM 이 낀 `Risk Level: L3` 를 놓쳐 under-read 되던 결함). 사이클 결속 쪽은 반대로
+    "정확히 1개"를 요구하는데, 그 방향 차이 때문에 선택은 파서가 아니라 소비자가 한다.
+    """
+    found, error = risk_declaration.scan(content)
+    if error is not None:
+        # 문법을 벗어났지만 선언을 의도한 게 분명한 줄(`Risk Level [custom]: L3`)을 건너뛰고 옆의
+        # 정상 선언을 채택하면, 작성자가 L3 로 쓰려던 사이클이 동거하는 L1 로 확정된다. 그러면
+        # `_authoritative_cycle_tier` 가 None 대신 L1 을 돌려주고 06 심층 검증이 통째로 꺼진다 —
+        # 조용한 하향이다. 게이트의 acceptance risk 추정(`unknown`)과 같은 방향으로 맞춘다.
+        return None
+    tiers = [tier for _line, tier in found]
+    if not tiers:
+        return None
+    return max(tiers, key=_TIER_RANK.__getitem__)
 
 
 def _authoritative_cycle_tier(root, profile, stem, exclude_keys=None):
@@ -1431,6 +1752,32 @@ def _snapshot_changed_06(root, profile, log_dir, session_id):
     return "ok", {key for key, h in _hash_06_glob(root, profile).items() if base.get(key) != h}
 
 
+def _overlay_say(root, diagnostic):
+    """엔진 판정이 낸 진단을 **hook 도메인** 문장으로. 렌더가 실패해도 줄은 서야 한다.
+
+    이 편의 레이어는 엔진이 import 될 때만 돈다. 그래도 문장은 hook catalog 가 소유한다 —
+    같은 code 를 두 도메인이 각자 렌더하는 것이 이 사이클이 세운 계약이고, 여기서 엔진
+    catalog 를 끌어오면 hook 이 엔진 문안에 묶인다.
+    """
+    try:
+        from sage.diagnostics import render
+        import i18n as hook_i18n
+        language = hook_i18n.context.resolve(root)[0]
+
+        def translate(key, **arguments):
+            text = hook_i18n.frag(language, key)
+            if not text:
+                return f"[SAGE] message_key={key}"
+            try:
+                return text.format(**arguments)
+            except (KeyError, IndexError, ValueError):
+                return f"[SAGE] message_key={key}"
+
+        return render(diagnostic, translate, "hook")
+    except Exception:
+        return str(diagnostic)
+
+
 def _session_start_overlay_l1(io, root):
     """SessionStart — CORE 렌더의 오버레이 관리 블록을 재수렴한다.
 
@@ -1468,7 +1815,8 @@ def _session_start_overlay_l1(io, root):
         return 0
     if errors:
         for path, message in errors:
-            print(f"[session-start-overlay] BLOCK: {path}: {message}", file=sys.stderr)
+            print(f"[session-start-overlay] BLOCK: {path}: {_overlay_say(root, message)}",
+                  file=sys.stderr)
         if changed:
             print("[session-start-overlay] 안전하게 식별된 blocked managed block은 제거됐습니다. "
                   "남은 오류를 고치고 새 세션을 시작하세요.", file=sys.stderr)

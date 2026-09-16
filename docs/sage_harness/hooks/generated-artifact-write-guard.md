@@ -6,71 +6,86 @@ runtime_bindings:
   codex: { event: PreToolUse, matcher: "apply_patch", timeout: 10 }
 ---
 ## intent
-생성 산출물(.claude/.codex 의 agents/hooks/skills) 직접수정을 결정론적으로 block 하고
-spec(docs/sage_harness)으로 redirect 한다. SSOT 모델의 잠금장치 — 없으면 "항상 spec을 고친다"가
-권고에 그치고 AI가 개발 중 산출물을 곁다리로 고쳐 조용한 drift가 생긴다 (설계 §5.6).
+Deterministically block direct edits to generated artifacts (agents, hooks and skills under
+`.claude` and `.codex`) and redirect to the spec under `docs/sage_harness`. This is the lock on
+the SSOT model. Without it, "always edit the spec" is only advice, and an AI fixing an artifact
+in passing during development produces silent drift.
 
 ## runtime_bindings
 - claude: { event: PreToolUse, matcher: "Write|Edit|MultiEdit" }
 - codex:  { event: PreToolUse, matcher: "apply_patch" }
-- on_fail: block            # adapter가 exit 2(stderr) / JSON 으로 매핑
+- on_fail: block — the adapter maps it to exit 2 on stderr, or to JSON.
 
 ## canonical
-scripts/sage_harness/hooks/generated_artifact_write_guard_core.py
-- 입력: stdin JSON(tool_input.file_path/path 또는 apply_patch command의 다중 target)
-- 핵심 알고리즘 = "경로가 생성 산출물인가" 분류
-- 양 host는 `sage-hook` → `runtime/run_hook.py` → `hook_runtime`을 통해 같은 Python core를 실행한다.
-- core load/실행 실패는 exit 2 fail-closed로 차단한다.
+sage_harness/hooks/generated_artifact_write_guard_core.py
+- Input: stdin JSON — tool_input.file_path or path, or the multiple targets of an apply_patch command.
+- The core algorithm is the single classification "is this path a generated artifact".
+- Both hosts run the same Python core through `sage-hook` → `runtime/run_hook.py` → `hook_runtime`.
+- A core that fails to load or run blocks with exit 2, fail-closed.
 
 ## enforcement
-- block(exit 2): `*.claude/{agents,hooks,skills}/*`, `*.codex/{agents,hooks,skills}/*`,
-  repo의 `.mcp.json`, CORE framework 문서(`AGENT_GUIDE.md`, `CLAUDE.md`, `CODEX.md`, `AGENTS.md`),
-  사이클 선언 상태 `*/.sage/cycle.json`
-- pass(exit 0): 위 소유 경계 밖의 경로. 특히 `docs/sage_harness/**`·`scripts/sage_harness/**` 소스
-- 경로 없음/파싱 실패 → pass (가드 대상 아님, 조용한 오작동 방지)
-- 예외 처리 불필요: `sage generate`·`sage cycle` CLI 는 편집도구(Write/Edit/apply_patch)를 거치지
-  않으므로 애초에 이 PreToolUse 가드에 걸리지 않는다 (설계 §5.6 G3)
-- `.sage/cycle.json` 은 **경로 꼬리**로 판정한다(`.mcp.json` 처럼 basename 으로 보면 프로젝트의 아무
-  `cycle.json` 이나 차단된다). 게이트가 "이 편집이 어느 사이클인가" 를 읽는 자리라, 편집 도구로 직접
-  쓸 수 있으면 완결된 사이클을 지목해 자기 게이트를 끌 수 있다 — env 통로에서는 불가능했고 파일로
-  옮기면서 생긴 구멍이다. matcher 가 편집 도구뿐이라 Bash 는 여전히 덮이지 않지만, Bash 를 가진 주체는
-  소스 자체를 게이트 없이 쓸 수 있으므로 새 레버가 아니다.
+- block (exit 2): `*.claude/{agents,hooks,skills}/*`, `*.codex/{agents,hooks,skills}/*`, the
+  repository `.mcp.json`, the CORE framework documents (`AGENT_GUIDE.md`, `CLAUDE.md`,
+  `CODEX.md`, `AGENTS.md`), and the cycle declaration state `*/.sage/cycle.json`.
+- pass (exit 0): anything outside those ownership boundaries — in particular the
+  `docs/sage_harness/**` and `scripts/sage_harness/**` sources.
+- No path, or a parse failure → pass. It is not a guard target, and failing loudly here would be
+  a silent malfunction of a different kind.
+- No exemption is needed for the CLI: `sage generate` and `sage cycle` do not go through an
+  editing tool (Write / Edit / apply_patch), so they never reach this PreToolUse guard.
+- `.sage/cycle.json` is matched on the **path tail**. Matching on basename, as `.mcp.json` does,
+  would block any `cycle.json` anywhere in the project. This is the file the gate reads to answer
+  "which cycle is this edit part of", so being able to write it with an editing tool would let
+  someone point at a completed cycle and switch their own gate off. That was impossible while the
+  channel was an env var; the hole appeared when it moved to a file. The matcher covers editing
+  tools only, so Bash is still not covered — but anyone with Bash can write the source itself
+  without a gate, so this is not a new lever.
 
-## CORE 부트스트랩 렌더 차단 + eligibility-aware 안내 (exit 2)
-CORE hand-shipped 렌더(CORE skill·로스터 에이전트)도 다른 산출물과 동일하게 block 한다. 과거엔
-spec→generate 산출물이 아니라는 이유로 면제했으나, 그러면 CORE 렌더 직접수정이 무방비였고
-`sage install --force` 가 그 수정을 조용히 덮어썼다(첫 실 사이클 실증에서 드러난 갭).
+## Blocking CORE bootstrap renders, with eligibility-aware guidance (exit 2)
+Hand-shipped CORE renders (CORE skills and roster agents) are blocked exactly like any other
+artifact. They used to be exempt on the grounds that they are not spec→generate output, but that
+left direct edits to CORE renders unprotected and `sage install --force` silently overwrote them.
 
-프로젝트 로컬 overlay 경로는 executable eligibility가 입증된 자산에만 안내한다. 현재 대상은
-양 host의 non-gate 워커 `implementer-a`/`implementer-b`와, FB23 로 재분류된 gate-bearing 자산
-`leader`/`reviewer`(agents)·`sage-cycle`/`sage-plan`/`sage-review`/`sage-team`(skills)이며,
-canonical lowercase overlay 경로로 redirect 한다(`core_overlay_hint`; skill overlay id 는 skill
-디렉터리명). 이들은 게이트를 자산-불read 결정론 오라클이 floor 하므로 overlay 물리 합성이 안전하다.
-남은 `qa`/`convention-checker`(agents)·`sage-init`/`sage-asset`/`sage-asset-override`/
-`sage-profile-modify`(skills)는 독립 oracle이 없어 현재 overlay 비지원임을 안내한다(`is_blocked_core_render`).
-따라서 보존되지만 합성할 수 없는 overlay 파일 생성을 유도하지 않는다.
+The project-local overlay path is only suggested for assets whose executable eligibility is
+proven. That currently covers the non-gate workers `implementer-a` and `implementer-b` on both
+hosts, plus the reclassified gate-bearing assets `leader` and `reviewer` (agents) and
+`sage-cycle`, `sage-plan`, `sage-review` and `sage-team` (skills). These redirect to the
+canonical lowercase overlay path (`core_overlay_hint`; a skill overlay id is the skill directory
+name). Overlay synthesis is safe for them because an asset-independent deterministic oracle
+floors their gates. The remaining `qa` and `convention-checker` (agents) and `sage-init`,
+`sage-asset`, `sage-asset-override` and `sage-profile-modify` (skills) have no independent
+oracle, so the guidance states that overlays are not currently supported for them
+(`is_blocked_core_render`). That keeps users from creating an overlay file which would be
+preserved but could never be synthesized.
 
-codex CORE skill은 선택 scope가 global이면 `$CODEX_HOME/skills`, project-local이면 repo `.codex/skills/`에
-설치된다. project-local CORE 이름은 일반 생성 skill이 아니라 install-owned CORE render로 식별해 직접수정을
-block하고, 같은 `--skill-scope project-local --force` 재설치 또는 지원되는 overlay 흐름으로 안내한다.
-비-CORE `.codex/skills/`는 기존대로 일반 프로젝트 skill 산출물로 block(spec→generate 안내).
-비-CORE 렌더는 기존대로 `docs/sage_harness/<kind>s/<id>.md` spec→generate redirect. eligible 오버레이 저작은
-`/sage-asset-override` 스킬이 현재 eligible non-gate 자산만 안내하며, 게이트 완화는 materialization
-preflight와 `sage validate --strict`가 hard-fail한다.
+A codex CORE skill installs to `$CODEX_HOME/skills` when the chosen scope is global, and to the
+repository `.codex/skills/` when it is project-local. A project-local CORE name is identified as
+an install-owned CORE render rather than an ordinary generated skill, so direct edits are blocked
+and the guidance points at reinstalling with the same `--skill-scope project-local --force`, or
+at the supported overlay flow. A non-CORE `.codex/skills/` entry is blocked as before, as an
+ordinary project skill artifact with spec→generate guidance. Non-CORE renders redirect to
+`docs/sage_harness/<kind>s/<id>.md` as before. Eligible overlay authoring goes through the
+`/sage-asset-override` skill, which only offers currently eligible non-gate assets, and gate
+relaxation hard-fails in materialization preflight and `sage validate --strict`.
 
-## AGENT_GUIDE.md (CORE 프레임워크 문서) 차단 + project-profile redirect (exit 2)
-`AGENT_GUIDE.md`(루트·하위경로)도 CORE 렌더이자 `core_renders` 앵커 대상이라 `sage install --force` 가
-덮어쓴다. 직접수정은 업그레이드에 조용히 사라지고, 렌더에 overlay-read 지시를 재주입하는 변조 경로이기도
-하다(`sage validate` L2 가 앵커 불일치로 탐지). framework overlay는 독립 gate oracle이 없어 차단한다.
-프로젝트 값은 `sage/project-profile.yaml`, 규칙은 conventions/critical-domain/project-local 문서가 소유한다.
+## Blocking AGENT_GUIDE.md, the CORE framework document, with a project-profile redirect (exit 2)
+`AGENT_GUIDE.md`, at the root or in a subpath, is itself a CORE render and a `core_renders`
+anchor target, so `sage install --force` overwrites it. A direct edit therefore disappears
+silently on upgrade, and it is also the tampering path for re-injecting overlay-read instructions
+into a render — `sage validate` detects that at L2 as an anchor mismatch. Framework overlays are
+blocked because they have no independent gate oracle. Project values belong to
+`sage/project-profile.yaml`, and rules belong to the conventions, critical-domain and
+project-local documents.
 
-## scope 메모 (v1)
-- 가드 범위 = agents/hooks/skills 디렉토리 (설계 §5.6 다이어그램 명시 범위)
-- settings.json / hooks.json(등록 산출물) 가드는 부트스트랩 중 직접편집 필요성 때문에 v1 보류 — 후속 결정
+## Scope note
+- The guard covers the agents, hooks and skills directories.
+- Guarding settings.json and hooks.json (the registration artifacts) is deferred, because
+  bootstrap needs to edit them directly. Still to be decided.
 
 ## tests
-scripts/sage_harness/hooks/tests/ (cases.tsv: path → expected exit)
+sage_harness/hooks/tests/ (cases.tsv: path → expected exit)
 
 ## mode (forward-compat)
-- v1 SAGE-mode = block (spec-SSOT 존재 전제)
-- spec 미존재 환경에 선적용 시 = warn-mode 미러 drift 탐지로 degrade (profile `guard.mode`)
+- In SAGE mode the guard blocks, which assumes the spec SSOT exists.
+- Applied ahead of that, in an environment without specs, it degrades to warn mode with mirror
+  drift detection (profile `guard.mode`).

@@ -134,7 +134,7 @@
         "codex": "sha256:dfd1c978994ea5bd6da91b39ae7940d8daebb69b81123ebf19d153f668249687"
       },
       "risk": [],
-      "spec_hash": "sha256:827b565e3fbd165d9ff21a98b3bcac8d09e69070145cb70632b06809b6177a92",
+      "spec_hash": "sha256:96847d1fe3e69bc655be811a429f2a101ada132c9fa7aecbcff1b7babfc87887",
       "unresolved": []
     },
     "hooks/chatforyou-dual-implementation-doc-gate": {
@@ -143,7 +143,7 @@
         "claude": "sha256:94e0c74f110cb4b4cad9abcf42cb6ee375cb9196c14af7ee316ab3387dbf07d8",
         "codex": "sha256:cfdaf9e4faefb4a994391354fd39963ffa460269e76c153cb44f60ce3309cbde"
       },
-      "canonical_hash": "sha256:df96a6caee320d3c064f490e176de8a5092bc3486e96486fa561847ab63a9c10",
+      "canonical_hash": "sha256:494cae7e029c5b00b7571c41c3cd9315c3c29b5253dd00c410c38153eafbad9f",
       "conformance": "UNKNOWN",
       "form": "core_adapter",
       "origin": "project",
@@ -151,7 +151,7 @@
         "claude": "sha256:94e0c74f110cb4b4cad9abcf42cb6ee375cb9196c14af7ee316ab3387dbf07d8",
         "codex": "sha256:cfdaf9e4faefb4a994391354fd39963ffa460269e76c153cb44f60ce3309cbde"
       },
-      "spec_hash": "sha256:1450438d382348b89e6f5bb6cf212e8307c3e32bed9b0394e889b9fcf0d848c9"
+      "spec_hash": "sha256:240adb15d363d0b3add46aa99b03e56e3f8e67151995295fce69dc92c6296fbd"
     },
     "hooks/generated-artifact-write-guard": {
       "adapter_contract_version": "2",
@@ -159,7 +159,7 @@
         "claude": "sha256:ec506d9e4e881f66ca7f8a8a4081b517c0b86d2cdafdf9e9f7f6a869e5facf93",
         "codex": "sha256:eef506545ad80aa90064de2471fce4350ce5454730d2473d988a6d1593b995de"
       },
-      "canonical_hash": "sha256:91ed061d25644ce1c6aeeb85b3005ef98b33902bf1f0bbfeb05bd5876d827291",
+      "canonical_hash": "sha256:7726af70304774d28a990b24cfb71af3a99615abea4390184bc258b8c2d88099",
       "conformance": "UNKNOWN",
       "form": "core_adapter",
       "render_hash": {
@@ -167,7 +167,7 @@
         "codex": "sha256:eef506545ad80aa90064de2471fce4350ce5454730d2473d988a6d1593b995de"
       },
       "risk": [],
-      "spec_hash": "sha256:abad0d2e9e1285b906a590a390b6cca79e91ba13fd70a23334db2b130abf89d0",
+      "spec_hash": "sha256:26b21cba415583ba76beac7fdb188bd7c60b42a8d991a012b2ab7a1a550d8cf9",
       "unresolved": []
     },
     "hooks/post-tool-logger": {
@@ -184,7 +184,7 @@
         "codex": "sha256:b37349688572c5e6925b32689517e3ecd4c714b2b59dba890f1ffb980adb1ed9"
       },
       "risk": [],
-      "spec_hash": "sha256:9bcc616cb18a6dc4ad91646e1fdff815d2958822a8cd38b58d368a430367a718",
+      "spec_hash": "sha256:d279189ac72351cd8d73150daacec1b69211ef740f36946ca1c934ec3b1f0640",
       "unresolved": []
     },
     "hooks/pre-implementation-gate": {
@@ -193,7 +193,7 @@
         "claude": "sha256:54e765c0dad01e4c5bce287e95c29564eb4d77995dbafa7681413090f7574486",
         "codex": "sha256:c0fd9948b1af347c797bcd460671c7a33b8a98d7cc6d8b3464773a4acf031ded"
       },
-      "canonical_hash": "sha256:b082b60c659a489892cf8964bd422ceec884dbe0629bff126ddbf1494ea63f8f",
+      "canonical_hash": "sha256:503f00ba82a28a284fb14570cd12a4a9ba3be0d9d7e542de1fb37cecefd6b329",
       "conformance": "UNKNOWN",
       "form": "core_adapter",
       "render_hash": {
@@ -201,7 +201,7 @@
         "codex": "sha256:c0fd9948b1af347c797bcd460671c7a33b8a98d7cc6d8b3464773a4acf031ded"
       },
       "risk": [],
-      "spec_hash": "sha256:33a88b2f5c3a62fc0c9b7bc1506ca801ab335e15b3135c7d3d8d5fadcf4b355c",
+      "spec_hash": "sha256:abedb1a6fb52328a4c680ab29dfc65eadd2ed2af31f617ff0369f9918a8ddbf4",
       "unresolved": []
     },
     "hooks/pre-phase4-checklist-gate": {
@@ -218,7 +218,7 @@
         "codex": "sha256:90a0205df56a47207e6e610a4a7f32dea87b2a42d893eef4ec59529f65e1747a"
       },
       "risk": [],
-      "spec_hash": "sha256:efefbbe4a9eb20485cc5bc48c5d09dd6c697b31153c86714d202a43425acfa44",
+      "spec_hash": "sha256:45490af1b9f5cfa4b398618a1de95ecb5d12e309f169c386849c93721233906e",
       "unresolved": []
     },
     "hooks/session-start-snapshot": {
@@ -235,7 +235,7 @@
         "codex": "sha256:080cb526553aa3ee9e6383e0664e5f2a35cdffdde426b7b6f0aa9936c4615527"
       },
       "risk": [],
-      "spec_hash": "sha256:8f2a83ca8956f23050fafd12261745a0dacbb1c18c6505f2e6efe0f197c0e113",
+      "spec_hash": "sha256:95000f726046acd40c2dcdbb5382ae14e91d4269d73aff5cff81da0c0216322d",
       "unresolved": []
     },
     "hooks/stop-compliance-report": {
@@ -252,7 +252,7 @@
         "codex": "sha256:1e3437fb58f182aa65a1c36669f008db6c61d9ca92a3b9b6c8d1cb0e4d4e79b1"
       },
       "risk": [],
-      "spec_hash": "sha256:7c5c1d5546c0631e123cee48ae2a01699900f9038cc43a1675f9b30ddd698e76",
+      "spec_hash": "sha256:d0574319566aedf522f0e18923dad8fa110f339c004c526bd4ea8317a553230e",
       "unresolved": []
     },
     "skills/backend-convention": {
@@ -350,141 +350,162 @@
     }
   },
   "core_renders": {
-    "codex/agents/convention-checker": {
-      "base_sha256": "84156230368c6491e8f3acf702b2a6efe6e794cf2131784d41019b7feae2d4a9",
-      "sage_version": "0.9.80"
-    },
-    "codex/agents/implementer-a": {
-      "base_sha256": "c6c66d303872152500e0c334fc02b2e6e7f12379168a248425d6ef9b033b5a1e",
-      "sage_version": "0.9.80"
-    },
-    "codex/agents/implementer-b": {
-      "base_sha256": "477fbe1fd724c545eb95e918505030a1bcd9203385239a89870b5574cb9f82a7",
-      "sage_version": "0.9.80"
-    },
-    "codex/agents/leader": {
-      "base_sha256": "1d5c893cd00fb2035d42eb9c63409e1181eaed11a6b28435d483f915070e08d9",
-      "sage_version": "0.9.80"
-    },
-    "codex/agents/qa": {
-      "base_sha256": "f8bd65e245eab1090ad702e22c5d81d81c1a214aed5a592e41bdd6a79cad8daa",
-      "sage_version": "0.9.80"
-    },
-    "codex/agents/reviewer": {
-      "base_sha256": "b51c4827fc8e8f991ae47a456b88d6738248be987594073a7965fc518426988b",
-      "sage_version": "0.9.80"
-    },
-    "codex/framework/AGENT_GUIDE": {
-      "base_sha256": "001740629463f65c4fb0e466462f4e77df15c4603ddd5eedbad9d5190e007f55",
-      "sage_version": "0.9.80"
-    },
-    "codex/framework/CODEX": {
-      "base_sha256": "03525f5b911ed4fa9cc0e6c7243235756697dea1ecc35b3d8c3013169bb7be08",
-      "sage_version": "0.9.80"
-    },
-    "codex/framework/AGENTS": {
-      "base_sha256": "80d150a7a1dfb3b9489b2e089999704bdd0b6f6d8b877a2725ea5b6684317d81",
-      "sage_version": "0.9.80"
-    },
     "claude/agents/convention-checker": {
       "base_sha256": "3925aabf6aa28abf6cc66757c64aef8c482d82226b569103f155455118a9ab50",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/agents/implementer-a": {
       "base_sha256": "4a245377b2804f93182a9150ac4a05b72ce576da033a9745c189c5e9a939112c",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/agents/implementer-b": {
       "base_sha256": "4b2753e0ba4746d153c99eeee7b613b152e24f396a192354fbf3cd237c36ff95",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/agents/leader": {
       "base_sha256": "bfdea822c6eabefa95c3f38a86a44c9316157fea7aeb106840e5add0037b3bf6",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/agents/qa": {
       "base_sha256": "5446067cf0829c1a5c967470b7153dab591f92493f052b70db122533d489d3ed",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/agents/reviewer": {
       "base_sha256": "be241674e9e087c83f89033efc413f12f4c4965f34cf1c8fa0fa8b0770b11c6f",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-asset": {
-      "base_sha256": "5d7e5ec7a920d8906238d90bc85743c844052ede273faa0bdce219a2f6069701",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-asset-override": {
-      "base_sha256": "fd74302b8f0ea9e59a2bf7bb0ea647bb92a06884a908356f7fd92d56c11fde35",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-cycle": {
-      "base_sha256": "ae6e9f3b862a20858845e95e47ea64c600130a0771efb9d579c119dac4e2d540",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-feedback": {
-      "base_sha256": "9bd7ae1a868cfb191246ce61c0d592e720bfd9fb4ac24a1f641e0460010b319b",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-init": {
-      "base_sha256": "d4623e7f5ee2bf748721326aaaf2a91439f7c07ee1ee90a009a5360c98aaf870",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-init-local": {
-      "base_sha256": "bc9970dc12278e6c8b754b612d7620a9c74cd7d488798746fe8172a1e037066c",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-plan": {
-      "base_sha256": "384ae86c676d1bf75793c68f7f0fd121dc1944cbd2d579c4d20a539556eb09dc",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-profile-modify": {
-      "base_sha256": "f2ce5eba8bcb7f47c57f26cab0be02c604dfa8a69d118718c47da5bb8321ecdb",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-review": {
-      "base_sha256": "8502b2becd0fc878c9f8a5f6b7f27b313f854ca1195bccdbf9bf6330c9a62d88",
-      "sage_version": "0.9.80"
-    },
-    "claude/skills/sage-team": {
-      "base_sha256": "a283aafd33f6ed7276640a4aa2e4ec2492980d2413b032cbaf5bc709ca87a0fb",
-      "sage_version": "0.9.80"
+      "sage_version": "1.1.1"
     },
     "claude/framework/AGENT_GUIDE": {
-      "base_sha256": "001740629463f65c4fb0e466462f4e77df15c4603ddd5eedbad9d5190e007f55",
-      "sage_version": "0.9.80"
+      "base_sha256": "0145dbfa6f8fbb430c3ff9381315e90f17eece7ceaa9595f82582d37091a1893",
+      "sage_version": "1.1.1"
     },
     "claude/framework/CLAUDE": {
-      "base_sha256": "f1ea3893407e36fc6b3b5c9db50af1230220a99e8a6896821d54a274e68b7805",
-      "sage_version": "0.9.80"
+      "base_sha256": "38a08dbc1e8fcd3f79917fa297c099a6df26bf20311dbe020d63c9af103d00f9",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-asset": {
+      "base_sha256": "5c726bef91a99f64d970eff7d2d543af23cc1998399805db4fd9c8d60f60ea71",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-asset-override": {
+      "base_sha256": "ad8cc775f1ad150ed6d3340d9658d52333f7dd5ec9ca342002f98480c170a4da",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-cycle": {
+      "base_sha256": "9da9b3c63edd1f996e1de6241a4b7378f0be4cc7a44bf3ab08e2a4e3abaf8bf8",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-cycle-fast": {
+      "base_sha256": "3bb6f52109596a5f1d156f60dec47483935bbad98563f2eab917304f015b526c",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-feedback": {
+      "base_sha256": "9439f81382ff5364d1a7165d1b34ebf28c7b0d2ed7c8b98b02221d6754bfab45",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-init": {
+      "base_sha256": "e18bdc9b1c8e4825c6012fe5a9849705fb5bd685e76a432c98b198a655ef0670",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-init-local": {
+      "base_sha256": "ad47bffe720a7b5f17526948d8c10093d36390e2431cc74fc8b5b3f56cf15600",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-plan": {
+      "base_sha256": "5868c8637db29c72a5eca294727439cfc95898a6002f78967da765d2076c2d7d",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-plan-fast": {
+      "base_sha256": "4a8904c717a991983b18decc3d14ef9d22efdd3a4468812717757685821f10c9",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-profile-modify": {
+      "base_sha256": "c26a75e6f42d0c7fb691c51eacc395459942654b2c1e573a23a10146f4b7b302",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-review": {
+      "base_sha256": "6f16feda63bff8ae855bbe12b307bf95f0c276bcbb5265ac997adc99d61230bc",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-team": {
+      "base_sha256": "9be5fb7ef244c26cbb94235fd359daf5f88045dbe8e67eb55981da8a120ced5a",
+      "sage_version": "1.1.1"
+    },
+    "claude/skills/sage-team-fast": {
+      "base_sha256": "1200726d27ee63fd14d20c52277114ccd74c2e3b36433404e25f9840bb8aae2f",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/convention-checker": {
+      "base_sha256": "84156230368c6491e8f3acf702b2a6efe6e794cf2131784d41019b7feae2d4a9",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/implementer-a": {
+      "base_sha256": "c6c66d303872152500e0c334fc02b2e6e7f12379168a248425d6ef9b033b5a1e",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/implementer-b": {
+      "base_sha256": "477fbe1fd724c545eb95e918505030a1bcd9203385239a89870b5574cb9f82a7",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/leader": {
+      "base_sha256": "1d5c893cd00fb2035d42eb9c63409e1181eaed11a6b28435d483f915070e08d9",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/qa": {
+      "base_sha256": "f8bd65e245eab1090ad702e22c5d81d81c1a214aed5a592e41bdd6a79cad8daa",
+      "sage_version": "1.1.1"
+    },
+    "codex/agents/reviewer": {
+      "base_sha256": "b51c4827fc8e8f991ae47a456b88d6738248be987594073a7965fc518426988b",
+      "sage_version": "1.1.1"
+    },
+    "codex/framework/AGENTS": {
+      "base_sha256": "4882e9a3f74eba56fbd1539923f8a78f9bed61c7d28c2e48462f2f18f5cb9b96",
+      "sage_version": "1.1.1"
+    },
+    "codex/framework/AGENT_GUIDE": {
+      "base_sha256": "0145dbfa6f8fbb430c3ff9381315e90f17eece7ceaa9595f82582d37091a1893",
+      "sage_version": "1.1.1"
+    },
+    "codex/framework/CODEX": {
+      "base_sha256": "03525f5b911ed4fa9cc0e6c7243235756697dea1ecc35b3d8c3013169bb7be08",
+      "sage_version": "1.1.1"
+    },
+    "shared/framework-doc/docs/agent/language-policy": {
+      "base_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f",
+      "sage_version": "1.1.1",
+      "semantic_source": "core/framework/docs/agent/language-policy.md",
+      "semantic_source_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f"
     }
   },
   "core_skill_receipts": {
     "claude": {
-      "sage_version": "0.9.80",
+      "sage_version": "1.1.1",
       "scope": "project-local"
     },
     "codex": {
-      "sage_version": "0.9.80",
+      "sage_version": "1.1.1",
       "scope": "global"
     }
   },
   "dirty_flag": false,
-  "generator_version": "0.9.80",
+  "generator_version": "1.1.1",
   "hook_runtime_hash": {
-    "claude": "sha256:b4bffc51b3ca3d0b8cc5a62b3490af09a4c7935936d177cb4e11336edf0797a7",
-    "codex": "sha256:016abcf7122b1c23950365e17e5d7161b07347fb83aad725ee6ddeab11624f53",
-    "shared": "sha256:5903136d9d99c9c48569001f7342b6a74ae4dc5db953b6cd2660239e3c56e0c3"
+    "claude": "sha256:2d0318a75804defae4ac5b53e3ea9e4fe5766c21a937c1c091f45bb780be8254",
+    "codex": "sha256:3519535630dd81a83cbe191b51fa3668d09ed3a9c46842e5948145a3737c941c",
+    "shared": "sha256:acad917c576f16f6baaca3004512be12a8902597038c870a8c648fb29147c0d8"
   },
   "host_runtime": "codex",
-  "installed_core_content_hash": "sha256:454ca21e36d423e71d8e4f1c1adfa46a6f0a0153691a8b4401c9559f6572ca93",
+  "installed_core_content_hash": "sha256:e8ce8f38ae0b7725bdb2cac1d2690820e9ee183333042a69a0e7cb1c9dbd104b",
   "installed_hosts": [
     "codex",
     "claude"
   ],
   "installed_instance": true,
+  "runtime_api": {
+    "required": 1
+  },
   "sage_source_commit": "unknown",
-  "sage_version": "0.9.80",
-  "source_core_content_hash": "sha256:454ca21e36d423e71d8e4f1c1adfa46a6f0a0153691a8b4401c9559f6572ca93",
+  "sage_version": "1.1.1",
+  "source_core_content_hash": "sha256:e8ce8f38ae0b7725bdb2cac1d2690820e9ee183333042a69a0e7cb1c9dbd104b",
   "template_version": "1"
 }

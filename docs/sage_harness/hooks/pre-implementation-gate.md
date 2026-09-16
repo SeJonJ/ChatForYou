@@ -6,169 +6,265 @@ runtime_bindings:
   codex: { event: PreToolUse, matcher: "apply_patch", timeout: 10 }
 ---
 ## intent
-소스/설정 변경 전 위험도(L0~L3)를 분류해 게이트를 적용한다. 동기화 산출물/금지 경로 직접수정 하드블록,
-L3(profile.risk 고위험 도메인) + plan 없음 하드블록, L3 review 확인, L2 plan 확인.
-PDCA phase 의무구조 강제(F9): profile.pdca 활성 시 구현 전 의무 phase 결핍이면 L2/L3 BLOCK·L1 WARN,
-같은 cycle의 Phase 00에 유효한 위험도 선언이 없거나 현재 변경 위험도보다 낮으면 BLOCK,
-report phase 작성 전 approve phase APPROVED 확인. pdca 비활성이면 None → 기존 risk/plan 동작(하위호환).
+Classify the risk level (L0–L3) of a source or configuration change and apply the gate before it
+lands. Hard-block direct edits to synchronized artifacts and forbidden paths; hard-block L3 (a
+high-risk domain from profile.risk) with no plan; confirm the L3 review; confirm the L2 plan.
+
+It also enforces the mandatory PDCA phase structure: when profile.pdca is active, missing
+mandatory phases before implementation BLOCK at L2/L3 and WARN at L1; a Phase 00 in the same cycle
+with no valid risk declaration, or one lower than the risk of the current change, BLOCKs; and
+before a report phase is written, the approve phase must be APPROVED. With pdca inactive the
+config is None and the original risk/plan behavior applies, preserving backward compatibility.
+
+When `pdca.base_plan.done_criteria_gate` is on, the three states and the revision of the exact
+Phase 00 Done Criteria are checked at every phase boundary, and Phase 06 additionally requires
+zero unresolved items and a Phase 05 / Loop approval hash-bound to the current Phase 00.
 
 ## runtime_bindings
-- claude: { event: PreToolUse, matcher: "Write|Edit|MultiEdit", input: file_path + content/new_string/edits }
-- codex:  { event: PreToolUse, matcher: "apply_patch", input: command 본문 다중파일+content }
-- output: block=메시지+exit2 (양 host stderr — host 가 차단 사유를 읽는 채널),
-  warn·ok=exit0 + hookSpecificOutput.additionalContext (양 host — 평문 stdout 은
-  PreToolUse 에서 디버그 로그로만 가고 컨텍스트로 승격되지 않는다)
-- OK·WARN 줄은 판정 cycle stem 과 그 출처(선언 / 브랜치 leaf 추론 / phase 문서)를 표기한다.
-  선언일 때만 보여주면 정작 위험한 추론 결속이 화면에 드러나지 않는다. WARN 에도 붙이는 이유는
-  plan 없이 통과하는 상태가 결속이 가장 의심스러운 자리이기 때문이다. pdca 비활성이면 표기 없고,
-  L1/L0 통과는 message_key 가 없어 줄 자체가 생기지 않는다.
+- claude: { event: PreToolUse, matcher: "Write|Edit|MultiEdit", input: file_path plus content / new_string / edits }
+- codex:  { event: PreToolUse, matcher: "apply_patch", input: multi-file command body plus content }
+- output: block = message + exit 2 on stderr for both hosts, the channel a host reads a block
+  reason from; warn and ok = exit 0 plus hookSpecificOutput.additionalContext for both hosts,
+  because plain stdout under PreToolUse only reaches the debug log and is never promoted into
+  context.
+- The OK and WARN lines name the cycle stem the verdict used and where it came from: a
+  declaration, a branch leaf inference, or a phase document. Showing it only for declarations
+  would hide exactly the inferred binding that is dangerous. It appears on WARN too, because
+  passing without a plan is where the binding is most suspect. With pdca inactive nothing is
+  shown, and an L1/L0 pass has no message_key so no line is produced at all.
 
-## canonical (부분추출 — IO-bound gate, 2단계 pure core)
-scripts/sage_harness/hooks/pre_implementation_gate_core.py
+## canonical — partial extraction; an IO-bound gate with a two-stage pure core
+sage_harness/hooks/pre_implementation_gate_core.py
 - `classify_risk(event, profile) -> {risk, reason, is_l3_filename, declared_l3, file_short}`
 - `decide(event, profile, snapshot, strategy_result) -> {status, exit_code, risk, message_key, safety_degraded?}`
-- core 는 fs/time 의존 0. plan 후보 내용은 snapshot, L3 review 매칭은 strategy_result(주입).
+- The core has no filesystem or clock dependency. Plan candidate contents arrive in the snapshot,
+  and the L3 review match arrives as an injected strategy_result.
 
-## algorithm_delta — 전략 슬롯 (사람 결정 완료 2026-06-13)
-"L3 review doc 매칭"이 런타임마다 다른 알고리즘 → 둘 다 보존:
-- scripts/sage_harness/hooks/strategies/pre_implementation_gate/claude_grep_first.py (grep-first)
-- scripts/sage_harness/hooks/strategies/pre_implementation_gate/codex_feature_signal.py (토큰 스코어링)
-- **find_l3_review(signals, snapshot) -> {found, path}** 공통 인터페이스.
-- **canonical 결정: `codex_feature_signal`** (정교한 feature-signal 스코어링 채택, 사람 결정).
-  profile.risk.l3_review_strategy 로 주입(독립 — 엔진 하드코딩 아님). adapter 가 CORE_DIR 의 전략 모듈 로드·실행.
-  → L3 + plan 있음 + review 매칭 시 GATE OK, 매칭 실패 시 WARN. plan 없음은 여전히 hard block.
-- 미선택(profile 에 strategy 없음) 시 = BLOCK + override-required + safety_degraded(안전 바닥, 다른 프로젝트 기본값).
+## algorithm_delta — the strategy slot
+"Matching the L3 review doc" is a genuinely different algorithm per runtime, so both are preserved:
+- sage_harness/hooks/strategies/pre_implementation_gate/claude_grep_first.py (grep-first)
+- sage_harness/hooks/strategies/pre_implementation_gate/codex_feature_signal.py (token scoring)
+- Common interface: **find_l3_review(signals, snapshot) -> {found, path}**.
+- **The canonical choice is `codex_feature_signal`**, adopting the more precise feature-signal
+  scoring. It is injected through profile.risk.l3_review_strategy — independent, never hardcoded
+  in the engine — and the adapter loads and runs the strategy module from CORE_DIR.
+  L3 with a plan and a review match is GATE OK; a failed match is WARN. No plan is still a hard block.
+- With no strategy selected in the profile the result is BLOCK plus override-required plus
+  safety_degraded — the safe floor, and the default for any other project.
 
-## profile_bound (risk trigger = 프로젝트 선언값, §7 I2~I7)
+## profile_bound — risk triggers are project-declared values
 profile.risk: { desktop_block_glob, l0_pass_globs, l3_filename_globs, l2_path_globs, l1_path_globs,
                 l3_content_keywords, l2_content_keywords, plan_glob }
-- canonical 매칭 = **case-insensitive**(G2, 더 많은 L3 포착 = 안전). 키워드/파일패턴 lower 비교.
+- Canonical matching is **case-insensitive**, since catching more L3 is the safe direction.
+  Keywords and file patterns are compared in lowercase.
 
-## PDCA phase 강제 (F9, profile.pdca — 독립)
-profile.pdca: { enabled, phases[{id,glob}], pre_implementation_required{L1,L2,L3}, report_phase, approve_phase, approve_marker }
-- adapter 가 phase glob(root 상대, recursive) 스캔 → snapshot.phase_docs={id:[{path,content,recent}]}.
-- `cycle_binding`은 configured phase glob에 실제로 매칭되는 markdown basename과 정확히 한 번 선언된
-  `Cycle-Stem`의 동일성을 검증한다. 선언은 fenced code block 밖에 있어야 한다. Phase 디렉터리 아래라도 glob 밖 파일은 cycle 문서가 아니다.
-  recursive `**`는 선두/중간/말미에서 0개 이상의 path segment로 동일하게 해석한다. 전체 Write/Add는
-  선언을 반드시 포함하고, 부분 Edit/Update는 기존 선언을 건드리지 않을 때만 snapshot identity를 사용한다.
-  선언 삭제·중복·오염은 snapshot fallback 없이 fail-closed 한다.
-  phase write는 changed path/declaration, source write는 explicit event stem 또는 exact branch final segment로
-  current cycle을 하나만 정한다. 숫자 substring과 recent/mtime은 cycle identity에 쓰지 않는다.
-- explicit event stem 의 선언 통로는 둘이다 — `SAGE_CYCLE_STEM` env 와 `<root>/.sage/cycle.json`
-  (`sage cycle set|show|clear`). 어댑터가 `env > 파일 > 없음` 순으로 해석해 `cycle_stem` 과
-  `cycle_stem_origin`(`env`/`cli`)을 이벤트에 싣는다. 장수 브랜치에서는 branch final segment 추론이
-  영영 맞지 않으므로 이게 정상 경로다. `decide` 는 판정에 `cycle_stem`/`cycle_source`/
-  `cycle_stem_declared`/`cycle_stem_origin` 을 스탬프해서, ① 안내가 추론 사실과 선언 경로를 가리키게
-  하고 ② 어댑터가 선언 사용을 `.sage/override.jsonl` 의 `cycle_stem_declared` 로
-  **세션·stem·기원** 1회 기록하게 한다. 선언 stem 은 이미 완결된 사이클을 지목해 전 게이트를 통과시킬
-  수 있어서, 기록 실패 시 통과를 허용하지 않는다(`block_cycle_stem_audit_failure`).
-  표시·감사는 **읽은 자리만** 말한다(`SAGE_CYCLE_STEM 선언` / `.sage/cycle.json 선언`) — 기원을 빼면
-  env 가 이기는 상태에서 화면이 "파일 선언" 이라 적어 확정적으로 거짓이 된다.
-- 선언 파일은 `sage install` 의 `/.sage/*` 관리 블록이 덮어 커밋되지 않고, 편집 도구로 직접 쓰는 것은
-  generated-artifact write guard 가 차단한다(에이전트가 완결 사이클을 지목해 자기 게이트를 끄는 경로).
-  파일이 있으나 읽지 못하면(손상·스키마 위반) **선언 부재로 degrade 하되** 그 사실을
-  `additionalContext` 로 표면화한다 — 부재와 손상이 똑같이 조용하면 1바이트만 잘라도 아래 완결 사이클
-  차단이 사라진다.
-- core `decide`: ① missing/conflicting/ambiguous binding은 `block_cycle_binding`
-  ①-b 결속된 stem 이 완결된 사이클(그 stem 의 report phase 문서 존재 **그리고**
-  approve phase 문서의 `Final Status` = approve marker)이면 새 소스 편집을 `block_cycle_closed` 로
-  차단한다. 완결 사이클은 00~06 이 다 갖춰져 모든 게이트를 통과하므로, 장수 브랜치에서 새 작업이
-  계획 문서 없이 조용히 진행되는 것을 막는 것이 목적이다. report 문서는 stem 결속을 요구한다 —
-  아무 06 이나 세면 저장소에 06 이 하나라도 있는 순간 모든 stem 이 완결이 된다.
-  **면제는 "변경이 1건 이상이고 전부 phase 문서" 하나뿐이다**(끝난 사이클의 05·06 정정은 정상 작업).
-  결속 출처는 면제 조건이 아니다 — env 선언은 셸과 함께 죽어 무해했지만 파일 선언은 세션을 넘겨
-  살아남아 오래된 선언이 이 차단을 통째로 끈다. 면제를 `any()` 로 쓰면 소스 편집에 문서 한 줄만 섞어
-  차단을 해제할 수 있고, 변경 0건(어댑터 추출 실패)도 면제가 아니다. 차단 사유는 결속 출처를
-  갈라 말한다(`선언된` / `브랜치에서 추론한`) — 낡은 선언 때문에 막힌 사용자를 브랜치로 보내면
-  해제 안내가 무효가 된다. 대상 여부는 경로 tier 가 아니라 **계산 위험도**로 갈리므로,
-  세션 위험도 선언(`declared_max`)이 L0 경로를 상향시키면 문서 편집도 걸린다.
-  두 조건 중 하나라도 판정 불가면 완결로 보지 않는다 — 여기서 fail-closed 하면 정상 진행을 막는다.
-  승인 조건이 실제로 거르는 것은 "작성 중인 06" 이 아니라(report 게이트가 승인 없는 06 작성을 이미
-  막으므로 `06 존재 ⟹ 승인` 이다) 게이트 설치 전 06·override 06·사후 승인 취소다.
-  이 차단은 override 가능하다(탈출구가 선언·신규 사이클로 명확).
-  ② Phase 00 위험도 게이트: Phase 01-06 또는 L1/L2/L3 비-phase 변경 전에 current stem의 Phase 00을
-  exact 선택하고 fence 밖 `Risk Level: L1|L2|L3` 선언을 정확히 한 개 요구한다. 누락·placeholder·malformed·
-  duplicate·읽기 불가·ambiguous는 `block_cycle_risk_declaration`이다. 현재 `classify_risk` 결과
-  (경로/내용 탐지와 `declared_max`의 최댓값)가 Phase 00 선언보다 높으면
-  `block_cycle_risk_reconciliation`으로 차단한다. Phase 00만 수정하는 변경은 자기복구를 위해 예외지만,
-  source/later phase와 섞은 변경은 pre-write snapshot 기준으로 차단하므로 Phase 00 상향 후 별도 재시도한다.
-  두 차단은 generic override로 우회할 수 없으며 Phase 00-only 복구가 유일한 진행 경로다.
-  ③ report←approve 게이트(L0 단축 전, current stem의 05에 정확히 한 개의
-  `Final Status: APPROVED`가 없으면 block_report_without_approval). Placeholder, duplicate status,
-  fenced code example, substring `APPROVED`는 승인 증거가 아니다. 06과 다른 phase를 같은 변경에서 수정하면 pre-write
-  snapshot으로 검증할 수 없으므로 분리 작성을 요구하고 차단한다.
-  ④ 구현 전 의무 phase(current stem exact) — L2/L3 결핍=block_phase_incomplete, L1=warn_phase_incomplete.
-- enabled=false/phases 없음 → `_pdca_cfg`=None → 강제 skip(기존 동작 보존). report/phase write는 snapshot과
-  같은 configured glob semantics로 판정한다.
+## PDCA phase enforcement (profile.pdca, independent)
+profile.pdca: { enabled, phases[{id,glob}], pre_implementation_required{L1,L2,L3}, report_phase, approve_phase, approve_marker,
+                base_plan.done_criteria_gate }
+- The adapter scans the phase globs (root-relative, recursive) into
+  snapshot.phase_docs = {id: [{path, content, recent}]}.
+- `cycle_binding` verifies that the markdown basename actually matching a configured phase glob
+  and the `Cycle-Stem` declared exactly once are identical. The declaration must sit outside a
+  fenced code block. A file under a phase directory but outside the glob is not a cycle document.
+  A recursive `**` is read identically as zero or more path segments at the start, middle or end.
+  A full Write or Add must contain the declaration; a partial Edit or Update may use the snapshot
+  identity only when it does not touch the existing declaration. A deleted, duplicated or
+  corrupted declaration fails closed with no snapshot fallback.
+  A phase write determines the current cycle from the changed path or declaration; a source write
+  determines it from an explicit event stem or the exact final branch segment. Numeric substrings
+  and recent/mtime are never used for cycle identity.
+- An explicit event stem has two declaration channels: the `SAGE_CYCLE_STEM` env var and
+  `<root>/.sage/cycle.json` (`sage cycle set|show|clear`). The adapter resolves them in the order
+  env, then file, then none, and puts `cycle_stem` and `cycle_stem_origin` (`env` / `cli`) on the
+  event. On a long-lived branch, inferring from the final branch segment never becomes correct
+  again, so this is the normal path. `decide` stamps `cycle_stem`, `cycle_source`,
+  `cycle_stem_declared` and `cycle_stem_origin` onto the verdict so that (1) the guidance points at
+  the inference and the declaration channel, and (2) the adapter records each use of a declaration
+  once per **session, stem and origin** as `cycle_stem_declared` in `.sage/override.jsonl`. Since a
+  declared stem can point at an already-closed cycle and carry a change past every gate, a failure
+  to record it does not permit a pass (`block_cycle_stem_audit_failure`).
+  Display and audit name **only the channel actually read** (`SAGE_CYCLE_STEM 선언` /
+  `.sage/cycle.json 선언`). Dropping the origin would let the screen say "declared in the file"
+  while env actually won, which is definitively false.
+- The declaration file is not committed, because `sage install`'s `/.sage/*` managed block covers
+  it, and writing it directly with an editing tool is blocked by the generated-artifact write
+  guard — that is the path by which an agent could point at a closed cycle and switch off its own
+  gate. When the file exists but cannot be read, from corruption or a schema violation, the gate
+  **degrades to "no declaration" but surfaces that fact** through `additionalContext`. If absence
+  and corruption were equally silent, truncating a single byte would remove the closed-cycle block
+  below.
+- Core `decide`:
+  1. A missing, conflicting or ambiguous binding is `block_cycle_binding`.
+  1b. If the bound stem belongs to a closed cycle — a report phase document exists for that stem
+     **and** the approve phase document's `Final Status` equals the approve marker — a new source
+     edit is blocked with `block_cycle_closed`. A closed cycle has a complete 00–06 and passed
+     every gate, so the point is to stop new work on a long-lived branch from proceeding quietly
+     with no plan document. The report document must be stem-bound: counting any 06 at all would
+     make every stem look closed the moment the repository contains a single 06.
+     **There is exactly one exemption: at least one change, and all of them phase documents** —
+     correcting the 05 or 06 of a finished cycle is normal work. The binding origin is not an
+     exemption condition: an env declaration died with the shell and was harmless, but a file
+     declaration survives across sessions, so a stale one would switch this block off entirely.
+     Writing the exemption with `any()` would let a single documentation line mixed into a source
+     edit clear the block, and zero changes (an adapter extraction failure) is not an exemption
+     either. The block reason distinguishes the binding origin (declared versus inferred from the
+     branch); sending a user who is blocked by a stale declaration to the branch would make the
+     recovery guidance useless. Eligibility is decided by **computed risk**, not by path tier, so a
+     session risk declaration (`declared_max`) that raises an L0 path brings documentation edits
+     into scope too.
+     If either condition cannot be determined the cycle is not treated as closed — failing closed
+     here would block legitimate progress. What the approval condition actually filters out is not
+     "a 06 being written" (the report gate already blocks writing a 06 without approval, so a 06
+     existing implies approval) but a 06 that predates the gate, an overridden 06, and an approval
+     revoked after the fact. This block is overridable, since the escape hatch — declare, or start
+     a new cycle — is clear.
+  2. Phase 00 risk gate: before Phases 01–06, or any L1/L2/L3 non-phase change, select the current
+     stem's Phase 00 exactly and require exactly one `Risk Level: L1|L2|L3` declaration outside a
+     fence. Missing, placeholder, malformed, duplicate, unreadable or ambiguous is
+     `block_cycle_risk_declaration`. When the current `classify_risk` result — the maximum of path
+     and content detection and `declared_max` — exceeds the Phase 00 declaration, it blocks with
+     `block_cycle_risk_reconciliation`. A change touching only Phase 00 is exempt so it can repair
+     itself, but a change mixing source or a later phase is judged against the pre-write snapshot
+     and blocked, so raise Phase 00 first and retry separately. Neither block can be bypassed with
+     a generic override; a Phase 00-only repair is the only way forward.
+  3. The report←approve gate, ahead of the L0 shortcut: if the current stem's 05 does not carry
+     exactly one `Final Status: APPROVED`, block with block_report_without_approval. A placeholder,
+     a duplicate status, a fenced code example and a substring `APPROVED` are not approval
+     evidence. Modifying 06 and another phase in the same change cannot be verified against the
+     pre-write snapshot, so it is blocked and separate writes are required.
+  4. Mandatory phases before implementation, on the exact current stem: a gap is
+     block_phase_incomplete at L2/L3 and warn_phase_incomplete at L1.
+  5. The Done Criteria gate: `off` or a missing key skips for backward compatibility, `advisory`
+     WARNs and `enforce` BLOCKs. A Phase 00-only repair does not block itself. Mixing Phase 00 and
+     01–06 into the same write makes the post-write revision unprovable from the pre-write
+     snapshot, so it BLOCKs or WARNs by mode and requires separate writes. Valid `[ ]` items in
+     01–04 only produce a progress WARN and are allowed, while a malformed, duplicate or empty
+     section, an invalid `[~]`, and revision-log errors are handled per mode. For a revision 2 or
+     later replan, the preceding affected phase documents must declare the current revision before
+     the next phase may proceed. Phase 06 requires zero unresolved items, and the exact
+     `Phase00-Hash: sha256:...` in Phase 05, the `Loop-Run` in that same document, and the
+     `phase00_hash` of the corresponding closed APPROVED loop record must all equal the hash of the
+     current Phase 00's full text. The hash normalizes only CRLF and CR to LF and includes
+     whitespace, ordering, statuses and the revision log. These blocks are not subject to a generic
+     override.
+- enabled=false or no phases → `_pdca_cfg` is None → enforcement is skipped, preserving the
+  original behavior. Report and phase writes are judged with the same configured glob semantics as
+  the snapshot.
 
-## report←approve audit 게이트 (9.5, profile.pdca.review_loop.report_gate_enforce — F-5)
-review_loop.enabled + report_gate_enforce ∈ {advisory, enforce} 일 때, 마커 검사에 더해 06 작성 시
-`_audit_gate` 가: current `Cycle-Stem`의 05 문서 1개를 exact 선택 → 그 동일 문서에서 APPROVED 마커와
-fenced code block 밖의 정확히 한 개 `Loop-Run: <run_id>` 를 함께 읽고, 주입된
-`snapshot.loop_audit`와 `runs[run_id]`가 다음을 모두 만족하는지 검사:
-파일 원문 `file_ok≠False` · clean(open 1회 + close 최대 1회 — 고아 close·중복/재사용 open·close 아님;
-open-only run 은 clean=True 이며 별도 `closed` 체크가 거른다) · seq_ok≠False(라운드 seq 연속 —
-7차 배치3) · chain_ok≠False(run별 strict hash-chain) · closed · result=APPROVED ·
-degraded 아님(reviewer 의도=실제 — 7차 배치3). 위반 시 advisory=warn_report_without_audit(exit0) /
-enforce=block_report_without_audit(exit2). report_gate_enforce 기본=advisory(키 부재 시 — 7차 배치3-5,
-루프 켠 프로젝트는 최소 WARN); 명시 off·루프 비활성 → skip(하위호환). loop_audit 주입은 adapter
-(`hook_runtime.build_snapshot` → `loop_audit.audit_summary`)가 담당(core 는 순수). stale 결합 차단: 마커와
-Loop-Run 을 *같은* selected 문서에서 읽는다.
-- **seq + strict hash-chain(10-g)**: writer는 OS 소유 프로세스 락 안에서 `seq`와 run별 `prev_hash`,
-  `record_hash`를 계산하고 한 줄 append합니다. `audit_summary.seq_ok`는 [0..n-1] 연속성을,
-  `chain_ok`는 immediate predecessor와 각 레코드의 canonical SHA-256 self-hash를 검산합니다.
-  손상 JSON·비-object 줄은 skip하지 않고 파일 전체 `file_ok=False`로 표면화합니다. 구버전 run은
-  `chain_ok=None`으로 하위호환하며 첫 신규 레코드부터 legacy 직전 레코드에 연결합니다. hash를 다시 계산하지
-  않은 수정·삽입·중간 삭제·재정렬은 v1 필드가 남아 있는 동안 탐지하지만, 전체 파일과 체인을 재계산하는
-  공격자를 인증하지는 않습니다. 또한 run 전체의 세 체인 필드를 모두 제거하면 정당한 legacy run과 구분할
-  외부 provenance가 없어 `chain_ok=None` 경계가 됩니다. 이 범위를 닫으려면 별도 artifact의 tip·Git
-  기준선·서명 head·외부 witness가 필요합니다. 원문 문제는 `file_issues`, runtime/module 요약 실패는
-  `snapshot_error`로 구분해 게이트가 실제 원인을 안내합니다.
-- **reviewer degraded(배치3-4)**: open 의 reviewer_requested 가 명시됐는데 close 의 reviewer_actual 이
-  *다르거나 기록 안 됨*(closed run 한정)이면 degraded → cross-model 요청이 same-runtime 으로 폴백/미확인된
-  정황을 침묵 통과시키지 않음(codex R1b P1: actual 미기록도 fail-closed). reviewer_actual 자동 기록은 배치2
-  (cross-model invocation)가 배선 — 그 전까지 req 미설정이면 degraded=False(오탐 없음).
-- **report_gate_enforce 기본 advisory(배치3-5, 의도적 변경)**: 키 부재 시 off→advisory 는 *비차단 WARN*
-  (exit0)이므로 hard break 아님 — 루프 켠 기존 프로젝트에 새 경고가 뜨는 것은 의도된 advisory-first 거동
-  (codex R1b P2: 명시 off 는 여전히 skip, 마이그레이션은 advisory 관찰 후 enforce 전환).
+### Fast Cycle virtual phase contract
 
-## acceptance evidence 게이트 (verification.acceptance.report_gate_by_risk)
-build/test/lint 통과가 "사용자 요구사항 충족"을 자동 증명하지 않는 갭을 위험도별로 닫는다.
-`verification.acceptance.enabled=true`일 때 06 작성 시
-`_acceptance_gate` 가: cycle risk(declared·주입·같은 stem의 00~05 선언 중 최댓값)가 require_for_risk(기본 L2/L3)에 들면
-→ current stem의 01 acceptance matrix와 04 acceptance evidence를 exact 선택해 fence 밖 table만 대조. 01/04 문서 미선택,
-matrix ID 없음/형식 오류/중복, evidence table 부재, required ID 누락, 미정의/중복 evidence ID,
-미해결 상태(unresolved_statuses 기본 FAIL·NOT TESTED), 미인식 상태값, N/A의 명시적 사유 부재이면 위반.
-required ID가 0개인 all-optional matrix 자체는 유효하다. 기본 정책은 L2 advisory(WARN), L3 enforce(BLOCK)이며
-`unknown`은 L3처럼 enforce한다. `report_gate_by_risk`도 L2 advisory/L3 enforce만 허용해 profile만으로 L3를
-하향할 수 없다. legacy `report_gate_enforce: enforce`는 전 위험도 enforce를 유지한다. legacy `advisory`/`off`는
-L3를 낮추지 않도록 L2 advisory/L3 enforce로 안전 승격하며 doctor/validate가 migration을 안내한다.
-`require_for_risk`에서도 L3를 제거할 수 없다. validate가 해당 profile을 FAIL하고 런타임도 L3를 강제 포함한다.
-Acceptance 상태는 PASS/FAIL/NOT TESTED/N/A로 닫혀 있으며 PASS와 사유 있는 N/A만 해결 상태다. Profile이
-추가한 custom status는 validate FAIL이고 런타임에서도 unresolved로 처리한다.
+When `pdca.fast_cycle.enabled=true` and the current stem's Phase 00 carries `Cycle-Mode: FAST`, the
+adapter parses `## Phase 01` through `## Phase 04` out of the composite 00 and injects them as a
+virtual phase snapshot. Physical 01–04 documents are never generated automatically, and if
+physical documents for the same stem also exist the ambiguity is not hidden. A source edit
+requires a clean active run in the strict-chain `.sage/fast_cycle.jsonl`, the exact stem, and a
+bound plan hash. A missing or corrupt audit, and a terminal or mismatched state, are blocked with
+`block_fast_cycle_audit` and are not overridable.
 
-L3 `NOT TESTED` 중 운영·외부 환경에서만 확인 가능한 단일 ID는 `sage acceptance-waiver grant`로 exact cycle stem,
-exact required acceptance ID, reason, scope, remaining evidence, user confirmation을 기록한 경우에만 residual WARN으로
-낮출 수 있다. TTL은 최대 24시간이고 `FAIL`, wildcard, unknown risk, expired/revoked/malformed/duplicate/conflicting grant에는
-적용되지 않는다. 상태를 PASS로 바꾸지 않으며 `warn_report_with_l3_waiver`에 남은 evidence를 출력한다. hook은 report 쓰기
-전에 `.sage/acceptance-waivers.jsonl`에 `use`를 append하고, 기록 실패 시 BLOCK한다.
+A source edit under an active Fast run emits `warn_fast_cycle` without lowering the actual risk.
+Only the standard L3 pre-review strategy is replaced by the Fast review contract; the acceptance,
+verification and report gates all remain. An exception while reading the Fast audit snapshot
+renders as the same fail-closed input as corruption.
 
-acceptance 비활성, legacy off, cycle risk가 *known*이고 require_for_risk 밖이면 skip한다.
-core 는 판단하지 않고 04 의 구조화된 상태(PASS/FAIL/NOT TESTED/N/A)만 확인한다.
+## report←approve audit gate (profile.pdca.review_loop.report_gate_enforce)
+When review_loop.enabled is set and report_gate_enforce ∈ {advisory, enforce}, then in addition to
+the marker check, writing a 06 sends `_audit_gate` through: select the current `Cycle-Stem`'s
+single 05 document exactly, read from that same document both the APPROVED marker and exactly one
+`Loop-Run: <run_id>` outside a fenced code block, and check that the injected
+`snapshot.loop_audit` and its `runs[run_id]` satisfy all of the following — the raw file is
+`file_ok≠False`; the run is clean (one open plus at most one close, so no orphan close and no
+duplicate or reused open or close; an open-only run is clean=True and is caught instead by the
+separate `closed` check); `seq_ok≠False` for round sequence continuity; `chain_ok≠False` for the
+per-run strict hash chain; closed; result=APPROVED; and not degraded, meaning the reviewer
+intended equals the reviewer actual. A violation is warn_report_without_audit (exit 0) under
+advisory and block_report_without_audit (exit 2) under enforce. report_gate_enforce defaults to
+advisory when the key is absent, so a project that turned the loop on gets at least a WARN; an
+explicit off, or an inactive loop, skips for backward compatibility. Injecting loop_audit is the
+adapter's job (`hook_runtime.build_snapshot` → `loop_audit.audit_summary`), keeping the core pure.
+Stale pairing is prevented by reading the marker and the Loop-Run from the *same* selected document.
 
-## reverse_extract 분류
-- 공유 core: 위험분류(경로/내용/declared), Desktop 블록, plan 존재 게이트, L2/L3 판정 구조
-- structural_io_adapter: file_path vs apply_patch 다중파일+content
-- output_adapter: 채널/메시지
-- profile_bound: risk trigger 전부
-- **algorithm_delta**: L3 review 매칭 (전략 슬롯, 병합금지)
-- minor drift: content keyword case (Claude 고정대소문자 vs Codex (?i)) → canonical case-insensitive
-  · **의도적 drift(audit P2)**: case-insensitive 는 원본보다 더 많은 L3 포착(안전 방향). 단 일반 문서/테스트에
-    섞인 L3 키워드 문자열도 L3 로 올릴 수 있음. L0 문서(plan_docs/docs/*.md) pass 가 선행이라 문서 오탐은 제한됨.
+- **Sequence plus strict hash chain**: inside an OS-owned process lock, the writer computes `seq`,
+  the per-run `prev_hash` and `record_hash`, and appends one line. `audit_summary.seq_ok` checks
+  continuity over [0..n-1]; `chain_ok` verifies the immediate predecessor and each record's
+  canonical SHA-256 self-hash. A corrupt JSON or non-object line is not skipped — the whole file is
+  surfaced as `file_ok=False`. Older runs stay backward compatible with `chain_ok=None` and are
+  linked from the first new record to the record immediately preceding the legacy span. Edits,
+  insertions, mid-file deletions and reorderings that do not recompute the hash are detected while
+  the v1 fields remain, but this does not authenticate an attacker who recomputes the entire file
+  and chain. Likewise, removing all three chain fields from an entire run leaves no external
+  provenance to distinguish it from a legitimate legacy run, which is the `chain_ok=None` boundary.
+  Closing that gap requires a tip in a separate artifact, a Git baseline, a signed head, or an
+  external witness. Problems with the raw file are reported as `file_issues` and a failure of the
+  runtime or module summary as `snapshot_error`, so the gate names the real cause.
+- **Reviewer degraded**: when an open records an explicit reviewer_requested but the close's
+  reviewer_actual *differs or was never recorded* — for closed runs only — the run is degraded. A
+  cross-model request that silently fell back to same-runtime, or that cannot be confirmed, must
+  not pass in silence, so an unrecorded actual also fails closed. Automatic recording of
+  reviewer_actual is wired by the cross-model invocation; until then, an unset request means
+  degraded=False and no false positives.
+- **report_gate_enforce defaulting to advisory** is an intentional change. With the key absent,
+  off → advisory is a *non-blocking* WARN (exit 0), so it is not a hard break: a new warning
+  appearing in an existing project that turned the loop on is the intended advisory-first
+  behavior. An explicit off still skips, and the migration is to observe under advisory before
+  switching to enforce.
+
+## acceptance evidence gate (verification.acceptance.report_gate_by_risk)
+Passing build, test and lint does not automatically prove that user requirements are met. This
+gate closes that gap per risk level. When `verification.acceptance.enabled=true`, writing a 06
+sends `_acceptance_gate` through: if the cycle risk — the maximum of declared, injected, and the
+declarations in 00–05 of the same stem — falls within require_for_risk (L2/L3 by default), select
+the current stem's 01 acceptance matrix and 04 acceptance evidence exactly and compare only the
+tables outside fences. A violation is any of: 01 or 04 not selected; a missing matrix ID, a
+malformed one, or a duplicate; no evidence table; a missing required ID; an undefined or duplicate
+evidence ID; an unresolved status (unresolved_statuses defaults to FAIL and NOT TESTED); an
+unrecognised status value; or an N/A without an explicit reason. An all-optional matrix with zero
+required IDs is itself valid.
+
+The default policy is advisory (WARN) at L2 and enforce (BLOCK) at L3, and `unknown` enforces like
+L3. `report_gate_by_risk` also permits only L2 advisory and L3 enforce, so a profile alone cannot
+lower L3. A legacy `report_gate_enforce: enforce` keeps enforce at every risk level. Legacy
+`advisory` and `off` are safely promoted to L2 advisory and L3 enforce so that L3 is never
+lowered, and doctor and validate explain the migration. L3 cannot be removed from
+`require_for_risk` either: validate FAILs such a profile and the runtime forces L3 back in.
+Acceptance statuses are closed at PASS / FAIL / NOT TESTED / N/A, and only PASS and an N/A with a
+reason count as resolved. A custom status added by a profile is a validate FAIL and is treated as
+unresolved at runtime.
+
+A single L3 `NOT TESTED` ID that can only be confirmed in production or an external environment
+may be lowered to a residual WARN, but only through `sage acceptance-waiver grant` recording the
+exact cycle stem, the exact required acceptance ID, a reason, a scope, the remaining evidence and
+user confirmation. The TTL is at most 24 hours, and it does not apply to `FAIL`, to wildcards, to
+an unknown risk, or to an expired, revoked, malformed, duplicate or conflicting grant. It does not
+change the status to PASS, and `warn_report_with_l3_waiver` prints the remaining evidence. Before
+writing the report the hook appends a `use` record to `.sage/acceptance-waivers.jsonl` and BLOCKs
+if that record cannot be written.
+
+The gate skips when acceptance is disabled, under legacy off, and when the cycle risk is *known*
+and outside require_for_risk. The core makes no judgement of its own — it only reads the
+structured statuses in 04.
+
+## reverse_extract classification
+- Shared core: risk classification (path, content, declared), the Desktop block, the plan-existence
+  gate, and the L2/L3 verdict structure.
+- structural_io_adapter: a single file_path versus apply_patch multi-file plus content.
+- output_adapter: channels and messages.
+- profile_bound: every risk trigger.
+- **algorithm_delta**: L3 review matching, in the strategy slot; never merged.
+- Minor drift: content keyword case — Claude fixed-case versus Codex `(?i)` — with canonical
+  case-insensitive. This drift is **intentional**: case-insensitive catches more L3 than the
+  original, which is the safe direction. The cost is that an L3 keyword appearing in ordinary
+  documentation or tests can also raise the level. The L0 pass for documents
+  (plan_docs, docs/*.md) runs first, which keeps documentation false positives limited.
 
 ## tests
-scripts/sage_harness/hooks/tests/test_pre_implementation_gate.py
-- classify(L0~L3/escalation/desktop/declared/case-insensitive) + decide(분기) + 전략 후보 2종(인라인플래그/무효패턴 포함)
-  + PDCA 강제(의무 phase block/통과/L3 review 보존/report 게이트/비활성 하위호환) + adapter(L3 block·L1 pass)
-  + audit 게이트 file_ok/seq_ok/chain_ok/degraded 분기 + report_gate_enforce 기본 advisory(7차 배치3, 10-g)
-  + acceptance evidence 게이트(matrix↔evidence 대조/미해결 block·warn/risk 미해당 skip)
+sage_harness/hooks/tests/test_pre_implementation_gate.py
+- classify (L0–L3, escalation, desktop, declared, case-insensitive) plus decide branching, plus
+  both strategy candidates including inline flags and invalid patterns.
+- PDCA enforcement: mandatory phase block and pass, L3 review preservation, the report gate, and
+  backward compatibility when inactive; adapter coverage for an L3 block and an L1 pass.
+- Audit gate branching over file_ok, seq_ok, chain_ok and degraded, plus report_gate_enforce
+  defaulting to advisory.
+- Acceptance evidence gate: matrix against evidence, unresolved block and warn, and skipping when
+  the risk is out of scope.
+- Done Criteria: the exact parser, progress, revisions, a mixed 00-plus-later-phase write, affected
+  phases, and Phase 00 hash-bound approval.

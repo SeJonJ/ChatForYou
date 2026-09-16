@@ -17,6 +17,12 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
   "팀 오케스트레이션", "run the team", or asks to drive the team through implementation→review
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read `sage/project-profile.yaml` — confirm bootstrapped; confirm a plan doc (Phases
    00–02) for this cycle exists. If not bootstrapped → direct to `/sage-init`; if no plan
    → direct to `/sage-plan` (do not author the plan here).
@@ -29,6 +35,18 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
    On a resumed session with a user-supplied context packet, first run
    `sage context restore --snapshot <path>` and read the generated briefing. Reject a
    failed/stale packet instead of using it as advisory context.
+   Read the cycle's document language from Phase 00's `Document-Language:` line and author
+   every 03–06 document with that same line, in that language. Phase 00 is the source of
+   truth; disagreement with `.sage/cycle.json` is a conflict to raise, not one to resolve by
+   choosing a side. A cycle with no marker predates it — follow the language the existing
+   documents use and do not mark only some of them.
+   Before every 01–05 phase boundary, re-open Phase 00 and inspect its exact Done Criteria:
+   `[ ]` is normal progress, `[x]` is demonstrated completion, and `[~]` is resolved only
+   with a same-line `(N/A: reason)`. Update only criteria actually satisfied by the completed
+   work. A text/item/scope change is replanning: increment `Done-Criteria-Revision`, record
+   Changed-At/Reason/Affected-Phases/Summary, rerun each affected phase in order, and stamp
+   those phase documents with the current revision. Normal `[ ]`→`[x]` progress does not
+   increment the revision. Any earlier APPROVED 05 becomes stale and must be reviewed again.
 3. Implementation (03): before source edits, open/update the 03 doc with ownership,
    checklist, and Phase-01 acceptance IDs. Root scaffolding/config/glue (build files,
    `local.properties`, `.gitignore`, `settings.*`) are source edits too — classified by
@@ -40,7 +58,7 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
    pinning; otherwise report `MODEL_SELECTION_DEGRADED` and the actual host default.
    Never claim the configured model ran without execution evidence. Each edits only its
    component paths and records files, checklist, acceptance trace, and unit tests into 03.
-4. Verification: invoke `scripts/verify-changes.sh` per `profile.verification` at the risk
+4. Verification: invoke `sage_harness/verify-changes.sh` per `profile.verification` at the risk
    gate. SAGE owns policy/gates/result format; this skill only triggers the run
    (pre-implementation-gate is not the executor). Record results in 03; stop if red.
 5. QA (04): invoke the qa agent for design↔implementation gap + test coverage +
@@ -48,14 +66,16 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
 6. Review (05): hand off to `/sage-review` (never hand-write 05). It records the loop to
    `.sage/loop_audit.jsonl`, resolves cross-model, and always blocks APPROVED for `FAIL`.
    `NOT TESTED` also blocks unless an exact active L3 waiver preserves it as residual
-   evidence; never convert it to PASS. On BLOCKED, stop.
+   evidence; never convert it to PASS. All Done Criteria must be resolved before APPROVED.
+   On BLOCKED, stop.
 7. Completion (06): **before writing 06, reconcile the risk tier** — re-classify actual changed
    paths/content with `profile.risk`, take `max(00's tier, that)`, and raise 00's `Risk Level` line
    if it grew. The pre-implementation gate enforces this throughout implementation: update only
    Phase 00 first, then retry the source or later-phase write; a combined patch is checked against
    the pre-write snapshot and blocked. Doing it before 06 keeps the 06 acceptance-evidence report
    gate and write-back off a stale L1. Then, only when `05_approved`,
-   the leader writes 06. The 06←05 gate enforces this deterministically. The 06 doc must declare
+   the leader writes 06. Re-open Phase 00 first and require all Done Criteria resolved plus
+   a fresh 05/Loop approval bound to the current Phase 00 hash. The 06←05 gate enforces this deterministically. The 06 doc must declare
    `Loop-Run: <RUN_ID>` at its top (copy the run_id from the APPROVED 05 doc; add `Source-05: <05 doc
    path>`) — the Stop-time retro gate reads this line to bind the report to its cycle, so it survives
    session resume. Omitting it leaves the retro gate unable to bind (advisory warns, enforce blocks).

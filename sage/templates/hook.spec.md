@@ -9,11 +9,11 @@ runtime_bindings:
 이 hook이 무엇을 결정론적으로 차단/검사하는지 한 문장.
 
 ## canonical
-# form=core_adapter: scripts/sage_harness/hooks/<id>_core.py (pure decide) + adapters/{claude,codex}/<id>.sh
-# form=native:       scripts/sage_harness/hooks/<id>.sh (단일 정본, legacy/custom POSIX hook)
+# form=core_adapter: sage_harness/hooks/<id>_core.py (pure decide) + adapters/{claude,codex}/<id>.sh
+# form=native:       sage_harness/hooks/<id>.sh (단일 정본, legacy/custom POSIX hook)
 
 ## enforcement
 - 차단 조건과 통과 조건을 명시 (enforcement는 hook 전용)
 
 ## tests
-scripts/sage_harness/hooks/tests/test_<id>.py   # 결정론 회귀 (core/adapter)
+sage_harness/hooks/tests/test_<id>.py   # 결정론 회귀 (core/adapter)

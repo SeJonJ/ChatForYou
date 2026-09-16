@@ -16,26 +16,33 @@ then re-validate. The profile-editing counterpart to /sage-init (first authoring
 ## when_to_use
 - After bootstrap, to change profile values: risk tiers, verification commands, the
   Phase-05 review loop (review_loop), vault outputs, components, options
-- When tuning review_loop iterations/budget/lenses, or toggling vault dashboard/retro note
+- When tuning review_loop or pdca.fast_cycle rounds/lenses, or toggling vault outputs
 - When the user says "/sage-profile-modify", "change the profile", "루프 설정 바꿔",
   "리뷰 루프 수정", "risk 글롭 수정", "profile 수정"
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read context: profile (if not bootstrapped — project.name empty OR risk globs and
    components both unset, the same predicate sage generate enforces → route to /sage-init,
    do not bootstrap here), AGENT_GUIDE, bootstrap-authoring (incl. shared Review loop +
    vault interview set).
 2. Identify the target section (project/components including `runtime_models`/
-   verification/risk/pdca.review_loop/options/knowledge_capture/file_type_map/compliance/
+   verification/risk/pdca.base_plan/pdca.review_loop/pdca.fast_cycle/options/knowledge_capture/file_type_map/compliance/
    `governance_docs`/`cross_model.reviewer`). For model edits, run `sage models --host <host>`
    and preserve its verification label; `cross_model.reviewer.host` scopes which peer the model
    was chosen for (the reviewer itself is resolved at run time) and must be an installed host
    other than a pinned `runtime.active_host`.
    `governance_docs` renders into the AGENT_GUIDE routing block (path + label only, never
    classification triggers).
-3. For pdca.review_loop and vault outputs, drive the SAME shared interview set as
+3. For pdca.base_plan, pdca.review_loop, pdca.fast_cycle, and vault outputs, drive the SAME shared interview set as
    /sage-init (bootstrap-authoring.md) — single source, no drift. Vault turn only when
-   loop on AND knowledge_capture.vault_path set.
+   the matching feature is on AND an effective vault path is set. Fast keeps
+   reason_required=true and engine floors of one round and two lenses.
 4. Propose before→after diff and **state the gate consequence** in plain terms
    (loosen/tighten); get explicit approval. (Consequence warnings are mandatory.)
 5. Edit profile.yaml in place — change only approved values, never add/remove schema keys.

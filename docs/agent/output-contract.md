@@ -7,7 +7,7 @@ What an agent/skill must produce so its work is verifiable and auditable.
 - **Plan linkage** — non-trivial work references its plan doc under
   `{paths.plan_docs}`.
 - **Verification** — the gate level required for the change has passed
-  (`scripts/verify-changes.sh`).
+  (`sage_harness/verify-changes.sh`).
 - **Acceptance evidence** — for non-trivial PDCA work, Phase 01 lists explicit
   acceptance items and Phase 04 records each item as `PASS`, `FAIL`,
   `NOT TESTED`, or `N/A` with evidence. Both documents bind by the same exact

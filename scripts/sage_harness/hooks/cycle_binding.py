@@ -136,6 +136,20 @@ def document_identity(doc):
     return declared, None
 
 
+def effective_content(change):
+    """이 변경 후의 문서 본문. post-image → 변경이 실은 전체 본문인 경우 → 조각 순서.
+
+    조각(부분 diff)만 읽으면 hunk 없는 rename 의 목적지가 빈 문자열이 되어, 내용이 그대로
+    옮겨가는 정상 rename 이 `Cycle-Stem:` 을 읽지 못해 결속에서 막힌다. 오케스트레이터가
+    되짚어 만든 전체 본문이 있으면 그것이 이 변경 뒤의 사실이므로 먼저 쓴다. 재구성이
+    실패했으면 post-image 자체가 없고, 그 실패는 본문 게이트가 fail-closed 로 잡는다.
+    """
+    image = (change or {}).get("post_image")
+    if image is not None:
+        return image
+    return (change or {}).get("content") or ""
+
+
 def resolve(event, snapshot, pdca):
     """Resolve exactly one current cycle -> {stem, error, source}.
 
@@ -168,7 +182,7 @@ def resolve(event, snapshot, pdca):
             if from_path is None:
                 errors.append(f"{path}: invalid phase document path stem")
                 continue
-            content = change.get("content") or ""
+            content = effective_content(change)
             removed = change.get("removed_content") or ""
             event_decl, event_error = declared_stem(content)
             if event_error:

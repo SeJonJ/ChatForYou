@@ -16,6 +16,12 @@ Git-ignored `sage/project-profile.local.yaml`. This guide stays neutral.
 4. Relevant plan doc under `{paths.plan_docs}`
 5. Relevant convention docs declared in `profile.conventions`
 
+Read item 3 **before printing anything a person reads**: its `interface.language`
+(`ko`|`en`, absent means `ko`) decides this session's conversation language, and a first
+line already sent in the wrong language cannot be taken back. The language a Phase 00–06
+document is written in is a separate per-cycle decision recorded as `Document-Language:`.
+Both, plus what is never translated, are in `docs/agent/language-policy.md`.
+
 ## Project Bootstrap (conversational authoring)
 
 Profile values, specs, and plan docs are **authored by the agent through
@@ -190,7 +196,7 @@ These are inherited by every agent/skill claim set as
 ## Definition of Done
 
 - Plan doc updated; implementation matches the plan.
-- `scripts/verify-changes.sh` passes at the required gate level.
+- `sage_harness/verify-changes.sh` passes at the required gate level.
 - Conventions in `profile.conventions` satisfied.
 - No direct edits to generated artifacts.
 
