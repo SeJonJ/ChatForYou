@@ -4,6 +4,16 @@
   "description": "project-profile.yaml→json 구조검증. 외부검토 R2/P0-2: risk/pdca 의 additionalProperties:false 가 'l3_filename_globs→l3_filename_glob' 류 오타(게이트 침묵 비활성)를 적발. 타입은 느슨(빈 프로파일/부분 작성 허용), 미지정 키만 차단.",
   "type": "object",
   "additionalProperties": false,
+  "definitions": {
+    "fastLensList": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["correctness", "security", "concurrency", "convention", "lifecycle", "performance", "error_handling", "data_integrity", "api_contract"]
+      }
+    }
+  },
   "properties": {
     "sage": {
       "type": "object",
@@ -325,6 +335,20 @@
         "approve_marker": {
           "type": "string"
         },
+        "base_plan": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Phase 00 Done Criteria progressive and final gate policy.",
+          "properties": {
+            "done_criteria_gate": {
+              "enum": [
+                "off",
+                "advisory",
+                "enforce"
+              ]
+            }
+          }
+        },
         "review_loop": {
           "type": "object",
           "additionalProperties": false,
@@ -403,8 +427,65 @@
                 "advisory",
                 "enforce"
               ]
+            },
+            "early_completion": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled"],
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "minimum_completed_rounds": {"type": "integer", "minimum": 1}
+              }
             }
           }
+        },
+        "fast_cycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "reason_required", "minimum_rounds", "minimum_lenses", "lenses"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "reason_required": {"const": true},
+            "minimum_rounds": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["L2", "L3"],
+              "properties": {
+                "L2": {"type": "integer", "minimum": 1},
+                "L3": {"type": "integer", "minimum": 1}
+              }
+            },
+            "minimum_lenses": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["L2", "L3"],
+              "properties": {
+                "L2": {"type": "integer", "minimum": 2},
+                "L3": {"type": "integer", "minimum": 2}
+              }
+            },
+            "lenses": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["L2", "L3"],
+              "properties": {
+                "L2": {"$ref": "#/definitions/fastLensList"},
+                "L3": {"$ref": "#/definitions/fastLensList"}
+              }
+            },
+            "standard_transition": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled"],
+              "properties": {
+                "enabled": {"type": "boolean"}
+              }
+            }
+          }
+        },
+        "cycle_binding_visibility": {
+          "enum": ["gated", "all"],
+          "description": "게이트 통과 줄에 결속 cycle stem 을 어디까지 노출할지. gated(기본·기존 동작)=판정 줄이 생기는 경우(L2/L3 통과·WARN)에만 표기. all=L1·L0 통과에도 한 줄을 내보내 모든 거버넌스 편집이 어느 사이클에 결속됐는지 확인 가능하게 한다. 통과 줄은 양 host 에서 모델 컨텍스트로 들어가므로 all 은 편집마다 한 줄이 쌓이는 비용을 감수하는 선택이다. 결속 증거 자체는 이 설정과 무관하게 .sage/override.jsonl 에 남는다. pdca.enabled=false 는 사이클 개념이 없어 대상이 아니다."
         },
         "retro": {
           "type": "object",

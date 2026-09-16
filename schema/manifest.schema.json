@@ -8,6 +8,15 @@
   "properties": {
     "sage_version": { "type": "string" },
     "generator_version": { "type": "string" },
+    "runtime_api": {
+      "type": "object",
+      "description": "이 설치의 project hook 이 요구하는 sage-hook runtime API. sage-hook 이 project core 를 import 하기 전에 정수로 대조한다. 요구 SAGE '버전' 의 정본은 여기가 아니라 shared profile 의 exact sage.required_version 이다 — 정본을 둘로 두면 갈렸을 때 판정할 근거가 없다.",
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "integer", "minimum": 1, "description": "필요한 최소 runtime API. 엔진 상수는 sage.runtime_api.HOOK_RUNTIME_API." }
+      },
+      "additionalProperties": false
+    },
     "template_version": { "type": "string" },
     "host_runtime": { "enum": ["claude", "codex"] },
     "installed_hosts": {
@@ -65,7 +74,16 @@
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
-        "sage_version": { "type": "string" }
+        "sage_version": { "type": "string" },
+        "semantic_source": {
+          "type": "string",
+          "description": "이 렌더의 엔진 정본 논리 경로. managed framework doc 처럼 정본과 설치본이 다른 파일일 때만 기록한다."
+        },
+        "semantic_source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "semantic_source 의 해시. 설치본이 아니라 정본이 바뀌었음을 구분하기 위한 값."
+        }
       },
       "additionalProperties": false
     },

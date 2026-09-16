@@ -21,6 +21,8 @@ _spec.loader.exec_module(core)
 
 TRIGGER = "plan_docs/04-analyze/newcyc.md"
 BASE = "plan_docs/00-base_plan/newcyc.md"
+BASE_GLOB = "plan_docs/00-base_plan/**/newcyc.md"
+MONTH_BASE = "plan_docs/00-base_plan/2026/09/newcyc.md"
 BACKEND_DOC = "springboot-backend/plan_docs/newcyc.md"
 FRONTEND_DOC = "nodejs-frontend/plan_docs/newcyc.md"
 ALLOWLIST = core.LEGACY_CYCLES_FILE
@@ -440,22 +442,57 @@ class TestComponentDocuments(unittest.TestCase):
 class TestPlanReads(unittest.TestCase):
     def test_exact_paths_only(self):
         self.assertEqual(core.plan_reads(event()),
-                         {"globs": [ALLOWLIST, BASE, BACKEND_DOC, FRONTEND_DOC]})
+                         {"globs": [ALLOWLIST, BASE_GLOB, BACKEND_DOC, FRONTEND_DOC]})
 
     def test_no_globs_without_trigger(self):
         self.assertEqual(core.plan_reads(event("src/Sample.java")), {"globs": []})
 
-    def test_globs_have_no_wildcard_or_escape(self):
+    def test_only_base_plan_glob_has_wildcard(self):
+        """00 문서만 월 폴더 배치를 잡으려고 재귀 glob 을 쓴다 — 나머지는 리터럴 경로."""
         for pattern in core.plan_reads(event())["globs"]:
-            self.assertNotIn("*", pattern)
             self.assertNotIn("..", pattern)
             self.assertFalse(pattern.startswith("/"))
+            if pattern == BASE_GLOB:
+                self.assertIn("*", pattern)
+            else:
+                self.assertNotIn("*", pattern)
 
     def test_prefix_similar_stem_is_not_matched(self):
         """정확 경로만 읽으므로 유사 prefix 파일은 판정에 쓰이지 않는다."""
         snap = snapshot(**{BASE: base_plan(),
                            "springboot-backend/plan_docs/newcyc_extra.md": "- [x] done\n"})
         self.assertIn("missing_component_doc", decide(event(), snap)["message"])
+
+
+class TestBasePlanMonthFolder(unittest.TestCase):
+    """00 base-plan 이 `plan_docs/00-base_plan/<stem>.md` flat 대신 월 폴더에 있어도 동일하게 동작한다."""
+
+    def test_month_folder_base_plan_is_found(self):
+        snap = snapshot(**{MONTH_BASE: base_plan(), BACKEND_DOC: "- [x] done\n"})
+        d = decide(event(), snap)
+        self.assertEqual((d["status"], d["exit_code"]), ("ok", 0))
+
+    def test_month_folder_base_plan_enforces_same_rules_as_flat(self):
+        d = decide(event(), snapshot(**{MONTH_BASE: base_plan(marker=None)}))
+        self.assertIn("missing_gate_marker", d["message"])
+
+    def test_flat_and_month_folder_together_is_ambiguous(self):
+        snap = snapshot(**{BASE: base_plan(), MONTH_BASE: base_plan()})
+        d = decide(event(), snap)
+        self.assertEqual(d["exit_code"], 2)
+        self.assertIn("ambiguous_base_plan", d["message"])
+
+    def test_unrelated_month_folder_file_is_not_matched(self):
+        other_stem_doc = "plan_docs/00-base_plan/2026/09/other.md"
+        d = decide(event(), snapshot(**{other_stem_doc: base_plan()}))
+        self.assertIn("missing_base_plan", d["message"])
+
+    def test_conflicting_paths_detects_month_folder_base_plan(self):
+        ev = {"changes": [{"path": TRIGGER, "op": "write"},
+                          {"path": MONTH_BASE, "op": "write"}]}
+        d = decide(ev, snapshot(**{MONTH_BASE: base_plan()}))
+        self.assertIn("mixed_change_scope", d["message"])
+        self.assertIn(MONTH_BASE, d["message"])
 
 
 class TestDecisionContract(unittest.TestCase):

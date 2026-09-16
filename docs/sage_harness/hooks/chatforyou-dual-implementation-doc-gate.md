@@ -31,7 +31,9 @@ Phase 04 진입 전에 ChatForYou 컴포넌트(backend/frontend)별 구현 문�
   추가하고(그 변경 자체는 Phase 04 가 아니라 이 게이트를 지나간다) 다음 변경에서 그 Phase 04 를
   쓰는 두-단계 우회가 성립한다. 대조를 목록 읽는 시점이 아니라 면제 적용 시점에 두는 이유는,
   읽는 시점에 두면 위의 "파일 없음 = 전면 검사" 가 "전면 차단" 으로 뒤집히기 때문이다.
-- 신규 stem 은 `plan_docs/00-base_plan/<stem>.md` 가 있어야 한다.
+- 신규 stem 은 `plan_docs/00-base_plan/` 아래 임의 깊이(`<stem>.md` 또는
+  `<YYYY>/<MM>/<stem>.md` 등 월 폴더 포함)에 문서가 정확히 하나 있어야 한다. 0건이면
+  `missing_base_plan`, 동일 stem 이 두 곳 이상이면 `ambiguous_base_plan` 으로 차단한다.
 - 00 은 `ChatForYou-Component-Doc-Gate: v1` 과 `Component-Backend:` · `Component-Frontend:` 를
   각각 정확히 한 번 선언해야 한다. 선언은 fenced code block 밖에서만 인정한다(CommonMark 규칙:
   닫는 fence 는 info string 을 못 갖고, backtick fence 의 info string 은 backtick 을 못 가진다).

@@ -42,6 +42,26 @@ declaration or retained it, and whether an environment declaration remains effec
 > only need the plan, `/sage-team` to resume 03–06 on an existing plan. Use
 > `/sage-cycle` when you want the whole thing driven from one call.
 
+## Conversation language (mandatory)
+
+Resolve it once, before the first turn, in this order:
+
+1. an explicit `--lang ko|en` on this skill's invocation,
+2. `interface.language` in `sage/project-profile.local.yaml`,
+3. `ko`.
+
+Conduct **every** question, proposal, progress note, warning and summary in that language.
+
+Only the conversation takes it. Machine values are never translated — paths, globs, command
+strings, component ids, strategy enums, statuses and the fixed schema keys. Phase 00–06 document
+prose follows the cycle's `Document-Language:` marker, which is a **separate** decision and may
+differ from the conversation. That document prose includes the **human-facing structure** — section
+headings, list labels, table headers and checklist text — not just paragraphs; a Korean document
+under English headings is the mixed state the marker exists to prevent. The two headings a parser
+reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, stay
+English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
+preference. Full rules: `docs/agent/language-policy.md`.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/skills/sage-cycle.md` — authoritative spec: procedure, drift_checks
@@ -54,6 +74,10 @@ Confirm the profile is bootstrapped (`project.name` non-empty, `risk`/`component
 set). If not → stop: "Profile is not bootstrapped. Run `/sage-init` first."
 
 ## Step 1 — Identify the cycle
+
+If the user asks mid-cycle to "go faster" or to drop documents, the only entrance is
+`/sage-cycle-fast`, which requires the `pdca.fast_cycle` opt-ins and an explicit user
+confirmation. Do not improvise a shortcut, and do not propose editing the profile to open one.
 
 Establish the single cycle this run is about, the same way the sub-skills do — by
 its plan-doc stem (the feature name) under `paths.plan_docs`. If the user has not

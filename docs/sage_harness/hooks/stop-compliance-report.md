@@ -6,61 +6,86 @@ runtime_bindings:
   codex: { event: Stop, matcher: "", timeout: 15 }
 ---
 ## intent
-세션 종료(Stop) 시 session-{today}.jsonl 을 집계해 compliance 리포트(compliance-{today}.md)를 생성한다.
-활동요약 + gate compliance(백엔드+plan / L3 패턴 / convention 안내) + 수정파일 목록 + policy_results.
-리포트 생성은 항상 하되, retro_gate(9-C) enforce 가 미완료 사이클을 잡으면 양 host 모두 종료를 1회 막는다.
-Claude는 exit 2, Codex는 stdout `{"decision":"block","reason":"..."}` + exit 0을 사용한다. Codex는 같은
-turn을 다시 실행하고 다음 Stop 입력에 `stop_hook_active=true`를 보내며, 이 재시도에서는 WARN으로 완화해 통과한다.
-enforce 미설정(기본 off)이면 종전대로 항상 통과한다.
+At session end (Stop), aggregate session-{today}.jsonl into a compliance report
+(compliance-{today}.md): activity summary, gate compliance (backend plus plan, L3 patterns,
+convention guidance), the list of modified files, and policy_results. The report is always
+written; separately, when the retro gate is set to enforce and catches an unfinished cycle, both
+hosts block termination once. Claude uses exit 2; Codex uses stdout
+`{"decision":"block","reason":"..."}` with exit 0. Codex then re-runs the same turn and sends
+`stop_hook_active=true` on the next Stop input, and that retry is relaxed to a WARN and passes.
+With enforce unset (off by default) everything passes as before.
 
 ## runtime_bindings
-- claude: { event: Stop, input: .claude/logs/session-{today}.jsonl, output: 파일쓰기 + report path(plain) }
-- codex:  { event: Stop, input: .codex/logs/session-{today}.jsonl, output: 파일쓰기 + 통과 시 무출력 / 차단 시 decision:block }
-- block wire: Claude=exit 2 + 사유를 stderr 로(리포트 저장 알림은 stdout 유지).
-  Codex=exit 0 + 단일 JSON `decision:block`(reason에 compliance 경로 포함).
-  Codex Stop은 hookSpecificOutput.additionalContext를 허용하지 않아 단독·결합 모두 hook failure가 된다.
+- claude: { event: Stop, input: .claude/logs/session-{today}.jsonl, output: file write plus the report path as plain text }
+- codex:  { event: Stop, input: .codex/logs/session-{today}.jsonl, output: file write, silent on pass, decision:block on a block }
+- Block wire: Claude uses exit 2 with the reason on stderr, keeping the report-saved notice on
+  stdout. Codex uses exit 0 with a single JSON `decision:block` whose reason carries the
+  compliance path. Codex Stop does not allow hookSpecificOutput.additionalContext — alone or
+  combined, it is a hook failure.
 
-## canonical (부분추출 — 공유 집계만)
-scripts/sage_harness/hooks/stop_compliance_report_core.py
-- `decide(event, profile, snapshot) -> report_model`  (pure)
-- `render_markdown(report_model) -> str`               (pure)
-- snapshot = { entries[], today, branch, runtime } (adapter 가 JSONL 읽어 주입)
+## canonical — partial extraction, shared aggregation only
+sage_harness/hooks/stop_compliance_report_core.py
+- `decide(event, profile, snapshot) -> report_model` (pure)
+- `render_markdown(report_model) -> str` (pure)
+- snapshot = { entries[], today, branch, runtime }, injected by the adapter after reading the JSONL.
 - report_model.sections = { header, activity_summary, gate_compliance{issues[]}, modified_files[], policy_results[] }
-- 공유 gate 3종: backend_without_plan(WARN) / l3_pattern_detected(NOTICE) / backend_convention_reminder(INFO)
+- Three shared gates: backend_without_plan (WARN), l3_pattern_detected (NOTICE),
+  backend_convention_reminder (INFO).
 
-## ⚠️ policy_delta — 병합 금지 (정책 모듈 보존)
-정책 모듈은 canonical core 에 자동병합 안 함 → policies/ 보존, policy_results 확장슬롯에만 주입:
-- policies/output_contract_check.py: **Codex-only**(transcript 결합). manifest.unresolved "promote_output_contract_semantics?"
-- policies/knowledge_capture.py: **OPTION(knowledge_capture, obsidian)**. vault_path 비면 N/A. CORE 아님.
-- policies/retro_gate.py: **공유(양 host)**, 9-C Loop C 게이트. `pdca.retro.report_gate_enforce`(off|advisory|enforce)로
-  `sage retro --check` 실행 여부를 세션 종료 시 사후 확인. enforce는 host별 차단 wire로 실제 종료를 막는다. retro_audit.jsonl(감사 트레일)에
-  성공(retro_check_ok)·미완료(retro_check_missing)·노트생략(retro_check_skipped, --no-vault)을 append. **enforcement 라
-  hook_runtime_hash 로 추적**(advisory 인 위 둘과 달리 부재 시 게이트가 조용히 무동작하므로).
-  06 감지는 로그기반 ∪ 세션 baseline 스냅샷(writer-독립 — Bash 작성 06 포착, W2). baseline은
-  SessionStart에서 기록하고 첫 UserPromptSubmit이 보조한다. 둘 다 미발화하거나 baseline이 손상돼
-  writer-독립 감지가 불가하면(session_id 부재 포함) **enforce 는 fail-closed BLOCK**,
-  advisory·재시도(stop_hook_active)는 WARN — 놓친 Bash-06 가능성을 조용히 통과시키지 않는다. snapshot은
-  no-follow 정규 파일만 신뢰하므로 symlink·비정규 파일도 손상 상태로 분류한다.
-- policies/writeback_depth_gate.py: **공유(양 host)**, L2/L3 write-back 심층 노트가 host depth self-review 를 거쳤는지
-  `pdca.writeback.depth_review_gate`(off|advisory|enforce)로 세션 종료 시 사후 확인. 이번 세션 L2/L3 06(Risk Level 미기재=보수적 L2)이
-  헤더 메타블록에 `Depth-Self-Review: performed` 를 자기선언했는지 검사 — 품질이 아니라 self-review 실행 증거만 본다(깊이 판정은
-  skill·host 소관, false-assurance 회피). 미선언 시 enforce 첫 Stop=BLOCK / advisory·재시도=WARN. retro_gate 와 같은 06 감지
-  (로그기반 ∪ SessionStart 스냅샷)·1회 block 제약을 공유하며, 둘 다 BLOCK 이면 한 번의 block 에 문구를 합쳐 싣는다. **enforcement 라
-  hook_runtime_hash 로 추적**. update_after_dev(write-back) 가 꺼지면 강제할 노트가 없어 무동작(INFO).
+## ⚠️ policy_delta — do not merge; the policy modules stay separate
+Policy modules are never auto-merged into the canonical core. They live under policies/ and are
+injected only through the policy_results extension slot:
+
+- policies/output_contract_check.py — **Codex only**, since it joins the transcript. Tracked in
+  manifest.unresolved as "promote_output_contract_semantics?".
+- policies/knowledge_capture.py — **optional** (knowledge_capture, obsidian). N/A when vault_path
+  is empty. Not CORE.
+- policies/retro_gate.py — **shared across both hosts**, the Loop C gate. Governed by
+  `pdca.retro.report_gate_enforce` (off | advisory | enforce), it confirms after the fact at
+  session end whether `sage retro --check` ran. Under enforce it blocks the actual termination
+  through each host's block wire. It appends success (retro_check_ok), incompletion
+  (retro_check_missing) and note-skipped (retro_check_skipped, --no-vault) to the audit trail in
+  retro_audit.jsonl. **Because it is enforcement, it is tracked by hook_runtime_hash** — unlike
+  the two advisory policies above, its absence would leave the gate silently inert.
+  Phase 06 detection is log-based ∪ the session baseline snapshot, which is writer-independent so
+  that a 06 written by Bash is still caught. The baseline is recorded at SessionStart, with the
+  first UserPromptSubmit as backup. If neither fires, or the baseline is corrupt so that
+  writer-independent detection is impossible (including a missing session_id), **enforce is a
+  fail-closed BLOCK** while advisory and the retry (stop_hook_active) are a WARN — a possibly
+  missed Bash-written 06 is never passed over silently. The snapshot trusts only no-follow
+  regular files, so a symlink or a non-regular file also counts as corrupt.
+- policies/writeback_depth_gate.py — **shared across both hosts**. Governed by
+  `pdca.writeback.depth_review_gate` (off | advisory | enforce), it confirms after the fact at
+  session end whether an L2/L3 write-back deep note went through the host depth self-review. It
+  checks whether this session's L2/L3 Phase 06 (a missing Risk Level is treated conservatively as
+  L2) declared `Depth-Self-Review: performed` in its header meta block. It looks for evidence
+  that the self-review ran, not for quality — depth is the skill's and the host's judgement, and
+  claiming otherwise would be false assurance. Undeclared means BLOCK on the first Stop under
+  enforce, and WARN under advisory or on a retry. It shares the retro gate's Phase 06 detection
+  (log-based ∪ SessionStart snapshot) and its one-block limit; when both would block, the two
+  messages are combined into a single block. **Because it is enforcement, it is tracked by
+  hook_runtime_hash.** When update_after_dev (write-back) is off there is no note to enforce, so
+  it is inert (INFO).
 
 ## profile_bound
-- L3 패턴 단일소스 = **profile.risk.l3_filename_globs 재사용**('*' strip + lower substring). pre-impl-gate 와 동일 소스(drift 방지),
-  단 의미 다름(pre-impl=사전차단 / stop=사후감사). severity/behavior 는 비공유.
+- The L3 pattern has a single source: **reuse profile.risk.l3_filename_globs** with '*' stripped
+  and a lowercase substring match. Same source as pre-implementation-gate, which prevents drift,
+  though the meaning differs — pre-implementation blocks in advance, Stop audits after the fact.
+  Severity and behavior are not shared.
 
-## reverse_extract 분류
-- 공유 core: JSONL 집계, activity_summary, gate 3종, report_model, markdown 렌더
-- token_adapter: 로그경로(.claude↔.codex)
-- output_adapter: Claude plain text+exit 2 ↔ Codex decision:block JSON 또는 무출력 통과
-- profile_bound: L3 패턴(공유 소스)
-- **policy_delta**: output_contract(Codex-only) + knowledge_capture(OPTION) + retro_gate(공유, enforcement) — 보존만, 미병합
+## reverse_extract classification
+- Shared core: JSONL aggregation, activity_summary, the three gates, report_model, markdown render.
+- token_adapter: the log path (`.claude` versus `.codex`).
+- output_adapter: Claude plain text with exit 2 versus Codex decision:block JSON or a silent pass.
+- profile_bound: the L3 pattern, from the shared source.
+- **policy_delta**: output_contract (Codex only), knowledge_capture (optional) and retro_gate
+  (shared, enforcement) — preserved, never merged.
 
 ## tests
-scripts/sage_harness/hooks/tests/test_stop_compliance_report.py + test_retro_gate.py + test_retro_audit.py
-- core(gate 3종/집계/빈로그/render) + 정책모듈 보존 + adapter e2e(claude·codex)
-- retro_gate(9-C): enforce 첫 Stop host별 차단 wire / stop_hook_active 재시도 통과 / advisory·off 미차단 / 세션스코프·표준 ** glob·
-  Loop-Run 결속·멀티마커 skip / Codex decision:block·재시도 무출력 통과 / retro_audit ok·missing 이벤트 + 상태변화 dedup
+sage_harness/hooks/tests/test_stop_compliance_report.py plus test_retro_gate.py and test_retro_audit.py
+- Core (the three gates, aggregation, an empty log, render), policy-module preservation, and
+  adapter end to end on claude and codex.
+- Retro gate: per-host block wire on the first Stop under enforce; the stop_hook_active retry
+  passes; advisory and off do not block; session scope, standard `**` globs, Loop-Run binding and
+  multi-marker skip; Codex decision:block and a silent passing retry; retro_audit ok and missing
+  events with state-change dedup.

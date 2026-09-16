@@ -28,18 +28,50 @@ def extract_changes(raw, rel):
         m = re.match(r"^\*\*\* (Add|Update|Delete) File: (.+)$", line)
         if m:
             change = {"path": rel(m.group(2).strip()), "op": m.group(1).lower(), "content": ""}
+            # Add File 은 모든 줄이 `+` 라 content 가 곧 변경 후 전체 본문이다. Update File 은
+            # 추가된 줄뿐이므로 전체를 전제로 하는 판정이 이것을 문서로 오해하면 안 된다.
+            if change["op"] == "add":
+                change["full_content"] = True
             changes.append(change)
             content_targets = [change]
             continue
         move = re.match(r"^\*\*\* Move to: (.+)$", line)
         if move:
-            prior_content = content_targets[0]["content"] if content_targets else ""
-            destination = {"path": rel(move.group(1).strip()), "op": "move", "content": prior_content}
-            if content_targets and content_targets[0].get("removed_content"):
-                destination["removed_content"] = content_targets[0]["removed_content"]
+            source = content_targets[0] if content_targets else None
+            destination = {"path": rel(move.group(1).strip()), "op": "move",
+                           "content": source["content"] if source else ""}
+            if source:
+                # 판정은 **목적지 경로·stem** 기준이어야 한다. source 를 따라가면 이동 전 이름의
+                # stem 으로 걸러져 사이클 밖으로 빠지고, 이동+수정 한 번에 문서 검사가 통째로
+                # 우회된다. 그래서 목적지가 source 를 가리키게 해 되짚은 결과를 넘겨받는다.
+                destination["source_path"] = source["path"]
+                # source 는 최종 상태에 남지 않는다. 그 사실을 **경로**가 아니라 이 변경 객체에
+                # 적어야 한다 — 같은 패치가 그 경로에 새 문서를 다시 만들면(Add File) 경로로
+                # 기억한 배제가 그 새 문서까지 통째로 검사에서 빼버린다.
+                source["move_destination"] = destination["path"]
+                if source.get("full_content"):
+                    destination["full_content"] = True
+                if source.get("removed_content"):
+                    destination["removed_content"] = source["removed_content"]
             changes.append(destination)
             content_targets.append(destination)
             continue
+        if line.startswith("*** "):
+            # `*** End of File` 만은 hunk 의 **위치 정보**라 버리면 안 된다 — 파일 끝이라는
+            # 사실을 잃으면 반복 문맥에서 앞쪽 일치를 골라 실제와 다른 문서를 되짚는다.
+            if line.strip() == "*** End of File":
+                for target in content_targets:
+                    if target["op"] == "update":
+                        target.setdefault("patch_body", []).append("*** End of File")
+            continue                      # End Patch 등 그 밖의 지시어는 hunk 본문이 아니다
+        # patch_body: hunk 원문을 그대로 싣는다. content/removed_content 는 +/- 만 모은 집계라
+        # 문맥줄이 빠져 있어 변경 후 전체 본문을 되짚을 수 없다 — 문서 전체를 전제로 하는
+        # 판정(본문 언어 구조 smoke)은 되짚은 결과가 있어야만 성립한다.
+        # update 에만 싣는다: add 는 content 가 이미 전체 본문이고, move 목적지는 디스크에 원본이
+        # 없어 되짚기가 성립하지 않는다(있는 것처럼 실으면 정상 rename 이 차단된다).
+        for target in content_targets:
+            if target["op"] == "update":
+                target.setdefault("patch_body", []).append(line)
         if line.startswith("+"):
             for target in content_targets:
                 target["content"] += line[1:] + "\n"
@@ -59,9 +91,10 @@ def read_declared_level(raw, root):
         return None
 
 
-def render_gate(decision, profile):
+def render_gate(decision, profile, root=None):
     # 문구는 messages 공유(SSOT), 채널은 Codex=block→stderr / 그 외→hookSpecific JSON.
-    m = messages.gate_text(decision, profile, RUNTIME)
+    m = messages.gate_text(decision, profile, RUNTIME,
+                           language=messages.display_language(root))
     if decision["status"] == "block":
         if m:
             print(m, file=sys.stderr)

@@ -23,6 +23,12 @@ Runs independently of the PDCA cycle — it never re-runs a cycle and never edit
 - When the user says "/sage-feedback", "피드백 확인", "마커 해소"
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read context: profile bootstrapped and `feedback.enabled: true`. If the section is absent
    or false → stop and route to `/sage-profile-modify` (the scan is a no-op otherwise).
 2. Run `sage feedback --output json` for the deterministic marker inventory. Never hand-grep:
@@ -68,7 +74,7 @@ Runs independently of the PDCA cycle — it never re-runs a cycle and never edit
 
 ## drift_checks
 - The marker token and severity rule are owned by
-  `scripts/sage_harness/hooks/runtime/feedback_markers.py` (single source shared with the gate
+  `sage_harness/hooks/runtime/feedback_markers.py` (single source shared with the gate
   and the CLI). If this spec ever states a different token, the spec is wrong.
 - A blocking marker cannot be bypassed by editing around it: the gate allows a write only when
   it removes the marker. The recorded escape hatch is `sage override grant --gate

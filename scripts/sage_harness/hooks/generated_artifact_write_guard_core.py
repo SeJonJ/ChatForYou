@@ -100,47 +100,95 @@ def _is_framework_doc(path: object) -> bool:
     return bool(parts) and parts[-1] in _FRAMEWORK_DOCS
 
 
-def block_message(path: str) -> str:
+def block_reason(path: str):
+    """(code, arguments) — 언어 중립 판정. 완성 문장을 만들지 않는다.
+
+    이전에는 이 자리가 한국어 문장을 직접 조립했다. 그 문장들은 catalog 키가 아니었고, 영어가
+    없었고, 어떤 한영 대조에도 걸리지 않았다 — 부채 스캐너의 범위가 `hooks/runtime/` 아래로
+    한정돼 있어서 이 파일은 검사조차 되지 않았다. 판정이 code 만 돌려주면 그 상태가 구조적으로
+    불가능해진다.
+    """
     if _is_cycle_declaration(_parts(path)):
-        return "\n".join([
-            f"⛔ SAGE write guard: '{path}' 는 사이클 선언 상태입니다. 직접수정 금지.",
-            "→ 선언: `sage cycle set <stem>` / 조회: `sage cycle show` / 해제: `sage cycle clear`",
-            "→ 게이트가 '이 편집이 어느 사이클인가' 를 여기서 읽습니다 — 직접 쓰면 완결된 "
-            "사이클을 지목해 게이트를 통과시킬 수 있습니다.",
-        ])
+        return "guard.cycle_declaration", {"path": path}
     if _is_framework_doc(path):
-        return "\n".join([
-            f"⛔ SAGE write guard: '{path}' 는 CORE 프레임워크 문서입니다. 직접수정 금지 "
-            "(sage install --force 가 덮어씀).",
-            "→ framework overlay는 독립 gate oracle이 없어 현재 차단됩니다.",
-            "→ 프로젝트 값은 'sage/project-profile.yaml', 규칙은 conventions/critical-domain/"
-            "project-local 문서에 작성하세요.",
-            "→ 그 문서를 세션 시작 라우팅 블록에 노출하려면 profile 의 'governance_docs'"
-            "(경로+라벨)에 등록하세요.",
-        ])
+        return "guard.framework_doc", {"path": path}
     overlay = _overlay_hint(path)
     if overlay:
-        return "\n".join([
-            f"⛔ SAGE write guard: '{path}' 는 CORE 부트스트랩 렌더입니다. 직접수정 금지.",
-            f"→ 프로젝트 로컬 커스터마이즈는 '{overlay}' 에 작성하세요 "
-            "(sage install --force 에도 보존).",
-            "→ 작성 도움: '/sage-asset-override' (게이트 완화 여부까지 점검).",
-        ])
+        return "guard.core_render", {"path": path, "overlay": overlay}
     if _is_blocked_core_render(path):
-        return "\n".join([
-            f"⛔ SAGE write guard: '{path}' 는 CORE 부트스트랩 렌더입니다. 직접수정 금지.",
-            "→ 이 gate-bearing CORE 자산은 독립 executable oracle이 없어 현재 overlay 비지원입니다.",
-            "→ CORE base 갱신은 선택한 host/scope의 'sage install --force'를 사용하세요.",
-            "→ 프로젝트 고유 규칙은 profile/conventions/critical-domain 문서에 두고, "
-            "새 프로젝트 자산은 '/sage-asset'으로 작성하세요.",
-        ])
-    return "\n".join([
-        f"⛔ SAGE write guard: '{path}' 는 생성 산출물입니다. 직접수정 금지.",
-        "→ docs/sage_harness/<kind>s/<id>.md (spec) 을 고치고 'sage generate' 를 쓰세요.",
-        "→ 이미 수정한 diff 라면 'sage absorb --kind <k> --id <id> --from-blocked-diff' 로 "
-        "spec patch 로 변환하세요.",
-        "(sage generate CLI 는 편집도구를 안 거치므로 이 가드에 걸리지 않습니다.)",
-    ])
+        return "guard.core_render_blocked", {"path": path}
+    return "guard.generated_asset", {"path": path}
+
+
+def _hook_catalog():
+    """hook catalog 를 최선으로 찾는다. 못 찾아도 예외를 올리지 않는다.
+
+    이 가드가 catalog 를 못 읽는다는 이유로 죽으면 표시 계층이 판정 계층을 무너뜨린다.
+    """
+    try:
+        from .runtime import i18n as module          # noqa: F401
+        return module
+    except Exception:
+        pass
+    for name in ("i18n",):
+        try:
+            return __import__(name)
+        except Exception:
+            continue
+    return None
+
+
+def block_message(path: str, language: str = None) -> str:
+    """차단 사유 + 복구 순서. code 를 항상 앞에 남긴다.
+
+    code 는 언어를 타지 않는 유일한 조각이라, 문장만 내면 사용자가 검색할 수도 CI 가 수집할
+    수도 없다.
+    """
+    code, arguments = block_reason(path)
+    catalog = _hook_catalog()
+    if catalog is None:
+        # catalog 를 못 읽어도 다음 행동은 남긴다. `Next:` 뒤에 오는 것은 그대로 붙여넣는
+        # 명령이라 번역이 필요 없다 — 문장을 못 만드는 것과 다음 행동을 못 주는 것은 다르다.
+        # 여기서 포기하면 가장 깨진 설치에서 사용자가 가장 적은 정보를 받는다.
+        return "\n".join([f"⛔ SAGE write guard [{code}]",
+                          *_recovery_lines(code, path, None, None)])
+    language = language or catalog.DEFAULT_LANGUAGE
+    # `frag` 를 쓰는 이유는 이 키들이 `message_key` 가 아니기 때문이다. `MESSAGES` 는 게이트
+    # 결정이 싣는 message_key 의 테이블이고, 여기 code 는 그 계약에 속하지 않는다.
+    template = catalog.frag(language, code)
+    try:
+        body = template.format(**arguments) if template else f"[SAGE] {code}"
+    except (KeyError, IndexError, ValueError):
+        body = f"[SAGE] {code}"
+    return "\n".join([f"⛔ SAGE write guard [{code}]", body,
+                      *_recovery_lines(code, path, catalog, language)])
+
+
+# 복구 표조차 못 읽을 때의 바닥값. 표를 못 읽는다는 이유로 사용자에게 아무 다음 행동도
+# 주지 않는 것이 가장 나쁜 실패다 — 가장 깨진 설치에서 정보가 0이 된다.
+_LAST_RESORT = ["Next: sage status"]
+
+
+def _recovery_lines(code, path, catalog, language):
+    """이 code 의 복구 줄. catalog 가 없으면 번역이 필요 없는 `Next:` 만 남긴다."""
+    try:
+        from .runtime import recovery as recovery_module
+    except Exception:
+        try:
+            recovery_module = __import__("recovery")
+        except Exception:
+            return list(_LAST_RESORT)
+    try:
+        if catalog is not None:
+            lines = recovery_module.render(code, lambda key: catalog.frag(language, key),
+                                           path=path, host="<host>")
+        else:
+            lines = [line for line in recovery_module.render(code, lambda key: key,
+                                                             path=path, host="<host>")
+                     if line.startswith("Next:")]
+    except Exception:
+        return list(_LAST_RESORT)
+    return lines or list(_LAST_RESORT)
 
 
 def extract_paths(raw_text: str) -> list[str]:
@@ -169,7 +217,10 @@ def extract_paths(raw_text: str) -> list[str]:
 def decide_paths(paths: list[str]) -> dict:
     for path in paths:
         if is_guarded(path):
-            return {"status": "block", "exit_code": 2, "path": path, "message": block_message(path)}
+            code, arguments = block_reason(path)
+            return {"status": "block", "exit_code": 2, "path": path,
+                    "code": code, "arguments": arguments,
+                    "message": block_message(path)}
     return {"status": "pass", "exit_code": 0, "path": "", "message": ""}
 
 

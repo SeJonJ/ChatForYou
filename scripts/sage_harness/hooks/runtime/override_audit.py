@@ -55,8 +55,24 @@ def _candidate_state_home(env):
     return os.path.join(os.path.expanduser("~"), ".local", "state", "sage")
 
 
+def _diagnostic(code, **arguments):
+    """언어 중립 진단(code+arguments). 이 모듈은 sage.diagnostics 를 import 할 수 없어
+    (엔진 없이 소비 프로젝트에서 단독 실행되어야 하므로) 같은 모양의 plain dict 로 올린다 —
+    hook_runtime.py 는 자체 _i18n(hook_runtime._overlay_say)으로, CLI(sage/commands/override.py)는
+    sage.i18n 으로 각자 렌더한다."""
+    return {"code": code, "arguments": arguments, "evidence": ""}
+
+
 class StateHomeError(RuntimeError):
-    """권한 캐시 위치를 안전하게 정할 수 없음. 우회 판정 불가 → 호출자는 BLOCK 을 유지해야 한다."""
+    """권한 캐시 위치를 안전하게 정할 수 없음. 우회 판정 불가 → 호출자는 BLOCK 을 유지해야 한다.
+
+    `diagnostic` 은 code+arguments dict(위 `_diagnostic()`)다 — CLI 는 sage.diagnostics.render 로,
+    hook 은 hook_runtime._overlay_say 로 각자 렌더한다. `str(exc)` 는 code 만 낸다(완성 문장은
+    아니지만, 진단을 렌더하지 않고 그대로 찍는 경로에서도 원인이 사라지지 않는다)."""
+
+    def __init__(self, diagnostic):
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic.get("code", str(diagnostic)))
 
 
 def state_home(environ=None):
@@ -70,9 +86,8 @@ def state_home(environ=None):
     env = os.environ if environ is None else environ
     candidate = _candidate_state_home(env)
     if not os.path.isabs(candidate):
-        raise StateHomeError(
-            f"권한 캐시 위치를 정할 수 없습니다(절대경로 아님: {candidate!r}). "
-            f"HOME 미설정 환경으로 보입니다 — {STATE_HOME_ENV} 를 절대경로로 지정하세요")
+        raise StateHomeError(_diagnostic("override_audit.state_home_not_absolute",
+                                         candidate=repr(candidate), env_var=STATE_HOME_ENV))
     return candidate
 
 
@@ -100,19 +115,20 @@ def _probe_gitdir(path):
     if os.path.isdir(git):
         return _GIT_OK, git
     if not os.path.isfile(git):
-        return _GIT_BROKEN, f"`.git` 이 파일도 디렉터리도 아님: {git}"
+        return _GIT_BROKEN, _diagnostic("override_audit.git_neither_file_nor_dir", git=git)
     try:                                     # worktree/submodule: gitdir 를 가리키는 포인터 파일
         with open(git, encoding="utf-8") as f:
             line = f.read().strip()
     except OSError as exc:
-        return _GIT_BROKEN, f"`.git` 포인터를 읽을 수 없음({git}): {type(exc).__name__}: {exc}"
+        return _GIT_BROKEN, _diagnostic("override_audit.git_pointer_unreadable", git=git,
+                                        error_type=type(exc).__name__, exc=exc)
     if not line.startswith("gitdir:"):
-        return _GIT_BROKEN, f"`.git` 포인터 형식이 아님({git})"
+        return _GIT_BROKEN, _diagnostic("override_audit.git_pointer_bad_format", git=git)
     target = line.split(":", 1)[1].strip()
     if target and not os.path.isabs(target):
         target = os.path.join(path, target)
     if not target or not os.path.isdir(target):
-        return _GIT_BROKEN, f"`.git` 이 가리키는 gitdir 가 없음({target!r})"
+        return _GIT_BROKEN, _diagnostic("override_audit.git_pointer_target_missing", target=repr(target))
     return _GIT_OK, target
 
 
@@ -131,9 +147,7 @@ def _gitdir(root):
         if state == _GIT_OK:
             return value
         if state == _GIT_BROKEN:
-            raise StateHomeError(
-                f"저장소 경계를 확정할 수 없습니다 — {value}. 정체성을 확정하지 못한 채 발급하면 "
-                "다른 저장소의 권한과 뒤섞일 수 있습니다")
+            raise StateHomeError(_diagnostic("override_audit.repo_boundary_unresolved", reason=value))
         parent = os.path.dirname(current)
         if parent == current:
             return None
@@ -186,12 +200,12 @@ def _repo_id(root, create=False):
     except FileExistsError:
         pass
     except OSError as exc:
-        raise StateHomeError(
-            f"저장소 정체성 마커를 만들 수 없습니다({marker!r}): {type(exc).__name__}: {exc}. "
-            "정체성 없이 발급하면 같은 경로에 만들어진 다른 저장소가 이 권한을 물려받습니다") from exc
+        raise StateHomeError(_diagnostic("override_audit.identity_marker_create_failed",
+                                         marker=repr(marker), error_type=type(exc).__name__,
+                                         exc=exc)) from exc
     value = _await_identity(marker)
     if not value:
-        raise StateHomeError(f"저장소 정체성 마커를 읽을 수 없습니다({marker!r})")
+        raise StateHomeError(_diagnostic("override_audit.identity_marker_unreadable", marker=repr(marker)))
     return value
 
 
@@ -236,9 +250,9 @@ def grants_path(root, environ=None, create=False):
     안이면 커밋돼서 다른 clone 으로 우회가 전파된다(이 사이클이 막으려던 바로 그 상태)."""
     home = state_home(environ)
     if _is_within(home, root):
-        raise StateHomeError(
-            f"권한 캐시 위치가 저장소 안입니다({home!r} ⊂ {os.path.realpath(root)!r}). "
-            f"커밋되면 다른 clone 에서 우회가 활성화됩니다 — {STATE_HOME_ENV} 를 저장소 밖으로 지정하세요")
+        raise StateHomeError(_diagnostic("override_audit.state_home_inside_repo",
+                                         home=repr(home), root=repr(os.path.realpath(root)),
+                                         env_var=STATE_HOME_ENV))
     return os.path.join(home, "grants", _root_key(root, create=create) + ".jsonl")
 
 
@@ -299,7 +313,11 @@ def grant(root, reason, ttl_seconds, gate="all", user=None, now=None):
     감사 로그(커밋·영속)와 권한 캐시(로컬·집행) 양쪽에 기록한다. TTL 상한 초과는 거부(ValueError):
     라이브러리 레벨 불변식이라 CLI 를 우회해 직접 호출해도 시한부 보장이 깨지지 않는다."""
     if int(ttl_seconds) > MAX_TTL_SECONDS:
-        raise ValueError(f"TTL {int(ttl_seconds)}s 가 상한 {MAX_TTL_SECONDS}s(24h) 초과 — 더 짧게 발급하거나 만료 후 재발급")
+        # 방어적 재검증 — CLI 호출부(sage override)는 ttl 을 MAX_TTL_SECONDS 로 이미 검증한 뒤에만
+        # 여기 도달한다. 화면 문구가 아니라 잘못된 프로그램 호출을 잡는 내부 계약 위반이라 영어로
+        # 직접 고정(언어 배선 불필요, write_declaration 과 같은 처리).
+        raise ValueError(f"TTL {int(ttl_seconds)}s exceeds the cap {MAX_TTL_SECONDS}s (24h) — "
+                         "issue a shorter grant or re-issue after it expires")
     t = time.time() if now is None else now
     rec = {"event": "grant", "grant_id": uuid.uuid4().hex[:12], "ts": _iso(t), "epoch": int(t),
            "expires_epoch": int(t) + int(ttl_seconds), "expires_at": _iso(t + ttl_seconds),

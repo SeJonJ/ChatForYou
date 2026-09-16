@@ -5,15 +5,19 @@ one cycle stem, one required acceptance ID, and at most 24 hours. Any malformed,
 duplicated, or conflicting authority record makes the summary invalid so consumers
 can fail closed instead of guessing which grant should win.
 """
-import fcntl
 import json
 import os
 import re
 import stat
 import time
 import uuid
+from contextlib import contextmanager
 
 AUDIT_REL = os.path.join(".sage", "acceptance-waivers.jsonl")
+LOCK_SUFFIX = ".lock"
+# Windows has no fcntl, no directory descriptors and no dir_fd, so the POSIX descriptor-bound
+# path cannot run there. Tests flip this to drive the Windows branch on any host.
+_NT_IO = os.name == "nt"
 MAX_TTL_SECONDS = 24 * 3600
 MAX_AUDIT_BYTES = 1024 * 1024
 MAX_RECORDS = 10000
@@ -77,6 +81,9 @@ def _audit_directory_fd(root, create=False):
 
 
 def _ensure_audit_directory(root):
+    if _NT_IO:
+        _nt_audit_directory(root, create=True)
+        return
     directory_fd = _audit_directory_fd(root, create=True)
     if directory_fd is not None:
         os.close(directory_fd)
@@ -86,6 +93,10 @@ def _append(root, record):
     encoded = (json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
     if len(encoded) > 65536:
         raise ValueError("acceptance waiver record is too large")
+    if _NT_IO:
+        _nt_append(root, encoded)
+        return
+    import fcntl
     directory_fd = _audit_directory_fd(root, create=True)
     fcntl.flock(directory_fd, fcntl.LOCK_EX)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
@@ -109,9 +120,12 @@ def _append(root, record):
 
 
 def _read_lines(root):
+    if _NT_IO:
+        return _nt_read_lines(root)
     directory_fd = None
     fd = None
     try:
+        import fcntl
         directory_fd = _audit_directory_fd(root, create=False)
         if directory_fd is None:
             return [], []
@@ -127,41 +141,7 @@ def _read_lines(root):
             return [], [f"audit exceeds {MAX_AUDIT_BYTES} bytes"]
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
         fd = os.open(leaf, flags, dir_fd=directory_fd)
-        opened = os.fstat(fd)
-        if (not stat.S_ISREG(opened.st_mode)
-                or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
-            return [], ["audit changed during secure open"]
-        chunks = []
-        total = 0
-        while total <= MAX_AUDIT_BYTES:
-            chunk = os.read(fd, min(65536, MAX_AUDIT_BYTES + 1 - total))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-        if total > MAX_AUDIT_BYTES:
-            return [], [f"audit exceeds {MAX_AUDIT_BYTES} bytes"]
-        after = os.fstat(fd)
-        if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
-                opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns):
-            return [], ["audit changed while being read"]
-        try:
-            lines = b"".join(chunks).decode("utf-8").splitlines()
-        except UnicodeDecodeError:
-            return [], ["audit is not valid UTF-8"]
-        records, issues = [], []
-        for line_no, line in enumerate(lines, 1):
-            if line_no > MAX_RECORDS:
-                issues.append(f"audit exceeds {MAX_RECORDS} records")
-                break
-            raw = line.strip()
-            if not raw:
-                continue
-            try:
-                records.append((line_no, json.loads(raw)))
-            except Exception:
-                issues.append(f"line {line_no}: malformed JSON")
-        return records, issues
+        return _read_opened(fd, before, ("st_size", "st_mtime_ns", "st_ctime_ns"))
     except Exception as exc:
         return [], [f"audit read failed: {type(exc).__name__}: {exc}"]
     finally:
@@ -169,6 +149,179 @@ def _read_lines(root):
             os.close(fd)
         if directory_fd is not None:
             os.close(directory_fd)
+
+
+def _read_opened(fd, before, change_fields):
+    """Read an already-opened audit descriptor and parse it. Shared by both platforms.
+
+    `change_fields` differs per platform because Windows `st_ctime_ns` is creation time, not a
+    metadata-change time, so it cannot reveal a concurrent rewrite there.
+    """
+    opened = os.fstat(fd)
+    if (not stat.S_ISREG(opened.st_mode)
+            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+        return [], ["audit changed during secure open"]
+    chunks = []
+    total = 0
+    while total <= MAX_AUDIT_BYTES:
+        chunk = os.read(fd, min(65536, MAX_AUDIT_BYTES + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    if total > MAX_AUDIT_BYTES:
+        return [], [f"audit exceeds {MAX_AUDIT_BYTES} bytes"]
+    after = os.fstat(fd)
+    if tuple(getattr(after, name) for name in change_fields) != tuple(
+            getattr(opened, name) for name in change_fields):
+        return [], ["audit changed while being read"]
+    return _parse_lines(b"".join(chunks))
+
+
+def _parse_lines(data):
+    try:
+        lines = data.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return [], ["audit is not valid UTF-8"]
+    records, issues = [], []
+    for line_no, line in enumerate(lines, 1):
+        if line_no > MAX_RECORDS:
+            issues.append(f"audit exceeds {MAX_RECORDS} records")
+            break
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            records.append((line_no, json.loads(raw)))
+        except Exception:
+            issues.append(f"line {line_no}: malformed JSON")
+    return records, issues
+
+
+# --- Windows -----------------------------------------------------------------------------
+# Path-based I/O: every leaf is checked with lstat before open and the opened descriptor must be
+# the object that was checked. A link planted between that check and the open is not caught here;
+# the audit is self-asserted local state, and a failed check still leaves the gate blocked.
+
+def _nt_flags(*flags):
+    value = getattr(os, "O_BINARY", 0) | getattr(os, "O_NOINHERIT", 0)
+    for flag in flags:
+        value |= flag
+    return value
+
+
+def _is_link_or_reparse(st):
+    return (stat.S_ISLNK(st.st_mode)
+            or bool(getattr(st, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT))
+
+
+def _nt_audit_directory(root, create):
+    """Return the real `.sage` directory, None when a read finds none, or raise."""
+    root_path = os.path.realpath(root)
+    # A missing root must not look like an empty audit, so check it before looking for `.sage`.
+    if not stat.S_ISDIR(os.stat(root_path).st_mode):
+        raise NotADirectoryError(f"project root is not a directory: {root_path}")
+    path = os.path.join(root_path, os.path.dirname(AUDIT_REL))
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        if not create:
+            return None
+        try:
+            os.mkdir(path, 0o700)
+        except FileExistsError:
+            pass
+        st = os.lstat(path)
+    if _is_link_or_reparse(st) or not stat.S_ISDIR(st.st_mode):
+        raise OSError("acceptance waiver audit directory must be a real directory, "
+                      "not a link or reparse point")
+    return path
+
+
+def _nt_checked_leaf(path):
+    """lstat a leaf that is about to be opened. None when absent."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    if _is_link_or_reparse(st) or not stat.S_ISREG(st.st_mode):
+        raise OSError(f"{os.path.basename(path)} must be a regular non-link file")
+    return st
+
+
+def _nt_verify_opened(fd, before, path):
+    opened = os.fstat(fd)
+    if not stat.S_ISREG(opened.st_mode):
+        raise OSError(f"{os.path.basename(path)} must be a regular file")
+    if before is not None and (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+        raise OSError(f"{os.path.basename(path)} changed during open")
+    return opened
+
+
+@contextmanager
+def _nt_lock(directory):
+    """Exclusive lock on a sibling `.lock` file. msvcrt has no shared lock, so reads take it too."""
+    import msvcrt
+    path = os.path.join(directory, os.path.basename(AUDIT_REL) + LOCK_SUFFIX)
+    before = _nt_checked_leaf(path)
+    fd = os.open(path, _nt_flags(os.O_CREAT, os.O_RDWR), 0o600)
+    locked = False
+    try:
+        _nt_verify_opened(fd, before, path)
+        if os.fstat(fd).st_size == 0:
+            os.write(fd, b"\0")
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        locked = True
+        yield
+    finally:
+        try:
+            if locked:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(fd)
+
+
+def _nt_append(root, encoded):
+    directory = _nt_audit_directory(root, create=True)
+    with _nt_lock(directory):
+        path = os.path.join(directory, os.path.basename(AUDIT_REL))
+        before = _nt_checked_leaf(path)
+        # O_BINARY keeps LF: text mode would store every record with CRLF.
+        fd = os.open(path, _nt_flags(os.O_WRONLY, os.O_CREAT, os.O_APPEND), 0o600)
+        try:
+            _nt_verify_opened(fd, before, path)
+            written = os.write(fd, encoded)
+            if written != len(encoded):
+                raise OSError(f"short append: {written}/{len(encoded)} bytes")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _nt_read_lines(root):
+    try:
+        directory = _nt_audit_directory(root, create=False)
+        if directory is None:
+            return [], []
+        with _nt_lock(directory):
+            path = os.path.join(directory, os.path.basename(AUDIT_REL))
+            try:
+                before = os.lstat(path)
+            except FileNotFoundError:
+                return [], []
+            if _is_link_or_reparse(before) or not stat.S_ISREG(before.st_mode):
+                return [], ["audit path is not a regular non-symlink file"]
+            if before.st_size > MAX_AUDIT_BYTES:
+                return [], [f"audit exceeds {MAX_AUDIT_BYTES} bytes"]
+            fd = os.open(path, _nt_flags(os.O_RDONLY))
+            try:
+                return _read_opened(fd, before, ("st_size", "st_mtime_ns"))
+            finally:
+                os.close(fd)
+    except Exception as exc:
+        return [], [f"audit read failed: {type(exc).__name__}: {exc}"]
 
 
 def read_records(root):
@@ -197,8 +350,21 @@ def _validate_grant(record):
 
 
 def audit_summary(root, now=None):
+    return summarize_records(*_read_lines(root), now=now)
+
+
+def summarize_records(parsed, file_issues, now=None):
+    """`(line_no, record)` 목록 하나를 요약으로 접는다. 파일도 락도 모르는 순수 함수.
+
+    락을 쥐고 읽는 `audit_summary` 와 락 없이 읽는 조회 경로가 **같은 이 함수**를 써야 한다.
+    의미 검증을 두 벌로 만들면 같은 감사가 writer 에게는 정상, 조회에게는 손상으로 보이는
+    상태가 생기고, 그때 어느 쪽이 옳은지 판정할 근거가 없다.
+
+    `file_issues` 는 복사해서 쓴다 — 호출부의 리스트에 판정 결과를 덧붙이면 같은 입력으로
+    두 번 부르는 것만으로 issue 가 불어난다.
+    """
     current = time.time() if now is None else now
-    parsed, issues = _read_lines(root)
+    issues = list(file_issues)
     grants, revoked, revoked_once = {}, set(), set()
     for line_no, record in parsed:
         if not isinstance(record, dict):

@@ -22,6 +22,26 @@ Do not edit this CORE render directly (the write-guard blocks it and `sage insta
 > repo (`.claude/skills/sage-profile-modify/`); Codex reads it from the user-global
 > skills dir (`$CODEX_HOME/skills/sage-profile-modify/`).
 
+## Conversation language (mandatory)
+
+Resolve it once, before the first turn, in this order:
+
+1. an explicit `--lang ko|en` on this skill's invocation,
+2. `interface.language` in `sage/project-profile.local.yaml`,
+3. `ko`.
+
+Conduct **every** question, proposal, progress note, warning and summary in that language.
+
+Only the conversation takes it. Machine values are never translated — paths, globs, command
+strings, component ids, strategy enums, statuses and the fixed schema keys. Phase 00–06 document
+prose follows the cycle's `Document-Language:` marker, which is a **separate** decision and may
+differ from the conversation. That document prose includes the **human-facing structure** — section
+headings, list labels, table headers and checklist text — not just paragraphs; a Korean document
+under English headings is the mixed state the marker exists to prevent. The two headings a parser
+reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, stay
+English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
+preference. Full rules: `docs/agent/language-policy.md`.
+
 ## What this skill is NOT
 
 The profile is **hand-authored SSOT**, not a generated artifact — so this skill edits
@@ -59,9 +79,14 @@ Read, in order, before asking anything:
 From the user's stated intent, or by asking, pin the **section**:
 - `project` (name/prefix) · `components[]` · `verification.commands` ·
   `risk.*` (L0–L3 globs / content keywords / `l3_review_strategy`) ·
+  **`pdca.base_plan.done_criteria_gate`** (`off|advisory|enforce`) ·
+  **`pdca.cycle_binding_visibility`** (`gated|all` — `all` also discloses the bound cycle
+  on L1/L0 gate passes) ·
   **`pdca.review_loop`** (the Phase-05 loop — use the shared interview set) ·
+  **`pdca.fast_cycle`** (`enabled`, `reason_required`, `minimum_rounds`,
+  `minimum_lenses`, ordered L2/L3 lenses, `standard_transition`) ·
   `options.*` · **`knowledge_capture`** (vault_path + `loop_audit_dashboard` / `retro_note`) ·
-  `file_type_map` · `compliance` / `output_contract` ·
+  `file_type_map` · `compliance` / `output_contract` · `conventions` ·
   **`governance_docs`** (session-start read-pointers rendered into the AGENT_GUIDE routing block) ·
   **`team.core.<role>.runtime`** (`model` / `effort`) ·
   **`components[].runtime_models`** · **`cross_model.reviewer` / `.effort`**.
@@ -95,6 +120,35 @@ For **`pdca.review_loop`** and the **vault outputs**, drive the *same* questions
 set) — single source, so init and modify never diverge. (Vault turn applies only when
 the loop is on AND `knowledge_capture.vault_path` is set.)
 
+`pdca.review_loop.early_completion` belongs to that same set and is asked only when the loop
+is on; default off. Turning it **on** loosens the gate — the loop may close before convergence
+on an explicit user authorization — so state that consequence and get approval like any other
+loosening. The approval stays `APPROVED` but carries
+`Review-Assurance: REDUCED_BY_USER_AUTHORIZATION`. Turning it **off** is a tightening and
+does not invalidate approvals already recorded. Never infer the close-time authorization from
+this profile value: enabling the feature is not the authorization.
+
+For **`pdca.fast_cycle`**, drive the same Fast Cycle question set as `/sage-init`:
+default off; when enabled, confirm L2/L3 `minimum_rounds`, `minimum_lenses`, and
+ordered lens candidates while keeping engine floors 1 round and 2 lenses and
+`reason_required: true`. State that lowering this policy reduces review breadth
+but does not lower actual risk, deterministic verification, acceptance, or 05/06.
+`pdca.fast_cycle.standard_transition` is asked only when Fast is on; default off. Turning
+it **on** loosens the gate — a cycle already past Phase 00 may switch to the Fast contract
+through `sage fast-cycle convert`, so the audit record rather than a composite document
+becomes the evidence of how the run entered Fast. Turning it **off** does not invalidate runs
+already converted. Never infer the conversion confirmation from this profile value: enabling
+the feature is not the confirmation.
+
+When a vault is available, include `knowledge_capture.fast_cycle_dashboard` in
+   the same output turn.
+
+For **`pdca.base_plan.done_criteria_gate`**, use the shared question in
+`bootstrap-authoring.md`. Show the current value and explain that `advisory` adds warnings,
+while `enforce` blocks malformed/replanned phase transitions and unresolved or stale final
+approval. Changing to `off` removes this completion backstop. Do not edit historical plans
+or infer N/A reasons as part of a profile change.
+
 ## Step 2 — Propose diff + consequence, get approval
 
 1. **Show the current value** of the target key(s) verbatim.
@@ -108,11 +162,16 @@ the loop is on AND `knowledge_capture.vault_path` is set.)
 | remove `risk.l3_filename_globs` / `l3_content_keywords` | that domain no longer gets the L3 gate/review (loosened) |
 | empty/changed `risk.l3_review_strategy` | L3 becomes hard-blocked, or review matching changes |
 | remove a phase from `pdca.pre_implementation_required` | that phase no longer required before code (gate loosened) |
+| `done_criteria_gate` → `off` | Phase 00 completion/replanning/stale-approval checks are disabled |
+| `done_criteria_gate` → `enforce` | malformed or stale active cycles can block until their Phase 00 and affected phases are repaired |
 | empty a `verification.commands` entry | that check (build/test/lint) is skipped |
 | `review_loop.enabled` → false | Phase 05 reverts to single-pass review |
 | lower `review_loop.max_iterations[L3]` | fewer rework rounds before BLOCKED (e.g. 1 ≈ single-pass) |
 | lower `review_loop.budget_tokens` | the loop may BLOCK earlier on budget |
 | narrow `review_loop.severity_block` | lower-severity findings no longer block APPROVED |
+| `review_loop.early_completion.enabled` → true | the loop may close before convergence on a user authorization; the verdict stays `APPROVED` but carries `Review-Assurance: REDUCED_BY_USER_AUTHORIZATION` (loosened) |
+| raise/lower `early_completion.minimum_completed_rounds` | changes how few rounds an authorized early close may stand on (engine floor 1) |
+| `fast_cycle.standard_transition.enabled` → true | a cycle already past Phase 00 may adopt the Fast contract without a composite plan; the audit record, not a document, becomes the evidence of how it entered Fast (loosened) |
 | empty `knowledge_capture.vault_path` | all vault features OFF |
 | remove a `governance_docs` entry | agents no longer discover that doc at session start (not a gate change) |
 

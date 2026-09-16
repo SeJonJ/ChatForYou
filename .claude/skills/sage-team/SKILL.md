@@ -23,6 +23,26 @@ makes sure the existing ones are actually invoked.
 > still passes the 06←05 gate. True enforcement (the gate also checking loop-audit +
 > test evidence) is a separate hardening step. State this limit if asked.
 
+## Conversation language (mandatory)
+
+Resolve it once, before the first turn, in this order:
+
+1. an explicit `--lang ko|en` on this skill's invocation,
+2. `interface.language` in `sage/project-profile.local.yaml`,
+3. `ko`.
+
+Conduct **every** question, proposal, progress note, warning and summary in that language.
+
+Only the conversation takes it. Machine values are never translated — paths, globs, command
+strings, component ids, strategy enums, statuses and the fixed schema keys. Phase 00–06 document
+prose follows the cycle's `Document-Language:` marker, which is a **separate** decision and may
+differ from the conversation. That document prose includes the **human-facing structure** — section
+headings, list labels, table headers and checklist text — not just paragraphs; a Korean document
+under English headings is the mixed state the marker exists to prevent. The two headings a parser
+reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, stay
+English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
+preference. Full rules: `docs/agent/language-policy.md`.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/skills/sage-team.md` — authoritative spec: procedure, drift_checks
@@ -51,6 +71,14 @@ used). Require every 00–06 markdown basename and its exactly-one `Cycle-Stem`
 declaration to equal that stem. Match every phase doc and audit run to it — ignore stale
 docs from other cycles and never use recency as identity. Missing/conflicting/ambiguous
 stems are a hard stop.
+
+Read the cycle's document language from Phase 00's `Document-Language:` line before writing
+anything. Every phase document you author (03–06) carries that same line and is written in that
+language. Phase 00 is the source of truth; if `.sage/cycle.json` disagrees with it, that is a
+conflict to raise, not one to resolve by picking a side. If Phase 00 has no such line, the cycle
+predates the marker — keep writing in the language the existing documents already use and do not
+introduce the marker on some documents only. Talking to the user in another language is fine and
+separate; see `docs/agent/language-policy.md`.
 
 Only after that hard stop passes, reconcile the machine-local declaration before
 choosing a resume point:
@@ -82,6 +110,22 @@ file existence:
 
 Start at the first stage whose anchor is absent. A doc that merely exists without its
 anchor is treated as incomplete (conservative).
+
+### Phase 00 Done Criteria at every boundary
+
+Before entering each remaining phase, re-open the exact-stem Phase 00. `[ ]` is normal
+progress, `[x]` means demonstrated completion, and `[~]` resolves only with a same-line
+`(N/A: reason)`. After Phase 03 implementation and Phase 04 verification, update only
+the criteria proven by that evidence. Do not mark an item complete because work merely
+started.
+
+Changing criterion text/scope, adding or deleting an item, reverting completion, or
+excluding an item is replanning. Increment `Done-Criteria-Revision`, append the required
+Changed-At/Reason/Affected-Phases/Summary record, then rerun affected phases in order and
+stamp each affected document with the current revision. A normal `[ ]` to `[x]` progress
+update is not replanning. Any prior Phase 05 approval becomes stale; run a new review loop.
+All criteria must resolve before APPROVED and must still resolve with the fresh hash-bound
+approval immediately before Phase 06.
 
 ## Step 1 — Implementation (Phase 03)
 
@@ -117,7 +161,7 @@ the 03 doc.
 
 Invoke verification per `profile.verification` for the change's risk level:
 ```
-scripts/verify-changes.sh        # build / test / lint at the risk gate
+sage_harness/verify-changes.sh        # build / test / lint at the risk gate
 ```
 SAGE owns the policy, gate levels, and result format (`verification-protocol.md`); this
 skill only triggers the run. (`pre-implementation-gate` is the edit/phase hook — it is

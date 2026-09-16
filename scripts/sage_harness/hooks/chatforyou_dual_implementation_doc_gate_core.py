@@ -166,6 +166,27 @@ def _base_plan_path(stem):
     return BASE_PLAN_DIR + "/" + stem + ".md"
 
 
+def _base_plan_glob(stem):
+    """00 base-plan 을 `BASE_PLAN_DIR` 아래 임의 깊이에서 찾는 glob.
+
+    프로젝트가 Phase 00 문서를 `YYYY/MM/` 월 폴더로 정리하므로, flat 경로 하나만 지목하면
+    월 폴더에 있는 00 문서를 못 찾아 신규 사이클처럼 오차단한다.
+    """
+    return BASE_PLAN_DIR + "/**/" + stem + ".md"
+
+
+def _is_base_plan_path(path, stem):
+    """`path` 가 이 stem 의 00 base-plan 인지 — 깊이 무관, `_canon_path` 로 case/구분자 정규화."""
+    canon = _canon_path(path)
+    return (canon.startswith(_canon_path(BASE_PLAN_DIR + "/"))
+            and canon.endswith(_canon_path("/" + stem + ".md")))
+
+
+def _find_base_plan(files, stem):
+    """snapshot 에 실제로 읽힌 파일들 중 이 stem 의 00 base-plan 경로 전부(정렬)."""
+    return sorted(path for path in files if _is_base_plan_path(path, stem))
+
+
 def _component_doc_path(directory, stem):
     return directory + "/" + stem + ".md"
 
@@ -181,7 +202,7 @@ def plan_reads(event, profile=None):
     if len(stems) != 1:
         return {"globs": []}
     stem = next(iter(stems))
-    globs = [LEGACY_CYCLES_FILE, _base_plan_path(stem)]
+    globs = [LEGACY_CYCLES_FILE, _base_plan_glob(stem)]
     globs.extend(_component_doc_path(directory, stem) for _, directory in COMPONENTS)
     return {"globs": globs}
 
@@ -239,14 +260,15 @@ def _conflicting_paths(event, stem):
     snapshot 은 쓰기 **전** 디스크 상태라, 한 번의 patch 로 00 을 무효화하면서 04 를 쓰면
     아직 유효한 00 으로 판정돼 게이트가 통과한다. 그 조합은 판정할 수 없으므로 거부한다.
     """
-    governed = {_base_plan_path(stem), LEGACY_CYCLES_FILE}
-    governed.update(_component_doc_path(directory, stem) for _, directory in COMPONENTS)
-    governed = {_canon_path(path) for path in governed}
+    governed_exact = {_canon_path(LEGACY_CYCLES_FILE)}
+    governed_exact.update(_canon_path(_component_doc_path(directory, stem))
+                          for _, directory in COMPONENTS)
     hit = []
     for change in (event or {}).get("changes") or []:
         path = ((change or {}).get("path") or "").replace("\\", "/")
-        # 비교는 정규화 키로, 안내는 작성자가 실제로 쓴 경로로.
-        if _canon_path(path) in governed:
+        # 비교는 정규화 키로, 안내는 작성자가 실제로 쓴 경로로. 00 문서는 월 폴더 배치까지
+        # 잡아야 하므로 깊이-무관 매칭을 따로 쓴다.
+        if _canon_path(path) in governed_exact or _is_base_plan_path(path, stem):
             hit.append(path)
     return sorted(set(hit))
 
@@ -304,13 +326,20 @@ def decide(event, profile, snapshot):
         return {"status": "skip", "exit_code": 0, "message": ""}
 
     files = (snapshot or {}).get("files") or {}
-    base_path = _base_plan_path(stem)
-    base_text = files.get(base_path)
-    if base_text is None:
+    base_matches = _find_base_plan(files, stem)
+    if len(base_matches) == 0:
         return _block("missing_base_plan", stem, [
-            "Phase 04 를 쓰기 전에 00 base-plan 이 있어야 합니다: " + base_path,
+            "Phase 04 를 쓰기 전에 00 base-plan 이 있어야 합니다: " + _base_plan_path(stem),
             "신규 사이클은 00 에서 컴포넌트 영향을 선언해야 합니다.",
         ])
+    if len(base_matches) > 1:
+        return _block("ambiguous_base_plan", stem, [
+            "동일 사이클의 00 base-plan 문서가 여러 곳에 있어 판정할 수 없습니다: "
+            + ", ".join(base_matches),
+            "하나만 남기고 나머지를 정리하세요.",
+        ])
+    base_path = base_matches[0]
+    base_text = files[base_path]
 
     lines = list(_plain_lines(base_text))
     marker_error = _marker_error(lines)

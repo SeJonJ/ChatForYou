@@ -75,14 +75,21 @@ a time and drive each turn yourself.
 
 ### Language (mandatory)
 
-Conduct the entire interview **in Korean** — every proposal, question,
-acknowledgement, and progress summary. (English support is planned but not yet
-active; default to Korean.) Only the **conversation** is Korean: the **machine** values you
-write into `project-profile.yaml` stay language-neutral as-is — paths, globs,
-command strings, component ids, strategy enums, and the fixed schema keys are
-never translated. The one exception is **human-facing message values** such as
-`desktop_block_hint` (a notice shown to the developer): write those in Korean too,
-matching the conversation — they are prose, not machine tokens.
+Conduct the entire interview in the **resolved conversation language** — every
+proposal, question, acknowledgement, and progress summary. Resolve it once, before
+the first question: an explicit `--lang ko|en` on this skill's invocation, then
+`interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+
+Only the **conversation** takes that language: the **machine** values you write into
+`project-profile.yaml` stay language-neutral as-is — paths, globs, command strings,
+component ids, strategy enums, and the fixed schema keys are never translated. The one
+exception is **human-facing message values** such as `desktop_block_hint` (a notice shown
+to the developer): write those in the conversation language too — they are prose, not
+machine tokens.
+
+This skill is one of only two flows (with `/sage-init-local`) permitted to **persist** a
+language preference, and only to the local profile after explicit user approval. Full
+rules: `docs/agent/language-policy.md`.
 
 ### Interview style (mandatory)
 
@@ -129,10 +136,23 @@ reach thoroughness through the back-and-forth, not a wall of questions.
      `runtime_models.<host>` value for each component. Codex cache candidates are
      cache-confirmed; Claude aliases are syntax-only/account-unverified. Do not claim
      that an alias proves account entitlement or silently probe a paid endpoint.
+   - **Same turn, propose `checklist_scan_targets`.** Once components are settled, propose
+     the derived default: `[{label: "03 implementation", glob: "plan_docs/03-implementation/**/*.md",
+     is_impl: true}]` plus one entry per component (`{label: "<id> plan", glob: "<component
+     path>/plan_docs/**/*.md"}`). This is what `pre-phase4-checklist-gate` scans before
+     Phase 04 — leaving it empty silently disables that gate. Single confirm, not an open
+     question.
 3. **`verification.commands`** — propose the real `build` / `test` / `lint` (and
    `syntax` for L1) from the build files you found. Empty = that check is skipped,
    so confirm only commands that genuinely exist.
-4. **`risk` tiers L0–L2** — propose from file types. **Briefly explain what the
+4. **`verification.acceptance`** — its own short turn right after `verification.commands`.
+   State that the requirement-level acceptance-evidence matrix is on by default
+   (`enabled: true`) and already enforces L3 (`require_for_risk: [L2, L3]`,
+   `report_gate_by_risk.L3: enforce` — Phase 06 is blocked on an unresolved `FAIL`/`NOT
+   TESTED` unless an exact waiver exists). Most projects keep the default — this turn is a
+   single confirm surfacing that the gate exists, not a new open question. Only dig into
+   `require_for_risk`/`waiver` if the user wants to change scope.
+5. **`risk` tiers L0–L2** — propose from file types. **Briefly explain what the
    levels mean as you set them**, since the user is choosing how strict each kind
    of file is gated. The levels are a blast-radius ladder — the gate enforces more
    the higher you go:
@@ -140,7 +160,7 @@ reach thoroughness through the back-and-forth, not a wall of questions.
    - **L1** `l1_path_globs` — low blast radius (e.g. UI/markup). Light checks only.
      Also set `plan_glob` here (e.g. `plan_docs/**/*.md`) — where plan docs live.
    - **L2** `l2_path_globs` — source / config. Requires build + test + lint to pass.
-5. **`risk` L3 (high-risk domains)** — the top of the ladder, reserved for areas
+6. **`risk` L3 (high-risk domains)** — the top of the ladder, reserved for areas
    where a mistake is costly. **Explain that L3 is the strictest tier: the gate
    requires the plan phases to exist before you may edit, and the change also needs
    independent review later in the workflow before it's considered done.** Here you
@@ -148,16 +168,20 @@ reach thoroughness through the back-and-forth, not a wall of questions.
    security-sensitive (auth, payment, crypto, secrets)? From the answer set
    `l3_filename_globs` + `l3_content_keywords`, and the `desktop_block_glob` /
    `desktop_block_hint` for generated/sync outputs that must never be hand-edited.
+   In the same turn, also ask whether any L1/L2 area should escalate on content alone —
+   if so, collect `l2_content_keywords` (L1→L2 escalation) alongside `l3_content_keywords`;
+   both are optional and default to empty.
    - Mention the **escalation rule** so the user understands the tiers interact:
      an L1/L2 file whose content matches `l3_content_keywords` is treated as L3,
-     and the effective level is `max(detected, what the user declared)` — i.e. the
-     gate always picks the stricter of the two.
+     an L1 file matching `l2_content_keywords` is treated as L2, and the effective
+     level is `max(detected, what the user declared)` — i.e. the gate always picks
+     the stricter of the two.
    - **`l3_review_strategy`** — REQUIRED for L3 to be reviewable rather than
      hard-blocked. Confirm `claude_grep_first` or `codex_feature_signal` (or a
      module name). The review protocol blocks L3 until this is set.
-6. **`file_type_map`** — propose `{ glob, type }` first-match classification for
+7. **`file_type_map`** — propose `{ glob, type }` first-match classification for
    logging from the stack you've established.
-7. **`governance_docs`** (optional) — project governance/reference docs the agent should
+8. **`governance_docs`** (optional) — project governance/reference docs the agent should
    discover at session start. Propose from the Step 0 repo scan: architecture notes,
    security policy (including hidden paths like `.github/SECURITY.md`), domain protocol
    docs, or convention docs **not already wired** through `risk.domains[].protocol_pointer`.
@@ -167,7 +191,7 @@ reach thoroughness through the back-and-forth, not a wall of questions.
    stay in `risk.*`, the hook's authoritative source). One turn: propose the entries you
    inferred for a single confirm; leave empty (`[]`) if the project has none. `doc` must be
    a project-relative path that exists; the label says why the agent should read it.
-8. **`team.core.<role>.runtime.model` / `.effort`** — optional per-agent runtime settings
+9. **`team.core.<role>.runtime.model` / `.effort`** — optional per-agent runtime settings
    for the CORE roles (`leader`, `implementer-a`, `implementer-b`, `qa`, `reviewer`,
    `convention-checker`). Ask once, as a single topic; leaving both unset is a fine answer.
    Note the nesting: these live under `runtime:`, *not* directly on the role — a bare
@@ -195,6 +219,14 @@ Same one-topic-per-turn style as Step 1: raise each toggle on its own turn, prop
 a default, and only dive into the matching section if the user enables it. Skip a
 toggle's detail entirely when it stays off.
 
+- **`runtime.active_host`** — propose `auto` (detects the executing host at run time) as the
+  default and get a single confirm. Only offer pinning to a fixed `claude`/`codex` if the
+  user explicitly wants one, and explain the cost: a pinned value lives in the shared
+  committed profile (a local profile cannot override it), so changing which host a
+  developer runs from later means an L2-gated edit to `project-profile.yaml`. If the project
+  is double-host, connect this to the `cross_model.policy` turn right after — a double-host
+  project should also set `options.cross_model: true` so Phase 05 calls the runtime opposite
+  the active host.
 - **`cross_model.policy`** — shared policy is `required | recommended | off`.
   `required` forces the local value on, `recommended` defaults on but permits a local
   opt-out, and `off` forces it off. Record the machine decision in
@@ -248,10 +280,54 @@ toggle's detail entirely when it stays off.
   Also surface that set's **token-cost note** (each lens = one reviewer subagent per round;
   `refuters` = reviewers per round batched over findings; cross_model adds a peer) so the
   user sets `lenses`/`refuters` knowing the subagent/token impact.
+  - **Early completion (conditional)**: only when the loop is **on**, ask the one turn from
+    the shared set for `pdca.review_loop.early_completion` (default off). If enabled, author
+    `enabled: true` and optionally `minimum_completed_rounds` (engine floor 1). State the gate
+    consequence: the approval stays `APPROVED` but carries
+    `Review-Assurance: REDUCED_BY_USER_AUTHORIZATION` so a later reader and the CI authority
+    can tell it apart. Say plainly that the authorization reason, approver and confirmation
+    token always come from the user at close time and are never inferred by a skill.
   - **Vault outputs (conditional)**: only when the loop is **on AND
     `knowledge_capture.vault_path` is set**, ask the one vault turn from the shared set —
     `loop_audit_dashboard` (감사 대시보드) and/or `retro_note` (회고 human-gate 노트).
     Skip this turn entirely when the loop is off or no vault is configured.
+- **Fast Cycle (`pdca.fast_cycle`)** — raise this shared-policy toggle in its own
+  turn, defaulting to `enabled: false`. If enabled, propose and confirm
+  `minimum_rounds` (L2/L3, engine floor 1), `minimum_lenses` (L2/L3, engine floor
+  2), and ordered L2/L3 `lenses` from the closed engine vocabulary. Keep
+  `reason_required: true`; never offer a switch that disables per-run reasons.
+  Explain that actual risk and its verification/acceptance remain unchanged and
+  that Fast consolidates physical 01 through 04 into the composite 00.
+  - **Standard→Fast conversion (conditional)**: only when Fast is **on**, ask the one turn
+    from the shared set for `pdca.fast_cycle.standard_transition` (default off). If enabled,
+    `sage fast-cycle convert` may switch a cycle already past Phase 00 to the Fast contract.
+    State the gate consequence: the run can reach Fast review minimums without a composite
+    plan, so the audit record — not a document — becomes the only evidence of how it entered
+    Fast. The conversion writes no document, and its confirmation token, reason and approver
+    always come from the user at conversion time and are never inferred by a skill.
+  If effective vault capability/path is configured, ask in the vault-output turn
+  whether `knowledge_capture.fast_cycle_dashboard` should be enabled. This is a
+  shared automation flag; the private path remains local. `sage-init-local` does
+  not own or modify `pdca.fast_cycle`.
+- **Phase 00 Done Criteria gate (`pdca.base_plan.done_criteria_gate`)** — always ask
+  the shared `off | advisory | enforce` question from `bootstrap-authoring.md` during
+  first authoring. Recommend `advisory` for a new project, but record the user's actual
+  choice. Explain that 01–04 may retain `[ ]`, while APPROVED/06 requires resolved
+  criteria and a fresh approval after reasoned replanning. This is shared policy and is
+  never delegated to `sage-init-local`.
+- **Feedback (`feedback.*`)** — raise as its own toggle, default `enabled: false`. Explain
+  in one line: when on, developers can leave `sage-feedback ::` markers in completed-cycle
+  code for `/sage-feedback` to resolve later; `!sage-feedback ::` markers additionally block
+  starting new implementation over them. If enabled, confirm three values in the same turn:
+  `record` (default `false` — leave off for chat-only responses with no audit trail, or turn
+  on to persist every resolution), `block_release` (CI blocks a release on unresolved blocking
+  markers when it calls `sage feedback --release-gate`), and — **only if `record` is
+  true** — `record_target` (`auto` — a vault note only if `knowledge_capture.vault_path` is
+  set, `sage` — audit log only, `vault` — vault note required). `record_target` never writes
+  anything by itself: `.sage/feedback.jsonl` is written only when `record: true`, and
+  `record_target` then decides only whether a human-readable vault note is written in
+  addition. Do not present `record_target` as controlling whether the audit log itself is
+  written.
 - **`options.codegraph` / `codegraph`** — toggle and MCP name.
 
 MCP servers themselves are governed as the `mcp` asset kind

@@ -92,6 +92,20 @@ Reason: [knowledge_capture disabled / provider unavailable]
 Decision: Proceeding from repository files only.
 ```
 
+## Fast Cycle composite plan
+
+Fast Cycle is available only when shared policy sets `pdca.fast_cycle.enabled: true` and only for
+actual L2/L3 work. It does not weaken actual risk, verification, acceptance, independent approval,
+write-back, retro, or snapshots. Before any write, collect Fast review level, lens count, and a
+one-line reason. Use one physical Phase 00 document with exact ordered headings `## Phase 00` through
+`## Phase 04`; embed the normal requirements, design, ownership, acceptance trace, implementation,
+and verification content under those headings. Physical Phase 05 and 06 remain separate.
+
+Open the audit only after every Phase 00 and Phase 03 pre-edit checklist item is checked. Bind every
+review round to the configured lenses, close or abort the Fast audit before clearing the cycle, and
+commit `.sage/fast_cycle.jsonl` with the delivery evidence. The standard `sage-cycle` skill never
+selects this mode implicitly; use `sage-cycle-fast`, `sage-plan-fast`, and `sage-team-fast`.
+
 ## Independent / Cross-model Review Protocol
 
 Independent review is **mandatory for L3** (recommended for L2). It is recorded in
@@ -112,13 +126,106 @@ is on and reachable — `docs/agent/review-protocol.md`).
 
 ---
 
+## Template language
+
+The templates below are written in English because this file is the contract every reviewer
+reads. **They are not literals to copy into a Korean document.** A cycle whose Phase 00 declares
+`Document-Language: ko` writes its human-facing structure in Korean too — section headings, table
+headers, list labels and checklist text — because a Korean body under English headings is exactly
+the mixed state the marker exists to prevent. Copying this file's English headings verbatim into a
+`ko` cycle is the most common way that happens. `docs/agent/language-policy.md` is the SSOT.
+
+Three groups behave differently.
+
+**Never translated — a parser reads the exact string.** Translating one of these does not change
+presentation, it removes the thing a gate looks for:
+
+```text
+## 5. Done Criteria                     ### Done Criteria              (fast)
+## 6. Done Criteria Revision Log        ### Done Criteria Revision Log (fast)
+## Phase 00 … ## Phase 04               (Fast composite headings, exact and in order)
+Status: PENDING — implementation not started        (Fast Phase 04 open marker)
+- [x] Phase 00 context complete … - [x] Phase 03 ownership, implementation checklist, and
+  verification plan ready                           (Fast Phase 00 mapping items)
+- [x] File ownership assigned before source edits … - [x] Verification command plan recorded
+                                                    (Fast Phase 03 pre-implementation items)
+Cycle-Stem  Document-Language  Risk Level  Done-Criteria-Revision  Loop-Run  Phase00-Hash
+Final Status  Source-05  Fast-Run  Fast-Audit-Run  Fast-Review-Level  Fast-Lenses  Fast-Reason
+Review-Assurance  Review-Close-Reason  Review-Rounds  Residual-Findings
+REDUCED_BY_USER_AUTHORIZATION  USER_AUTHORIZED_EARLY  FAST-CONVERTED
+APPROVED  FAIL  BLOCKED  PASS  WARN  NOT TESTED  N/A  L0  L1  L2  L3
+```
+
+The Phase 03 checklist items are ordinary translatable prose in a **standard** cycle and fixed
+literals in a **Fast composite** plan, where `sage fast-cycle open` matches them by exact string.
+
+**Translated, but one keyword has to survive.** The acceptance gate finds these two sections by
+scanning heading text for `acceptance matrix` / `acceptance evidence` — or, in Korean, for `수용`
+or `인수`. A heading such as `## 4. 승인 기준표` contains neither and the gate reads the document as
+having no acceptance table at all. Their column headers are matched the same way, so keep one
+recognized word per column: `id`/`acceptance`, `required`/`필수`, `status`/`상태`,
+`evidence`/`근거`, `reason`/`사유`, `notes`/`비고`. Keep the evidence column `필요 증거`, not
+`필수 증거` — two columns starting with `필수` make the `Required?` lookup ambiguous.
+
+**Everything else is ordinary prose.** Translate it. The mapping below is the expected Korean
+form; deviate where the feature reads better, but keep the numbering and the parser keywords.
+
+| Phase | English | Korean |
+|---|---|---|
+| 00 | `## 0. Prior Knowledge` / `Type` `Note` `Key Takeaway` | `## 0. 사전 지식` / `유형` `메모` `핵심 시사점` |
+| 00 | `## 1. Summary (Goal & Scope)` | `## 1. 요약 (목표와 범위)` |
+| 00 | `## 2. Impact Analysis (Critical)` | `## 2. 영향도 분석 (중요)` |
+| 00 | `## 3. Technology & Risks` | `## 3. 기술과 리스크` |
+| 00 | `## 4. Final Conclusion & UX Guide` | `## 4. 최종 결론 및 UX 가이드` |
+| 01 | `## 1. User Stories & Requirements` | `## 1. 사용자 스토리와 요구사항` |
+| 01 | `## 2. Data Schema (Entities, DTOs)` | `## 2. 데이터 스키마 (엔티티, DTO)` |
+| 01 | `## 3. API / Interface Specifications` | `## 3. API / 인터페이스 명세` |
+| 01 | `## 4. Acceptance Matrix` | `## 4. 인수 매트릭스` |
+| 01 | `ID` `User Requirement` `Required Evidence` `Owner` `Required?` | `ID` `사용자 요구사항` `필요 증거` `담당` `필수?` |
+| 02 | `## 1. Architecture & Interface Design` | `## 1. 아키텍처 및 인터페이스 설계` |
+| 02 | `## 2. Sequence Diagrams` | `## 2. 시퀀스 다이어그램` |
+| 02 | `## 3. Error Codes & Exception Strategy` | `## 3. 오류 코드 및 예외 전략` |
+| 03 | `## 0. Pre-Implementation Checklist` | `## 0. 구현 전 체크리스트` |
+| 03 | `## 1. File Ownership (Modified Files)` | `## 1. 파일 담당 (변경 파일)` |
+| 03 | `## 2. Implementation Checklists` | `## 2. 구현 체크리스트` |
+| 03 | `## 3. Acceptance Implementation Trace` | `## 3. 인수 구현 추적` |
+| 03 | `Acceptance ID` `Implementation Task` `Test / Manual Evidence Planned` `Status` | `인수 ID` `구현 작업` `계획한 테스트/수동 증거` `상태` |
+| 03 | `## 4. Build & Test Results` | `## 4. 빌드 및 테스트 결과` |
+| 04 | `## 1. Design vs. Implementation Gap (Match Rate: X%)` | `## 1. 설계 대비 구현 갭 (일치율: X%)` |
+| 04 | `## 2. Missing Items & Deviations` | `## 2. 누락 항목과 이탈` |
+| 04 | `## 3. Coverage Verification (qa)` | `## 3. 커버리지 검증 (qa)` |
+| 04 | `## 4. Acceptance Evidence Review` | `## 4. 인수 증거 검토` |
+| 04 | `Acceptance ID` `User Requirement` `Status` `Evidence` `Notes` | `인수 ID` `사용자 요구사항` `상태` `근거` `비고` |
+| 04 | `## 5. Review Context for External Model` | `## 5. 외부 모델용 리뷰 컨텍스트` |
+| 05 | `## External / Cross-model Review` | `## 외부 / 교차 모델 리뷰` |
+| 05 | `### External Findings` | `### 외부 지적` |
+| 05 | `### Review Loop Iterations` | `### 리뷰 루프 반복` |
+| 05 | `### Reviewer Interpretation` | `### 리뷰어 해석` |
+| 05 | `### Acceptance Gate` | `### 인수 게이트` |
+| 05 | `### Needs User Approval` | `### 사용자 승인 필요` |
+| 05 | `### Final Status` (heading only — the `Final Status:` line never changes) | `### 최종 상태` |
+| 05 | `## 1. Code Quality` … `## 5. Convention Compliance` | `## 1. 코드 품질` … `## 5. 컨벤션 준수` |
+| 05 | `## 6. Review Scorecard` / `## 7. Action Items` | `## 6. 리뷰 스코어카드` / `## 7. 조치 항목` |
+| 06 | `## 1. Completion Summary` | `## 1. 완료 요약` |
+| 06 | `## 2. Value Delivered` | `## 2. 전달한 가치` |
+| 06 | `## 3. Lessons Learned & Future Tasks` | `## 3. 배운 점과 후속 과제` |
+| 06 | `## 4. Knowledge Capture (optional)` | `## 4. 지식 캡처 (선택)` |
+
+Role names (`leader`, `reviewer`, `qa`) are profile identifiers, not words — they stay as written
+in both languages.
+
+---
+
 ## [Phase 00: Base Plan Template]
+
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
 
 ```markdown
 # [Base Plan] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
 Risk Level: <L1|L2|L3>
+Done-Criteria-Revision: 1
 <!-- required: this cycle's max risk — the higher of the user-declared level and the risk the change globs
      imply. Replace <...> with one of L1/L2/L3. Knowledge write-back reads this exact `Risk Level: Lx` line
      to size the note (the durable per-cycle tier that survives session resume); the 06 acceptance-evidence
@@ -140,17 +247,33 @@ Risk Level: <L1|L2|L3>
 
 ## 4. Final Conclusion & UX Guide
 
-## 5. Document Mapping (Checklist)
+## 5. Done Criteria
+- [ ] {concrete user-visible or engineering completion outcome}
+
+## 6. Done Criteria Revision Log
+
+Initial revision 1. No replanning record.
+
+<!-- For revision 2+, increment Done-Criteria-Revision and append:
+### Revision 2
+- Changed-At: Phase 04
+- Reason: {why the approved plan was insufficient}
+- Affected-Phases: 02, 03, 04, 05
+- Summary: {what changed and what must be rerun}
+-->
 ```
 
 ---
 
 ## [Phase 01: Plan Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Plan] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
 ## 1. User Stories & Requirements
 
 ## 2. Data Schema (Entities, DTOs)
@@ -167,10 +290,13 @@ Cycle-Stem: `{phase-document-basename}`
 
 ## [Phase 02: Design Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Design] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
 ## 1. Architecture & Interface Design
 
 ## 2. Sequence Diagrams
@@ -182,10 +308,13 @@ Cycle-Stem: `{phase-document-basename}`
 
 ## [Phase 03: Implementation Guide Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Implementation] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
 ## 0. Pre-Implementation Checklist
 - [ ] File ownership assigned before source edits
 - [ ] Acceptance IDs from Phase 01 mapped to implementation tasks
@@ -209,10 +338,13 @@ Cycle-Stem: `{phase-document-basename}`
 
 ## [Phase 04: Gap Analysis Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Analyze] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
 **Reviewer:** leader (responsible)  **Contributor:** qa (coverage)  **Date:** {YYYY-MM-DD}
 
 > 04 issues no standalone verdict. The verdict is issued in 05.
@@ -241,10 +373,15 @@ Cycle-Stem: `{phase-document-basename}`
 
 ## [Phase 05: Expert Review Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Expert Review] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
+Loop-Run: {run_id}
+Phase00-Hash: sha256:{hash printed by APPROVED sage review-loop close}
 **Reviewer Role:** reviewer (synthesis) (+ cross-model reviewer when enabled)
 **Review Date:** {YYYY-MM-DD}
 **Final Status:** {APPROVED | FAIL | BLOCKED — replace with exactly one value}
@@ -306,10 +443,13 @@ only when the item was explicitly out of scope, deferred, or user-approved.
 
 ## [Phase 06: Final Report Template]
 
+> A `ko` cycle translates these headings and table headers — see **Template language** above.
+
 ```markdown
 # [Report] {Feature Name}
 
 Cycle-Stem: `{phase-document-basename}`
+Done-Criteria-Revision: 1
 Loop-Run: {run_id}
 Source-05: {root-relative path of the APPROVED Phase 05 doc}
 

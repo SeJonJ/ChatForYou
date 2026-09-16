@@ -26,6 +26,26 @@ Do not edit this CORE render directly (the write-guard blocks it and `sage insta
 > (`.claude/skills/sage-asset/`); Codex reads it from the user-global skills dir
 > (`$CODEX_HOME/skills/sage-asset/`).
 
+## Conversation language (mandatory)
+
+Resolve it once, before the first turn, in this order:
+
+1. an explicit `--lang ko|en` on this skill's invocation,
+2. `interface.language` in `sage/project-profile.local.yaml`,
+3. `ko`.
+
+Conduct **every** question, proposal, progress note, warning and summary in that language.
+
+Only the conversation takes it. Machine values are never translated — paths, globs, command
+strings, component ids, strategy enums, statuses and the fixed schema keys. Phase 00–06 document
+prose follows the cycle's `Document-Language:` marker, which is a **separate** decision and may
+differ from the conversation. That document prose includes the **human-facing structure** — section
+headings, list labels, table headers and checklist text — not just paragraphs; a Korean document
+under English headings is the mixed state the marker exists to prevent. The two headings a parser
+reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, stay
+English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
+preference. Full rules: `docs/agent/language-policy.md`.
+
 ## Hard rules
 
 - **Never edit generated artifacts to "change" an asset.** The write-guard blocks
@@ -72,7 +92,7 @@ Gather, for the asset:
 
 ### hook (deterministic)
 1. Author the spec `docs/sage_harness/hooks/<id>.md` + the canonical
-   `scripts/sage_harness/hooks/<id>_core.py` (pure check).
+   `sage_harness/hooks/<id>_core.py` (pure check).
 2. For a new hook, hand off: `sage generate --kind hook --id <id> --write --target both`.
    This validates both bindings and atomically registers settings, adapters, shims, and manifest.
 

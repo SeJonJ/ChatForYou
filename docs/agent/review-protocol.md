@@ -42,7 +42,7 @@ requirements were converted into evidence:
 
 How a change is matched to its review document is a project policy
 (`profile.risk.l3_review_strategy`). Strategy candidates are preserved under
-`scripts/sage_harness/hooks/strategies/`; until one is selected, L3 changes are
+`sage_harness/hooks/strategies/`; until one is selected, L3 changes are
 blocked (safe default — the gate cannot confirm a review it cannot locate).
 
 ## Adversarial review-rework loop (Loop A)

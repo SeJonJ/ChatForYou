@@ -23,6 +23,12 @@ step). The overlay-authoring counterpart to /sage-asset (new assets) and
 - When the user says "/sage-asset-override", "오버레이 작성", "CORE 커스터마이즈"
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read context: profile bootstrapped; the target CORE base spec
    (docs/sage_harness/{agents,skills}/<id>.md) or its render; AGENT_GUIDE.
 2. Identify kind + id — MUST be currently listed by `sage.overlay_classify.COMPOSE_ALLOWED`.

@@ -22,6 +22,12 @@ resumes at the right half.
   only, `/sage-team` to resume 03–06 on an existing plan
 
 ## procedure
+0. Resolve the conversation language once: an explicit `--lang ko|en` on this skill's
+   invocation, then `interface.language` in `sage/project-profile.local.yaml`, then `ko`.
+   Every question, proposal, progress note, warning and summary uses it; machine values
+   and Phase 00–06 `Document-Language:` prose do not. Document prose includes section headings
+   and list labels, except `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, which a
+   parser reads by their exact string. See `docs/agent/language-policy.md`.
 1. Read `sage/project-profile.yaml` — confirm bootstrapped (`project.name`
    non-empty, `risk` and `components` set). If not → block, direct to `/sage-init`.
 2. Identify the single cycle by its plan-doc stem (the feature name) under

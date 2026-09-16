@@ -15,6 +15,26 @@ This skill owns the **planning half** of a PDCA cycle: it produces the plan doc
 completion (03–06) is `/sage-team`'s job; `/sage-cycle` is the umbrella that runs
 both in sequence.
 
+## Conversation language (mandatory)
+
+Resolve it once, before the first turn, in this order:
+
+1. an explicit `--lang ko|en` on this skill's invocation,
+2. `interface.language` in `sage/project-profile.local.yaml`,
+3. `ko`.
+
+Conduct **every** question, proposal, progress note, warning and summary in that language.
+
+Only the conversation takes it. Machine values are never translated — paths, globs, command
+strings, component ids, strategy enums, statuses and the fixed schema keys. Phase 00–06 document
+prose follows the cycle's `Document-Language:` marker, which is a **separate** decision and may
+differ from the conversation. That document prose includes the **human-facing structure** — section
+headings, list labels, table headers and checklist text — not just paragraphs; a Korean document
+under English headings is the mixed state the marker exists to prevent. The two headings a parser
+reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revision Log`, stay
+English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
+preference. Full rules: `docs/agent/language-policy.md`.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/skills/sage-plan.md` — authoritative spec: intent, procedure, drift_checks
@@ -48,6 +68,11 @@ leader authors 00/01 from. Skip/shorten only if the user already gave rich detai
 "enough" (record what you have). The interview elicits *requirements*; it does NOT re-ask
 profile config (`components`/`risk`/`cross_model`) that `sage-init` already settled.
 
+Ask which language this cycle's Phase 00–06 documents should be written in (`ko` or `en`)
+unless an existing Phase 00 for this stem already carries a `Document-Language:` line — that
+line wins and is not re-asked. This is the document language, not the language you talk in;
+see `docs/agent/language-policy.md`.
+
 Do not proceed to leader handoff until scope + interview are confirmed.
 
 ## Step 2 — Invoke the leader
@@ -78,10 +103,18 @@ Hand off to the `leader` agent with this briefing:
   point
 - Required: choose one markdown basename as the cycle identity and declare the
   exact same `Cycle-Stem: <basename>` once near the top of every 00–02 document.
+- Required: declare the agreed document language once per document as a standalone
+  `Document-Language: <ko|en>` line outside any code fence, and write the prose in that
+  language. It is fixed for the whole cycle — the pre-implementation gate blocks when
+  documents of one cycle disagree. After the stem is chosen, mirror it for resumed sessions
+  with `sage cycle set <stem> --document-language <ko|en>`.
 - Required: the 00 base plan must record a `Risk Level: Lx` line — L1/L2/L3, the
   higher of the user-declared level and the risk the change globs imply. This is the
   durable per-cycle tier used by later gates and knowledge write-back. Fill exactly one
   declaration with a real `L1`/`L2`/`L3`; never leave the `<L1|L2|L3>` placeholder.
+- Required: record `Done-Criteria-Revision: 1` and exactly one `## 5. Done Criteria`.
+  Translate confirmed outcomes into concrete `[ ]` items. Planning does not prove
+  implementation completion, so do not pre-check them and do not leave TODO.
 
 ## Step 3 — Verify plan doc exists
 
@@ -96,6 +129,8 @@ Also confirm the 00 base plan carries exactly one filled `Risk Level: L1`/`L2`/`
 line outside code fences (not the `<L1|L2|L3>` placeholder). If it is missing,
 unfilled, malformed, or duplicated, block and ask the leader to repair Phase 00 before
 handoff. Later-phase and governed source writes fail closed without this declaration.
+Also reject a missing/malformed/duplicate Done Criteria section, a missing revision 1,
+an empty list, or placeholder-only criteria before handoff.
 
 After all stem and risk checks pass, declare the verified identity:
 

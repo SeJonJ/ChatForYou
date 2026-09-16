@@ -1,58 +1,67 @@
-# Plan Interview — Phase 00/01 요구사항·설계 인터뷰
+# Plan Interview — requirements and design interview for Phase 00/01
 
-`sage-plan`(및 `sage-cycle`)이 새 PDCA 사이클의 첫 문서(Phase 00 CONTEXT / 01 CONTENT)를
-작성하기 **전에**, host 가 사용자로부터 기획·설계 의도를 상세히 끌어내는 인터뷰의 단일 출처(SSOT).
-질문은 고정 스크립트가 아니라 **00/01 문서가 요구하는 섹션을 채우도록** 구동된다
-(00/01 섹션 규칙: `docs/agent/pdca-templates.md` §"00 vs 01").
+Single source of truth for the interview a host runs **before** `sage-plan` (or `sage-cycle`)
+writes the first documents of a new PDCA cycle (Phase 00 CONTEXT / 01 CONTENT), to draw the
+user's intent out in detail. The questions are not a fixed script: they are driven by **the
+sections 00/01 have to fill** (section rules: `docs/agent/pdca-templates.md` §"00 vs 01").
 
-## 언제 / 언제 생략
+## When to run it, when to skip
 
-- **언제**: 새 사이클 진입 시(사용자가 한 줄로만 과제를 말했을 때). 한 문장 scope 만으로 얕은
-  00/01 을 쓰지 말고, 아래 코어 질문으로 먼저 요구사항을 확보한다.
-- **생략/축약**: 사용자가 이미 상세 기획을 제시했거나 "충분/그만" 이라고 하면 즉시 종료하고
-  가진 정보로 진행. 과잉 심문 금지.
-- **범위**: 기획 인터뷰이지 profile 설정 인터뷰가 아니다. `sage-init` 이 이미 채운 값
-  (components / risk 글롭 / cross_model 등)은 다시 묻지 않는다.
+- **Run it** when entering a new cycle and the user has stated the task in a single line. Do not
+  write a shallow 00/01 from a one-sentence scope; secure the requirements with the core
+  questions below first.
+- **Skip or shorten** when the user has already supplied a detailed plan, or says they have said
+  enough (`"충분"`, `"그만"`). Stop immediately and proceed with what you have. Do not interrogate.
+- **Scope**: this is a planning interview, not a profile-configuration interview. Never re-ask
+  values `sage-init` has already filled in (components, risk globs, cross_model, and so on).
 
-## 출력
+## Output
 
-1. **항상**: 인터뷰 Q/A 원문을 `.sage/plan_interview.md` 로 기록(사람이 준 의도의 정본 기록).
-2. 그 다음 leader 가 이 기록을 **00/01 문서로 구조화**한다 — 전사(copy)가 아니라 00=맥락·01=상세
-   분리 규칙(`pdca-templates.md`)에 맞춰 배치.
-3. **완료 시(Obsidian 사용 + `.sage/plan_interview.md` 존재)**: `sage-team` 마무리에서 이 기록을
-   `sage knowledge write-back` 으로 vault 에 별도 "기획 인터뷰" 노트로 남긴다(단일 write 경로 준수).
-   Obsidian 미사용이면 `.sage/plan_interview.md` 가 최종 산출물.
+1. **Always**: record the raw interview Q/A to `.sage/plan_interview.md` — the authoritative
+   record of the intent the user gave.
+2. The leader then **structures that record into the 00/01 documents** — not a transcription, but
+   placed according to the split rule where 00 holds context and 01 holds detail
+   (`pdca-templates.md`).
+3. **On completion**, when Obsidian is in use and `.sage/plan_interview.md` exists, `sage-team`
+   writes this record to the vault as a separate `기획 인터뷰` note via
+   `sage knowledge write-back`, honouring the single write path. Without Obsidian,
+   `.sage/plan_interview.md` is the final artifact.
 
-## 코어 질문 (항상 — 과제 문구에 맞게 표현만 적응)
+## Core questions (always asked; adapt only the wording to the task)
 
-각 답은 오른쪽 섹션에 앵커된다.
+Each answer anchors to the section on the right.
 
-| # | 질문 | 채우는 섹션 |
+| # | Question | Section it fills |
 |:--:|---|---|
-| 1 | **플랫폼/환경** — 어디서 도는가? (웹 / 모바일 Android·iOS·둘다 / 데스크톱 / 서버 / CLI …) | 00 범위 · 01 요구사항 |
-| 2 | **핵심 기능** — 반드시 포함돼야 하는 기능은? (우선순위 포함) | 01 요구사항 |
-| 3 | **데이터/외부 연동** — API·DB·외부 서비스를 쓰나? 어떤 것을? | 01 데이터·API |
-| 4 | **제약·주의사항** — 보안/성능/규정/기존 코드 제약, 하지 말아야 할 것 | 00 리스크 · 01 제약 |
-| 5 | **완료 기준** — 무엇으로 "됐다"를 판단하나? (사용자가 확인할 시나리오) | 01 acceptance matrix 씨앗 |
+| 1 | **Platform and environment** — where does this run? (web / mobile Android, iOS or both / desktop / server / CLI …) | 00 scope · 01 requirements |
+| 2 | **Core features** — what must be included, and in what priority? | 01 requirements |
+| 3 | **Data and integrations** — are APIs, databases or external services involved, and which? | 01 data and API |
+| 4 | **Constraints and cautions** — security, performance, regulatory or existing-code constraints, and what must not be done | 00 risk · 01 constraints |
+| 5 | **Definition of done** — what determines that this is finished? (the scenario the user will check) | seed for the 01 acceptance matrix |
 
-## 적응 후속 질문 (답변에서 파생)
+## Adaptive follow-ups (derived from the answers)
 
-코어 답을 근거로 필요한 만큼만 파고든다. 예:
-- API "예" → 어떤 API·인증 방식·rate limit·실패 시 폴백?
-- 모바일 → 최소 지원 OS 버전·오프라인 요구?
-- 보안/비밀값 언급 → L3 후보인지(risk 글롭과 대조), 저장·마스킹 요건?
-- "필수 기능" 이 여럿 → 이번 사이클 범위 vs 후속(scope 확정)?
+Dig only as far as the core answers warrant. For example:
 
-각 후속 답도 00(맥락·리스크) 또는 01(요구사항·데이터·acceptance)로 매핑한다.
+- API said yes → which API, what authentication, rate limits, fallback on failure?
+- Mobile → minimum supported OS version, offline requirements?
+- Security or secrets mentioned → is this an L3 candidate (check against the risk globs), and
+  what are the storage and masking requirements?
+- Several features called mandatory → which are in this cycle's scope and which follow later?
 
-## 진행 규칙
+Map every follow-up answer to 00 (context, risk) or 01 (requirements, data, acceptance) as well.
 
-- **배치로 묻는다**(한 번에 관련 몇 개씩). host 별 형식: claude 는 구조화 질문, codex 는 순차 질문 —
-  형식만 다르고 내용 동일.
-- 코어 5개 + 사용자가 필요하다고 본 확장 답이 모이면 종료. 사용자가 "충분/그만" 이면 즉시 종료.
-- 인터뷰가 끝나야 leader 핸드오프로 넘어간다(기존 "scope 확정 후 진행" 게이트 유지).
+## How to run it
 
-## 인계
+- **Ask in batches** — a few related questions at a time. The form differs per host: claude asks
+  structured questions, codex asks them sequentially. Only the form differs, never the content.
+- Finish once the five core answers plus whatever the user considered worth expanding are in.
+  If the user says they have had enough, stop immediately.
+- The interview must complete before the leader handoff; the existing "confirm scope first" gate
+  still applies.
 
-leader 는 `.sage/plan_interview.md` 를 입력으로 00/01 을 저작한다. 인터뷰가 비었거나 사용자가 즉시
-종료했으면, 확보된 최소 정보로 00/01 을 쓰되 미확정 항목을 문서에 "TBD/가정" 으로 명시(은폐 금지).
+## Handoff
+
+The leader authors 00/01 with `.sage/plan_interview.md` as input. When the interview is empty or
+the user ended it at once, write 00/01 from the minimum information secured and mark every
+undecided item in the document as TBD or an explicit assumption. Never paper over a gap.
