@@ -171,8 +171,10 @@ class ShutdownConfigRecordingGateTest {
         KurentoRoom completedRoom = completedRoom("room-done");
         KurentoRoom freshRoom = freshRoom("room-new");
 
-        given(redisService.searchRoomListByOptions(any()))
-                .willReturn(List.of(doc("room-in"), doc("room-done"), doc("room-new")));
+        stubMarkedRooms(List.of("room-in", "room-done", "room-new"));
+        given(redisService.getChatRoomFromMaster("room-in")).willReturn(inProgressRoom);
+        given(redisService.getChatRoomFromMaster("room-done")).willReturn(completedRoom);
+        given(redisService.getChatRoomFromMaster("room-new")).willReturn(freshRoom);
         given(redisService.getAllChatRoomData("room-in"))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), inProgressRoom));
         given(redisService.getAllChatRoomData("room-done"))
@@ -242,9 +244,19 @@ class ShutdownConfigRecordingGateTest {
     }
 
     private void stubRoomList(String roomId, KurentoRoom room) {
-        given(redisService.searchRoomListByOptions(any())).willReturn(List.of(doc(roomId)));
+        stubMarkedRooms(List.of(roomId));
+        given(redisService.getChatRoomFromMaster(roomId)).willReturn(room);
         given(redisService.getAllChatRoomData(roomId))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), room));
+    }
+
+    private void stubMarkedRooms(List<String> roomIds) {
+        given(chatRoomRecoveryService.markOwnedRoomsRecoverable()).willReturn(
+                PreShutdownResult.builder()
+                        .instanceId(INSTANCE_ID)
+                        .markedRoomCount(roomIds.size())
+                        .roomIds(roomIds)
+                        .build());
     }
 
     private Document doc(String roomId) {

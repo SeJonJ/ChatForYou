@@ -42,7 +42,9 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
     private static final int CLAIM_RETRY_AFTER_MS = 500;
 
     // 배포 복구 후보 metadata(room:recovery:{roomId})의 TTL(초). 이 시간 안에 재입장해야 복구된다.
-    @Value("${recovery.room.ttl-seconds:180}")
+    // 기본값은 브라우저 자동 재연결 대기(3분)에 서버 종료 대기 시간을 더한 값이다. TTL 이 브라우저 대기보다
+    // 먼저 끝나면 아직 재연결을 시도 중인 참가자가 복구 불가로 판정된다.
+    @Value("${recovery.room.ttl-seconds:240}")
     private long recoveryTtlSeconds;
 
     private final RedisService redisService;
@@ -58,7 +60,7 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
             return RecoveryDecision.notRecoverable(RecoveryReason.NOT_RECOVERABLE);
         }
 
-        if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || instanceProvider.isHealthy(chatRoom.getInstanceId())) {
+        if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || instanceProvider.isInstanceAlive(chatRoom.getInstanceId())) {
             return RecoveryDecision.notRecoverable(RecoveryReason.NOT_RECOVERABLE);
         }
 
@@ -98,14 +100,23 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
             );
         }
 
+        if (instanceProvider.isShuttingDown()) {
+            // 종료 중인 인스턴스가 방을 가져가면 곧바로 다시 주인을 잃는다. claim lock 도 잡지 않아야
+            // 살아있는 인스턴스의 복구가 lock TTL 만큼 지연되지 않는다.
+            return retryResult(roomId, RecoveryReason.INSTANCE_SHUTTING_DOWN, currentInstanceId, currentInstanceId);
+        }
+
         if (!redisService.tryAcquireRoomClaimLock(roomId, currentInstanceId, CLAIM_LOCK_TTL_MS)) {
             // 다른 인스턴스가 소유권 이전 중이면 브라우저가 짧게 재시도해야 중복 owner를 피할 수 있다.
-            return RecoveryResult.redirectRecover(
-                    ChatRoomRecoveryOutVo.retry(roomId, RecoveryReason.CLAIM_IN_PROGRESS, CLAIM_RETRY_AFTER_MS)
-            );
+            return retryResult(roomId, RecoveryReason.CLAIM_IN_PROGRESS, currentInstanceId, null);
         }
 
         try {
+            // lock 을 잡는 사이에 종료가 시작될 수 있어 한 번 더 확인한다.
+            if (instanceProvider.isShuttingDown()) {
+                return retryResult(roomId, RecoveryReason.INSTANCE_SHUTTING_DOWN, currentInstanceId, currentInstanceId);
+            }
+
             // lock 획득 뒤 master 값을 다시 읽어 slave lag나 오래된 join 응답으로 인한 오판을 막는다.
             ChatRoom masterRoom = redisService.getChatRoomFromMaster(roomId);
             if (masterRoom == null) {
@@ -115,30 +126,40 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
                 );
             }
 
-            if (currentInstanceId.equals(masterRoom.getInstanceId()) && instanceProvider.isHealthy(currentInstanceId)) {
+            String ownerInstanceId = masterRoom.getInstanceId();
+
+            if (currentInstanceId.equals(ownerInstanceId) && instanceProvider.isInstanceAlive(currentInstanceId)) {
                 String existingCookie = redisService.getInstanceCookieFromMaster(currentInstanceId);
                 if (StringUtil.isNullOrEmpty(existingCookie)) {
-                    return RecoveryResult.redirectRecover(
-                            ChatRoomRecoveryOutVo.retry(roomId, RecoveryReason.CURRENT_COOKIE_UNAVAILABLE, CLAIM_RETRY_AFTER_MS)
-                    );
+                    return retryResult(roomId, RecoveryReason.CURRENT_COOKIE_UNAVAILABLE, currentInstanceId, ownerInstanceId);
                 }
 
                 routingService.setRecoveryRoutingInfo(response, roomId, existingCookie);
                 return RecoveryResult.success(ChatRoomRecoveryOutVo.success(masterRoom, currentInstanceId));
             }
 
-            if (StringUtil.isNullOrEmpty(masterRoom.getInstanceId()) || instanceProvider.isHealthy(masterRoom.getInstanceId())) {
+            if (StringUtil.isNullOrEmpty(ownerInstanceId)) {
                 return RecoveryResult.redirectDashboard(
                         ChatRoomRecoveryOutVo.redirectDashboard(roomId, RecoveryReason.NOT_RECOVERABLE)
                 );
             }
 
+            if (instanceProvider.isInstanceAlive(ownerInstanceId)) {
+                // 다른 참가자가 먼저 복구해 살아있는 owner 가 이미 있는 상태다. 소유권은 그대로 두고 owner 로
+                // 가는 라우팅 쿠키만 내려줘야 같은 방으로 합류한다.
+                String ownerCookie = redisService.getInstanceCookieFromMaster(ownerInstanceId);
+                if (StringUtil.isNullOrEmpty(ownerCookie)) {
+                    return retryResult(roomId, RecoveryReason.OWNER_COOKIE_UNAVAILABLE, currentInstanceId, ownerInstanceId);
+                }
+
+                routingService.setRecoveryRoutingInfo(response, roomId, ownerCookie);
+                return RecoveryResult.success(ChatRoomRecoveryOutVo.success(masterRoom, ownerInstanceId));
+            }
+
             String currentCookie = redisService.getInstanceCookieFromMaster(currentInstanceId);
             if (StringUtil.isNullOrEmpty(currentCookie)) {
                 // current instance cookie 없이는 성공 Set-Cookie 계약을 지킬 수 없다. old cookie/raw instanceId fallback은 dead pod 재고정을 만든다.
-                return RecoveryResult.redirectRecover(
-                        ChatRoomRecoveryOutVo.retry(roomId, RecoveryReason.CURRENT_COOKIE_UNAVAILABLE, CLAIM_RETRY_AFTER_MS)
-                );
+                return retryResult(roomId, RecoveryReason.CURRENT_COOKIE_UNAVAILABLE, currentInstanceId, ownerInstanceId);
             }
 
             masterRoom.setInstanceId(currentInstanceId);
@@ -238,6 +259,28 @@ public class ChatRoomRecoveryServiceImpl implements ChatRoomRecoveryService {
                 .markedRoomCount(roomIds.size())
                 .roomIds(roomIds)
                 .build();
+    }
+
+    /**
+     * 복구 대기 여부를 판정한다. 만료 metadata 는 삭제하지 않고 대기 아님으로만 응답한다.
+     */
+    @Override
+    public boolean hasPendingRecovery(String roomId) {
+        RoomRecoveryMetadata metadata = redisService.getRoomRecoveryMetadata(roomId);
+        return metadata != null && !isExpired(metadata);
+    }
+
+    /**
+     * 재시도 응답을 만들고 사유를 기록한다.
+     * 재시도 응답은 브라우저에서만 보이고 서버 로그에는 남지 않아 운영에서 추적할 수 없었다.
+     */
+    private RecoveryResult retryResult(String roomId, RecoveryReason reason,
+                                       String currentInstanceId, String ownerInstanceId) {
+        log.info("Room recovery retry: roomId={}, reason={}, instanceId={}, ownerInstanceId={}",
+                roomId, reason, currentInstanceId, ownerInstanceId);
+        return RecoveryResult.redirectRecover(
+                ChatRoomRecoveryOutVo.retry(roomId, reason, CLAIM_RETRY_AFTER_MS)
+        );
     }
 
     private boolean isExpired(RoomRecoveryMetadata metadata) {

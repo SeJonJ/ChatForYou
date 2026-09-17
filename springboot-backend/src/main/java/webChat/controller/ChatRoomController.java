@@ -123,14 +123,14 @@ public class ChatRoomController {
             jwtRoomProvider.validate(roomToken, chatRoom.getRoomId(), oauthRedis.getEmail());
         }
 
-        if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isHealthy(chatRoom.getInstanceId())){
+        if (StringUtil.isNullOrEmpty(chatRoom.getInstanceId()) || !instanceProvider.isInstanceAlive(chatRoom.getInstanceId())){
             // slave 복제 지연으로 owner-unhealthy 가 오판될 수 있어 master 기준 owner 를 재확인한다.
             // WHY: 복구 직후 stale slave 가 죽은 owner 를 계속 반환하면 REDIRECT_RECOVER 가 반복되어
             //      recover→reconnect 가 상한 없이 도는 루프가 생긴다. master 가 정상 owner 를 보이면 일반 라우팅으로 수렴시킨다.
             ChatRoom masterRoom = redisService.getChatRoomFromMaster(roomId);
             if (masterRoom != null
                     && !StringUtil.isNullOrEmpty(masterRoom.getInstanceId())
-                    && instanceProvider.isHealthy(masterRoom.getInstanceId())) {
+                    && instanceProvider.isInstanceAlive(masterRoom.getInstanceId())) {
                 chatRoom = masterRoom;
             } else {
                 RecoveryDecision recoveryDecision = chatRoomRecoveryService.evaluateJoinRecovery(chatRoom);
@@ -151,8 +151,22 @@ public class ChatRoomController {
             if(redirectCount > 3){
                 return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_DASHBOARD));
             } else {
-                // cookieInstanceId 로 올바른 쿠키 조회 후 세팅
-                routingService.setRoutingInfo(response, roomRoutingInfo.getRoomId(), roomRoutingInfo.getNginxCookie(), redirectCount + 1);
+                // 라우팅 정보는 복제본에서 읽어 복구 직후에는 이전 owner 를 가리킬 수 있다. 확정된 owner 와
+                // 일치할 때만 쓰고, 아니면 owner 인스턴스 쿠키로 대체한다. 쿠키가 없다고 방을 포기하면
+                // 살아있는 방에서 사용자를 내보내게 된다.
+                String ownerInstanceId = chatRoom.getInstanceId();
+                String nginxCookie = roomRoutingInfo != null && ownerInstanceId.equals(roomRoutingInfo.getInstanceId())
+                        ? roomRoutingInfo.getNginxCookie()
+                        : null;
+                if (StringUtil.isNullOrEmpty(nginxCookie)) {
+                    nginxCookie = redisService.getInstanceCookieFromMaster(ownerInstanceId);
+                }
+                if (StringUtil.isNullOrEmpty(nginxCookie)) {
+                    log.warn("Room routing cookie unavailable: roomId={}, ownerInstanceId={}", roomId, chatRoom.getInstanceId());
+                    throw new ChatForYouException(ErrorCode.INTERNAL_SERVER_ERROR);
+                }
+
+                routingService.setRoutingInfo(response, roomId, nginxCookie, redirectCount + 1);
                 return ResponseEntity.ok(ChatForYouResponse.ofRedirectRoom(chatRoom, ChatForYouResponseResult.REDIRECT_ROOM));
             }
         }

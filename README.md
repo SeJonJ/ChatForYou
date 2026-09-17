@@ -18,7 +18,7 @@ ChatForYou_v2/
 │   ├── src/main/java/       # Java 소스 코드
 │   ├── src/main/resources/  # 설정 파일
 │   └── build.gradle         # Gradle 빌드 설정
-├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.3)
+├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.4)
 │   ├── src/                 # Electron 소스 코드
 │   └── package.json
 └── README.md

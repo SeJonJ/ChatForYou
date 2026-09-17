@@ -85,7 +85,7 @@ class ChatRoomControllerJoinRoomTest {
 
         given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
-        given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(true);
+        given(instanceProvider.isInstanceAlive(INSTANCE_ID)).willReturn(true);
         given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
         given(userService.getUserInfo(oauthRedis)).willReturn(userDto);
 
@@ -112,7 +112,7 @@ class ChatRoomControllerJoinRoomTest {
         given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
         // 비정상 인스턴스 조건
-        given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(INSTANCE_ID)).willReturn(false);
         given(chatRoomRecoveryService.evaluateJoinRecovery(rtcRoom))
                 .willReturn(RecoveryDecision.notRecoverable(RecoveryReason.NOT_RECOVERABLE));
 
@@ -135,14 +135,13 @@ class ChatRoomControllerJoinRoomTest {
         // given — 인스턴스 정상이지만 현재 인스턴스와 불일치 → REDIRECT_ROOM
         OauthRedis oauthRedis = createOauthRedis();
         ChatRoom rtcRoom = rtcRoom(ROOM_ID, "instance-other");
-        // routingService.setRoutingInfo 에서 roomRoutingInfo.getRoomId() 호출 → null 방지
         RoomRoutingInfo roomRoutingInfo = mock(RoomRoutingInfo.class);
-        given(roomRoutingInfo.getRoomId()).willReturn(ROOM_ID);
+        given(roomRoutingInfo.getInstanceId()).willReturn("instance-other");
         given(roomRoutingInfo.getNginxCookie()).willReturn("nginx-cookie");
 
         given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
-        given(instanceProvider.isHealthy("instance-other")).willReturn(true);
+        given(instanceProvider.isInstanceAlive("instance-other")).willReturn(true);
         // 현재 인스턴스 != 방 인스턴스 → 불일치 분기
         given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
         given(routingService.getRedirectCount(any())).willReturn(0);
@@ -179,9 +178,9 @@ class ChatRoomControllerJoinRoomTest {
 
         given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(slaveRoom);
-        given(instanceProvider.isHealthy("instance-dead")).willReturn(false);
+        given(instanceProvider.isInstanceAlive("instance-dead")).willReturn(false);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(true);
+        given(instanceProvider.isInstanceAlive(INSTANCE_ID)).willReturn(true);
         given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
         given(userService.getUserInfo(oauthRedis)).willReturn(userDto);
 
@@ -209,7 +208,7 @@ class ChatRoomControllerJoinRoomTest {
 
         given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
         given(chatRoomService.findRoomById(ROOM_ID)).willReturn(msgRoom);
-        given(instanceProvider.isHealthy(INSTANCE_ID)).willReturn(true);
+        given(instanceProvider.isInstanceAlive(INSTANCE_ID)).willReturn(true);
         given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
 
         try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
@@ -221,6 +220,115 @@ class ChatRoomControllerJoinRoomTest {
 
         // then — MSG 타입은 녹화 ledger 와 무관하므로 SADD 미호출
         verify(redisService, never()).addRoomMember(anyString(), anyString());
+    }
+
+    // ── owner 생존 판정 — 공유 heartbeat 기준 ────────────────────────────
+
+    @Test
+    @DisplayName("기동 직후라 해시링에 없는 owner 라도 heartbeat 가 살아있으면 방을 비활성화하지 않고 라우팅한다")
+    void joinRoom_owner가공유heartbeat로살아있으면_방을비활성화하지않는다() throws Exception {
+        // given — 다른 인스턴스 소유 방, 공유 heartbeat 기준 생존
+        OauthRedis oauthRedis = createOauthRedis();
+        ChatRoom rtcRoom = rtcRoom(ROOM_ID, "instance-other");
+        RoomRoutingInfo roomRoutingInfo = mock(RoomRoutingInfo.class);
+        given(roomRoutingInfo.getInstanceId()).willReturn("instance-other");
+        given(roomRoutingInfo.getNginxCookie()).willReturn("srv|cookie-other");
+
+        given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
+        given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
+        given(instanceProvider.isInstanceAlive("instance-other")).willReturn(true);
+        given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
+        given(routingService.getRoomRoutingInfoByRoomId(ROOM_ID)).willReturn(roomRoutingInfo);
+
+        try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
+            // when
+            mockMvc.perform(get("/chatforyou/api/chat/room/{roomId}", ROOM_ID)
+                            .header("Authorization", AUTHORIZATION))
+                    .andExpect(status().isOk());
+        }
+
+        // then — 복구 판정도 방 비활성화도 일어나지 않는다
+        verify(chatRoomRecoveryService, never()).evaluateJoinRecovery(any());
+        verify(chatRoomService, never()).delChatRoom(anyString(), anyBoolean());
+        verify(routingService).setRoutingInfo(any(), anyString(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("owner heartbeat 가 없고 복구도 불가능하면 기존처럼 방을 비활성화한다")
+    void joinRoom_owner가죽고복구불가면_방을비활성화한다() throws Exception {
+        // given
+        OauthRedis oauthRedis = createOauthRedis();
+        ChatRoom rtcRoom = rtcRoom(ROOM_ID, "instance-dead");
+
+        given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
+        given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
+        given(instanceProvider.isInstanceAlive("instance-dead")).willReturn(false);
+        given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(null);
+        given(chatRoomRecoveryService.evaluateJoinRecovery(rtcRoom))
+                .willReturn(RecoveryDecision.notRecoverable(RecoveryReason.NOT_RECOVERABLE));
+
+        try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
+            // when
+            mockMvc.perform(get("/chatforyou/api/chat/room/{roomId}", ROOM_ID)
+                            .header("Authorization", AUTHORIZATION))
+                    .andExpect(status().isOk());
+        }
+
+        // then
+        verify(chatRoomService).delChatRoom(ROOM_ID, true);
+    }
+
+    @Test
+    @DisplayName("라우팅 정보가 없어도 owner 인스턴스 쿠키로 라우팅하고 방에서 내보내지 않는다")
+    void joinRoom_라우팅정보없음_owner쿠키로라우팅한다() throws Exception {
+        // given — room:mapping 이 없는 살아있는 타 인스턴스 소유 방
+        OauthRedis oauthRedis = createOauthRedis();
+        ChatRoom rtcRoom = rtcRoom(ROOM_ID, "instance-other");
+
+        given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
+        given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
+        given(instanceProvider.isInstanceAlive("instance-other")).willReturn(true);
+        given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
+        given(routingService.getRoomRoutingInfoByRoomId(ROOM_ID)).willReturn(null);
+        given(redisService.getInstanceCookieFromMaster("instance-other")).willReturn("srv|cookie-other");
+
+        try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
+            // when
+            mockMvc.perform(get("/chatforyou/api/chat/room/{roomId}", ROOM_ID)
+                            .header("Authorization", AUTHORIZATION))
+                    .andExpect(status().isOk());
+        }
+
+        // then
+        verify(routingService).setRoutingInfo(any(), eq(ROOM_ID), eq("srv|cookie-other"), anyInt());
+        verify(chatRoomService, never()).delChatRoom(anyString(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("라우팅 정보가 이전 owner 를 가리키면 확정된 owner 쿠키로 라우팅한다")
+    void joinRoom_라우팅정보가이전owner면_확정owner쿠키로라우팅한다() throws Exception {
+        // given — 복구 직후 복제본에 남은 이전 owner 라우팅 정보
+        OauthRedis oauthRedis = createOauthRedis();
+        ChatRoom rtcRoom = rtcRoom(ROOM_ID, "instance-other");
+        RoomRoutingInfo staleRoutingInfo = mock(RoomRoutingInfo.class);
+        given(staleRoutingInfo.getInstanceId()).willReturn("instance-dead");
+
+        given(userService.getValidatedOauthUser(EMAIL)).willReturn(oauthRedis);
+        given(chatRoomService.findRoomById(ROOM_ID)).willReturn(rtcRoom);
+        given(instanceProvider.isInstanceAlive("instance-other")).willReturn(true);
+        given(instanceProvider.getInstanceId()).willReturn(INSTANCE_ID);
+        given(routingService.getRoomRoutingInfoByRoomId(ROOM_ID)).willReturn(staleRoutingInfo);
+        given(redisService.getInstanceCookieFromMaster("instance-other")).willReturn("srv|cookie-other");
+
+        try (MockedStatic<TokenUtils> tokenUtils = mockValidToken()) {
+            // when
+            mockMvc.perform(get("/chatforyou/api/chat/room/{roomId}", ROOM_ID)
+                            .header("Authorization", AUTHORIZATION))
+                    .andExpect(status().isOk());
+        }
+
+        // then — 죽은 인스턴스 쿠키를 내려주면 사용자가 계속 없는 서버로 간다
+        verify(routingService).setRoutingInfo(any(), eq(ROOM_ID), eq("srv|cookie-other"), anyInt());
     }
 
     // ── 헬퍼 ────────────────────────────────────────────────────────────────

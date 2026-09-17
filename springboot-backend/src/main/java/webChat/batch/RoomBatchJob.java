@@ -12,6 +12,7 @@ import webChat.model.room.RoomState;
 import webChat.repository.DailyInfoRepository;
 import webChat.service.analysis.AnalysisService;
 import webChat.service.chatroom.ChatRoomService;
+import webChat.service.chatroom.recovery.ChatRoomRecoveryService;
 import webChat.service.redis.RedisService;
 import webChat.service.routing.RoutingInstanceProvider;
 
@@ -29,6 +30,7 @@ public class RoomBatchJob {
     private final ChatRoomService chatRoomService;
     private final DailyInfoRepository dailyInfoRepository;
     private final RedisService redisService;
+    private final ChatRoomRecoveryService chatRoomRecoveryService;
     private final int SEARCH_COUNT = 100;
     private final RoutingInstanceProvider instanceProvider;
 
@@ -50,6 +52,13 @@ public class RoomBatchJob {
         try {
             List<KurentoRoom> chatRoomListForDelete = redisService.getChatRoomListForDelete(SEARCH_COUNT);
             for (KurentoRoom kurentoRoom : chatRoomListForDelete) {
+                // 서버 종료로 CREATED 로 되돌아간 방은 삭제 후보로 잡히지만, 참가자들이 아직 재연결을
+                // 시도하는 동안 지우면 방과 녹화 파일이 함께 사라진다.
+                if (chatRoomRecoveryService.hasPendingRecovery(kurentoRoom.getRoomId())) {
+                    log.debug("Skip delete for room {} waiting for deploy recovery", kurentoRoom.getRoomId());
+                    continue;
+                }
+
                 chatRoomService.delChatRoom(kurentoRoom);
                 if (!RoomState.INACTIVE.equals(kurentoRoom.getRoomState()) && instanceProvider.getInstanceId().equals(kurentoRoom.getInstanceId())) {
                     instanceProvider.decrementInstanceRoomCount();

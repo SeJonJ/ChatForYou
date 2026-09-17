@@ -37,6 +37,30 @@ module.exports = [
       globals: {
         ...globals.browser,
         ...globals.jquery,
+        // reconnectPolicy.js 가 <script> 로 먼저 로드되어 window 에 노출하는 전역
+        ReconnectPolicy: 'readonly',
+      },
+    },
+  },
+
+  // ReconnectPolicy 를 선언하는 원본 파일에서는 전역 선언을 끈다(재선언 오류 방지)
+  {
+    files: ['static/js/rtc/reconnectPolicy.js'],
+    languageOptions: {
+      globals: {
+        ReconnectPolicy: 'off',
+      },
+    },
+  },
+
+  // Node 단위 테스트 (node:test 러너)
+  {
+    files: ['test/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
       },
     },
   },

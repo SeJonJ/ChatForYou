@@ -470,6 +470,22 @@ public abstract class InstanceProvider {
     }
 
     /**
+     * 방 소유권 판정용 인스턴스 생존 여부를 반환한다.
+     * activeServers 는 인스턴스마다 Kafka 이벤트로 채워져 기동 직후에는 자기 자신만 담고 있어,
+     * 살아 있는 다른 인스턴스의 방을 주인 없는 방으로 오판한다. 그래서 모든 인스턴스가 공유하는
+     * Redis heartbeat 키를 기준으로 판정한다.
+     */
+    public boolean isInstanceAlive(String instanceId) {
+        if (StringUtil.isNullOrEmpty(instanceId)) {
+            return false;
+        }
+        if (instanceId.equals(this.instanceId)) {
+            return !isShutdown;
+        }
+        return redisService.hasInstanceHeartbeat(instanceId);
+    }
+
+    /**
      * Heartbeat 시작
      */
     private void startHeartbeat() {

@@ -67,7 +67,7 @@ class RecoveryServiceRecordingGateTest {
         given(instanceProvider.getInstanceId()).willReturn(NEW_INSTANCE);
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(COOKIE);
     }
 
