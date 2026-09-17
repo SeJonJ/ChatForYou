@@ -63,10 +63,14 @@ class ShutdownConfigOwnerScopeTest {
     @BeforeEach
     void setUp() {
         given(instanceProvider.getInstanceId()).willReturn(CURRENT_INSTANCE);
+        stubMarkedRooms(List.of());
+    }
+
+    private void stubMarkedRooms(List<String> roomIds) {
         given(chatRoomRecoveryService.markOwnedRoomsRecoverable()).willReturn(PreShutdownResult.builder()
                 .instanceId(CURRENT_INSTANCE)
-                .markedRoomCount(0)
-                .roomIds(List.of())
+                .markedRoomCount(roomIds.size())
+                .roomIds(roomIds)
                 .build());
     }
 
@@ -84,7 +88,8 @@ class ShutdownConfigOwnerScopeTest {
     void cleanup_타인스턴스소유방은_정리하지않는다() {
         // given: B 소유 방(userCount=1) 한 개
         KurentoRoom bRoom = room("room-B", OTHER_INSTANCE, 1);
-        given(redisService.searchRoomListByOptions(any())).willReturn(List.of(roomDocument("room-B")));
+        stubMarkedRooms(List.of("room-B"));
+        given(redisService.getChatRoomFromMaster("room-B")).willReturn(bRoom);
         given(redisService.getAllChatRoomData("room-B"))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), bRoom));
 
@@ -104,7 +109,8 @@ class ShutdownConfigOwnerScopeTest {
     void cleanup_자기인스턴스소유방은_정상정리한다() {
         // given: A 소유 방(userCount=2) 한 개
         KurentoRoom aRoom = room("room-A", CURRENT_INSTANCE, 2);
-        given(redisService.searchRoomListByOptions(any())).willReturn(List.of(roomDocument("room-A")));
+        stubMarkedRooms(List.of("room-A"));
+        given(redisService.getChatRoomFromMaster("room-A")).willReturn(aRoom);
         given(redisService.getAllChatRoomData("room-A"))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), aRoom));
 
@@ -125,8 +131,9 @@ class ShutdownConfigOwnerScopeTest {
         // given: A 소유 방, B 소유 방 혼재
         KurentoRoom aRoom = room("room-A", CURRENT_INSTANCE, 1);
         KurentoRoom bRoom = room("room-B", OTHER_INSTANCE, 1);
-        given(redisService.searchRoomListByOptions(any()))
-                .willReturn(List.of(roomDocument("room-A"), roomDocument("room-B")));
+        stubMarkedRooms(List.of("room-A", "room-B"));
+        given(redisService.getChatRoomFromMaster("room-A")).willReturn(aRoom);
+        given(redisService.getChatRoomFromMaster("room-B")).willReturn(bRoom);
         given(redisService.getAllChatRoomData("room-A"))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), aRoom));
         given(redisService.getAllChatRoomData("room-B"))
@@ -150,7 +157,8 @@ class ShutdownConfigOwnerScopeTest {
     void cleanup_중복호출시_한번만정리한다() {
         // given
         KurentoRoom aRoom = room("room-A", CURRENT_INSTANCE, 1);
-        given(redisService.searchRoomListByOptions(any())).willReturn(List.of(roomDocument("room-A")));
+        stubMarkedRooms(List.of("room-A"));
+        given(redisService.getChatRoomFromMaster("room-A")).willReturn(aRoom);
         given(redisService.getAllChatRoomData("room-A"))
                 .willReturn(Map.of(DataType.CHATROOM.getType(), aRoom));
 

@@ -424,6 +424,32 @@ function retryReconnectAfterPreflightFailure(error) {
 }
 
 /**
+ * 빠른 복구 재시도를 소진했을 때 재연결 루프로 인계한다.
+ * 복구 타이머·카운터를 먼저 정리해 재시도 루프가 둘 다 도는 것을 막고, 재연결 예약은 한 건만 남긴다.
+ */
+function handOffRecoveryToReconnect() {
+    if (isIntentionalClose()) {
+        return;
+    }
+
+    resetRecoveryState();
+    if (!reconnectNoticeMessage) {
+        setReconnectNoticeMessage(DEPLOY_RECONNECT_NOTICE);
+    }
+
+    if (reconnectInProgress) {
+        reconnectInProgress = false;
+        scheduleReconnect();
+        return;
+    }
+
+    if (ws) {
+        // onclose 가 재연결 경로로 수렴시킨다.
+        ws.close();
+    }
+}
+
+/**
  * WebSocket 재오픈 전에 HTTP로 방 상태를 확인해 deploy recovery 필요 여부를 판정한다.
  */
 function preflightRoomBeforeReconnect() {
@@ -454,8 +480,14 @@ function preflightRoomBeforeReconnect() {
 
             if (result === 'REDIRECT_ROOM') {
                 resetRecoveryState();
-                clearConnectedSession();
                 console.log('room redirect to : ', data?.roomId);
+                if (ReconnectPolicy.decideRedirectRoomAction(reconnectInProgress) === 'RECONNECT') {
+                    // 응답의 Set-Cookie 로 라우팅이 갱신됐으므로 다음 재연결 시도가 새 owner 로 간다.
+                    reconnectInProgress = false;
+                    scheduleReconnect();
+                    return;
+                }
+                clearConnectedSession();
                 location.reload();
                 return;
             }
@@ -499,10 +531,9 @@ function recoverRoomAndReconnect() {
                 return;
             }
 
-            if (result === 'REDIRECT_RECOVER'
-                    && (data?.reason === 'CLAIM_IN_PROGRESS' || data?.reason === 'CURRENT_COOKIE_UNAVAILABLE')) {
-                if (recoveryRetryCount >= RECOVERY_MAX_RETRY) {
-                    redirectToRoomListOnce('방 복구가 지연되고 있습니다. 잠시 후 방 목록에서 다시 입장해주세요.');
+            if (result === 'REDIRECT_RECOVER' && ReconnectPolicy.isRetryableRecoveryReason(data?.reason)) {
+                if (ReconnectPolicy.decideRecoveryRetry(recoveryRetryCount, RECOVERY_MAX_RETRY) === 'HAND_OFF') {
+                    handOffRecoveryToReconnect();
                     return;
                 }
 
@@ -1386,8 +1417,12 @@ function register() {
             const { result, data } = response || {};
             if(result === 'REDIRECT_ROOM'){
                 resetRecoveryState();
-                clearConnectedSession();
                 console.log('room redirect to : ', data?.roomId);
+                if (ReconnectPolicy.decideRedirectRoomAction(reconnectInProgress) === 'RECONNECT') {
+                    if (ws) { ws.close(); }
+                    return;
+                }
+                clearConnectedSession();
                 location.reload();
             } else if (result === 'REDIRECT_RECOVER') {
                 recoverRoomAndReconnect();
@@ -1449,6 +1484,9 @@ function register() {
                     // ws.close() → onclose(guard 미설정) → scheduleReconnect → attempt 누적 → MAX 시 수동 재입장 모달
                     if (ws) { ws.close(); }
                 }
+            } else if (ReconnectPolicy.decideRegisterFailureAction(reconnectInProgress) === 'RECONNECT') {
+                // 배포 중 일시적인 서버 오류로 입장 요청을 못 보낸 채 소켓만 열려 있으면 화면이 멈춘다.
+                if (ws) { ws.close(); }
             }
         };
         // AJAX 요청 실행
@@ -1610,6 +1648,14 @@ function onExistingParticipants(msg) {
 
         // 로컬 스트림 백업 (화면 공유 복원용)
         participant.setLocalStream(stream);
+
+        // 재연결로 마이크·카메라를 새로 열면 트랙은 켜진 상태로 시작하는데 버튼은 끔 상태 그대로다.
+        // 화면과 실제 송출이 어긋나 음소거가 조용히 풀리므로 버튼 상태를 새 트랙에 다시 적용한다.
+        ReconnectPolicy.applyLocalMediaStates(
+            stream,
+            ReconnectPolicy.resolveMediaFlag($('#audioBtn').data('flag')),
+            ReconnectPolicy.resolveMediaFlag($('#videoBtn').data('flag'))
+        );
 
         // 로컬 발화 감지 tap 부착 — 실패해도 WebRTC 입장 흐름은 계속되어야 한다.
         if (typeof SpeakingDetector !== 'undefined') {

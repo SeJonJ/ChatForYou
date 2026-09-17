@@ -135,6 +135,12 @@ public interface RedisService {
     String getInstanceCookieFromMaster(String instanceId);
 
     /**
+     * 인스턴스 heartbeat 키 존재 여부를 master Redis에서 조회한다.
+     * 인스턴스 생존 여부를 모든 인스턴스가 같은 기준으로 판정하기 위한 조회다.
+     */
+    boolean hasInstanceHeartbeat(String instanceId);
+
+    /**
      * 방 복구 성공 시 room owner, routing, recovery metadata를 Redis 트랜잭션으로 함께 갱신한다.
      */
     void updateRecoveredRoomRoutingAndMetadata(ChatRoom chatRoom,

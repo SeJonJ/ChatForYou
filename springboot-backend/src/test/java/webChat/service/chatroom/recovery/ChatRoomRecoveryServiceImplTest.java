@@ -39,7 +39,9 @@ class ChatRoomRecoveryServiceImplTest {
     private static final String ROOM_ID = "room-1";
     private static final String OLD_INSTANCE = "instance-old";
     private static final String NEW_INSTANCE = "instance-new";
+    private static final String OTHER_INSTANCE = "instance-other";
     private static final String CURRENT_COOKIE = "srv|cookie-new";
+    private static final String OTHER_COOKIE = "srv|cookie-other";
 
     @Mock
     private RedisService redisService;
@@ -61,7 +63,7 @@ class ChatRoomRecoveryServiceImplTest {
     void evaluateJoinRecovery_whenOwnerUnhealthyAndMetadataExists_returnsRecoverable() {
         // given
         ChatRoom chatRoom = rtcRoom(OLD_INSTANCE);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
 
         // when
@@ -77,7 +79,7 @@ class ChatRoomRecoveryServiceImplTest {
     void evaluateJoinRecovery_whenMetadataExpired_deletesMetadataAndReturnsExpired() {
         // given
         ChatRoom chatRoom = rtcRoom(OLD_INSTANCE);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(expiredMetadata());
 
         // when
@@ -94,7 +96,7 @@ class ChatRoomRecoveryServiceImplTest {
     void evaluateJoinRecovery_whenMetadataMissing_returnsNotRecoverable() {
         // given
         ChatRoom chatRoom = rtcRoom(OLD_INSTANCE);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(null);
 
         // when
@@ -137,7 +139,7 @@ class ChatRoomRecoveryServiceImplTest {
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(metadata);
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(CURRENT_COOKIE);
 
         // when
@@ -188,7 +190,7 @@ class ChatRoomRecoveryServiceImplTest {
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(NEW_INSTANCE)).willReturn(true);
+        given(instanceProvider.isInstanceAlive(NEW_INSTANCE)).willReturn(true);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(CURRENT_COOKIE);
 
         // when
@@ -211,7 +213,7 @@ class ChatRoomRecoveryServiceImplTest {
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(null);
 
         // when
@@ -235,7 +237,7 @@ class ChatRoomRecoveryServiceImplTest {
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(NEW_INSTANCE)).willReturn(true);
+        given(instanceProvider.isInstanceAlive(NEW_INSTANCE)).willReturn(true);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(null);
 
         // when
@@ -258,7 +260,7 @@ class ChatRoomRecoveryServiceImplTest {
         given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
         given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
         given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
-        given(instanceProvider.isHealthy(OLD_INSTANCE)).willReturn(false);
+        given(instanceProvider.isInstanceAlive(OLD_INSTANCE)).willReturn(false);
         given(redisService.getInstanceCookieFromMaster(NEW_INSTANCE)).willReturn(CURRENT_COOKIE);
         willThrow(new IllegalStateException("update failed"))
                 .given(redisService)
@@ -295,6 +297,110 @@ class ChatRoomRecoveryServiceImplTest {
         assertThat(result.getMarkedRoomCount()).isEqualTo(1);
         assertThat(result.getRoomIds()).containsExactly("room-owned");
         verify(redisService, times(1)).saveRoomRecoveryMetadata(any(RoomRecoveryMetadata.class), anyLong());
+    }
+
+    @Test
+    @DisplayName("recoverRoom_whenOtherAliveInstanceOwnsRoom_returnsOwnerCookieWithoutClaiming")
+    void recoverRoom_whenOtherAliveInstanceOwnsRoom_returnsOwnerCookieWithoutClaiming() {
+        // given — 다른 참가자가 먼저 복구해 살아있는 owner 가 이미 있는 상태
+        ChatRoom requestRoom = rtcRoom(OLD_INSTANCE);
+        ChatRoom masterRoom = rtcRoom(OTHER_INSTANCE);
+        given(instanceProvider.getInstanceId()).willReturn(NEW_INSTANCE);
+        given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
+        given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
+        given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
+        given(instanceProvider.isInstanceAlive(OTHER_INSTANCE)).willReturn(true);
+        given(redisService.getInstanceCookieFromMaster(OTHER_INSTANCE)).willReturn(OTHER_COOKIE);
+
+        // when
+        RecoveryResult result = sut.recoverRoom(requestRoom, response);
+
+        // then
+        assertThat(result.getResult().name()).isEqualTo("SUCCESS");
+        assertThat(result.getData().getInstanceId()).isEqualTo(OTHER_INSTANCE);
+        assertThat(masterRoom.getInstanceId()).isEqualTo(OTHER_INSTANCE);
+        verify(routingService).setRecoveryRoutingInfo(response, ROOM_ID, OTHER_COOKIE);
+        verify(redisService, never()).updateRecoveredRoomRoutingAndMetadata(any(), any(), any(), anyLong());
+        verify(instanceProvider, never()).incrementInstanceRoomCount();
+        verify(redisService).releaseRoomClaimLock(ROOM_ID, NEW_INSTANCE);
+    }
+
+    @Test
+    @DisplayName("recoverRoom_whenOwnerCookieMissing_returnsRedirectRecover")
+    void recoverRoom_whenOwnerCookieMissing_returnsRedirectRecover() {
+        // given
+        ChatRoom requestRoom = rtcRoom(OLD_INSTANCE);
+        ChatRoom masterRoom = rtcRoom(OTHER_INSTANCE);
+        given(instanceProvider.getInstanceId()).willReturn(NEW_INSTANCE);
+        given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
+        given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
+        given(redisService.getChatRoomFromMaster(ROOM_ID)).willReturn(masterRoom);
+        given(instanceProvider.isInstanceAlive(OTHER_INSTANCE)).willReturn(true);
+        given(redisService.getInstanceCookieFromMaster(OTHER_INSTANCE)).willReturn(null);
+
+        // when
+        RecoveryResult result = sut.recoverRoom(requestRoom, response);
+
+        // then
+        assertThat(result.getResult().name()).isEqualTo("REDIRECT_RECOVER");
+        assertThat(result.getData().getReason()).isEqualTo(RecoveryReason.OWNER_COOKIE_UNAVAILABLE.name());
+        assertThat(result.getData().getRetryAfterMs()).isEqualTo(500);
+        verify(routingService, never()).setRecoveryRoutingInfo(any(), anyString(), anyString());
+        verify(redisService).releaseRoomClaimLock(ROOM_ID, NEW_INSTANCE);
+    }
+
+    @Test
+    @DisplayName("recoverRoom_whenInstanceShuttingDown_returnsRedirectRecoverWithoutClaimLock")
+    void recoverRoom_whenInstanceShuttingDown_returnsRedirectRecoverWithoutClaimLock() {
+        // given — 곧 종료될 인스턴스가 방을 가져가면 바로 다시 주인을 잃는다
+        ChatRoom requestRoom = rtcRoom(OLD_INSTANCE);
+        given(instanceProvider.getInstanceId()).willReturn(NEW_INSTANCE);
+        given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
+        given(instanceProvider.isShuttingDown()).willReturn(true);
+
+        // when
+        RecoveryResult result = sut.recoverRoom(requestRoom, response);
+
+        // then
+        assertThat(result.getResult().name()).isEqualTo("REDIRECT_RECOVER");
+        assertThat(result.getData().getReason()).isEqualTo(RecoveryReason.INSTANCE_SHUTTING_DOWN.name());
+        verify(redisService, never()).tryAcquireRoomClaimLock(anyString(), anyString(), anyLong());
+        verify(redisService, never()).getChatRoomFromMaster(anyString());
+    }
+
+    @Test
+    @DisplayName("recoverRoom_whenShutdownStartsAfterClaimLock_returnsRedirectRecoverWithoutOwnerChange")
+    void recoverRoom_whenShutdownStartsAfterClaimLock_returnsRedirectRecoverWithoutOwnerChange() {
+        // given — lock 을 잡은 뒤 종료가 시작된 상황
+        ChatRoom requestRoom = rtcRoom(OLD_INSTANCE);
+        given(instanceProvider.getInstanceId()).willReturn(NEW_INSTANCE);
+        given(redisService.getRoomRecoveryMetadata(ROOM_ID)).willReturn(validMetadata());
+        given(instanceProvider.isShuttingDown()).willReturn(false, true);
+        given(redisService.tryAcquireRoomClaimLock(eq(ROOM_ID), eq(NEW_INSTANCE), anyLong())).willReturn(true);
+
+        // when
+        RecoveryResult result = sut.recoverRoom(requestRoom, response);
+
+        // then
+        assertThat(result.getResult().name()).isEqualTo("REDIRECT_RECOVER");
+        assertThat(result.getData().getReason()).isEqualTo(RecoveryReason.INSTANCE_SHUTTING_DOWN.name());
+        verify(redisService, never()).getChatRoomFromMaster(anyString());
+        verify(redisService, never()).updateRecoveredRoomRoutingAndMetadata(any(), any(), any(), anyLong());
+        verify(redisService).releaseRoomClaimLock(ROOM_ID, NEW_INSTANCE);
+    }
+
+    @Test
+    @DisplayName("hasPendingRecovery_reflectsMetadataPresenceAndExpiry")
+    void hasPendingRecovery_reflectsMetadataPresenceAndExpiry() {
+        // given
+        given(redisService.getRoomRecoveryMetadata(ROOM_ID))
+                .willReturn(validMetadata(), expiredMetadata(), null);
+
+        // when & then
+        assertThat(sut.hasPendingRecovery(ROOM_ID)).isTrue();
+        assertThat(sut.hasPendingRecovery(ROOM_ID)).isFalse();
+        assertThat(sut.hasPendingRecovery(ROOM_ID)).isFalse();
+        verify(redisService, never()).deleteRoomRecoveryMetadata(anyString());
     }
 
     private ChatRoom rtcRoom(String instanceId) {

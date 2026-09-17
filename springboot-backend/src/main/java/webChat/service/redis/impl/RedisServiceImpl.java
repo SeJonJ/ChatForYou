@@ -652,6 +652,13 @@ public class RedisServiceImpl implements RedisService {
     }
 
     @Override
+    public boolean hasInstanceHeartbeat(String instanceId) {
+        // heartbeat 는 TTL 로 만료되므로 키 존재 자체가 생존 신호다. slave 복제 지연으로 죽은 인스턴스를
+        // 살아있다고 오판하지 않도록 master 에서 읽는다.
+        return Boolean.TRUE.equals(masterTemplate.hasKey(INSTANCE_HEARTBEAT_PREFIX.getPrefix() + instanceId));
+    }
+
+    @Override
     public void updateRecoveredRoomRoutingAndMetadata(ChatRoom chatRoom,
                                                       RoomRoutingInfo roomRoutingInfo,
                                                       RoomRecoveryMetadata metadata,
