@@ -1,4 +1,7 @@
+name = "chatforyou-frontend-expert"
+description = "Implement scoped Node.js and Electron frontend work for ChatForYou."
 model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
-model_instructions_file = "/Users/sejon/project/ChatForYou_v2/.codex/agents/chatforyou-frontend-expert.md"
+model_instructions_file = "chatforyou-frontend-expert.md"
+developer_instructions = "Read `.codex/agents/chatforyou-frontend-expert.md` from the current Git worktree before doing role work."
