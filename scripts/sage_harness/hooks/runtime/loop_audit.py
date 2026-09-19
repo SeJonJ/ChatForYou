@@ -398,9 +398,10 @@ def severity_receipt_issues(receipt, survived):
 
 
 def record_round(root, run_id, iteration, found, survived, accepted, arch=0, tokens=0, now=None,
-                 lens_receipts=None, survived_by_severity=None):
+                 lens_receipts=None, survived_by_severity=None, peer_usage=None):
     """라운드 1건 기록.
     found=FIND 발견수, survived=REFUTE 생존수, accepted=REWORK 채택수, arch=아키텍처 에스컬레이션수, tokens=누적 토큰.
+    peer_usage=이 라운드 peer 리뷰어 실측(`sage cross-check` 의 REVIEWER_TOKENS) dict 또는 "unknown".
     seq=append 순 단조 번호(라이브러리 stamp, 수기 위조·순서조작 탐지용 — 7차 배치3)."""
     t = time.time() if now is None else now
     record = {
@@ -416,6 +417,8 @@ def record_round(root, run_id, iteration, found, survived, accepted, arch=0, tok
             raise AuditWriteError("survived_by_severity invalid: " + "; ".join(issues))
         record["survived_by_severity"] = {key: int(survived_by_severity[key])
                                           for key in SEVERITIES}
+    if peer_usage is not None:
+        record["peer_usage"] = peer_usage if peer_usage == "unknown" else dict(peer_usage)
 
     # close 와 같은 이유로 lock 안에서 다시 본다. CLI 는 orphan(open 없음)과 종료된 run 을 이미
     # 거부하지만 그 검사는 lock 밖이라, round 와 close 가 경합하면 둘 다 통과해 종료 뒤에 라운드가

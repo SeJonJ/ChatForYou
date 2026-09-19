@@ -30,8 +30,9 @@ a structured review report for the current implementation cycle.
    `pdca.review_loop` resolves pass
    vs loop. `cross_model.reviewer.model` (optional) and `cross_model.effort` (default
    `high`) are passed to the peer CLI by `sage cross-check`; without reviewer.model the
-   peer CLI default model remains in effect. Build one UTF-8 review packet containing the
-   same-stem phase documents, implementation files, and verification evidence. Invoke exactly
+   peer CLI default model remains in effect. Build one UTF-8 review packet as described under
+   **Review packet** in `docs/agent/review-protocol.md` (propositions, context map,
+   verification summary — not raw rule or plan documents). Invoke exactly
    one deterministic command: `sage cross-check --packet-file <packet>` for cross-model, or
    `sage review --packet-file <packet> --host <active_host>` for same-runtime. A COMPLETE status
    requires review body plus `REVIEWER_PROCESS`, `REVIEWER_HOST`, `REVIEWER_MODEL`,
