@@ -1,10 +1,10 @@
 # SAGE Team Onboarding
 
 Host: `codex`
-Selected Codex CORE skill scope: `global`
+Selected Codex CORE skill scope: `project-local`
 
-Global CORE skills live under the effective `$CODEX_HOME/skills` and are not carried by the repository.
-The SAGE CLI/runtime and CORE skill install are per-user: each teammate installs the CLI, then runs `sage install --host codex --skill-scope global --dest <repo>`.
+Project-local CORE skills live under `.codex/skills`. When these files are committed, a teammate can discover the prompts after cloning the repository.
+This repository content does not install the `sage` or `sage-hook` executable. Each teammate still installs the SAGE CLI/runtime separately and runs `sage doctor`.
 
 Run `sage-init` only for the first shared+local bootstrap. When the shared profile is already bootstrapped, each teammate runs `sage-init-local` to create only `sage/project-profile.local.yaml`.
 

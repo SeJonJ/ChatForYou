@@ -268,12 +268,17 @@ pipx install "sage-harness[schema]"
 # Claude Code 훅/스킬 설치 (이미 부트스트랩된 프로젝트에 합류하는 경우)
 sage install --host claude --force
 
-# Codex 훅 설치 (전역 스킬 scope)
-sage install --host codex --skill-scope global --force
+# Codex 훅/스킬 설치 (스킬은 레포 .codex/skills 에 설치)
+sage install --host codex --skill-scope project-local --force
 
 # 설치/버전/게이트 상태 확인
 sage doctor
 ```
+
+프로젝트 overlay(`sage/asset_overrides/`)는 레포에 설치된 스킬에만 합성됩니다. 그래서 Codex 도
+`--skill-scope project-local` 로 설치해야 Claude와 같은 규칙으로 동작합니다. 전역
+(`$CODEX_HOME/skills`)에 예전 SAGE 스킬이 남아 있으면 어느 쪽이 쓰일지 보장되지 않으므로
+(`sage doctor` 가 중복으로 경고) 전역 사본은 지우세요.
 
 **주요 명령**
 

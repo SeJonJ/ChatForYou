@@ -45,6 +45,33 @@ How a change is matched to its review document is a project policy
 `sage_harness/hooks/strategies/`; until one is selected, L3 changes are
 blocked (safe default — the gate cannot confirm a review it cannot locate).
 
+## Review packet
+
+The packet is what an independent reviewer process (`sage cross-check` / `sage review`) sees.
+It runs in an empty scratch directory with process controls, and `sage` prepends a fixed
+reviewer contract (exploration budget, output contract, repository root). The reviewer judges
+from the packet first and reads the repository only for what a specific claim needs, so the
+packet decides both the depth and the cost of the review. Aim for roughly 60K tokens or less.
+
+Include:
+- **Review contract summary** — the verdict vocabulary and severity definitions. Not the raw
+  rule, profile, or skill documents: the reviewer re-reading them found nothing and cost the
+  most.
+- **Propositions** — Phase 01 requirements and Phase 02 invariants rewritten as true/false
+  statements the reviewer must judge (e.g. "the set marked recoverable is the same set that is
+  reset"). Not the raw plan documents.
+- **Verification summary** — what Phase 03/04 already ran and the results, so the reviewer
+  does not re-run tests or builds.
+- **Diff hunks plus the full body of every changed function.**
+- **Context map** — one hop out from the change: callers, callees, and the models / DTOs /
+  storage signatures they touch, as `file:line`. Defects that live outside the diff (a caller
+  that reads a different snapshot, a replica read mixed with a primary decision) are found
+  through this map.
+
+Across rounds of one cycle keep the packet body unchanged and append the round delta at the end
+(fixed prefix keeps the prompt cache warm). When host refuters dispute a peer-only P0/P1, the
+dispute and its evidence go into the next round's delta.
+
 ## Adversarial review-rework loop (Loop A)
 
 When `profile.pdca.review_loop.enabled` is true and the change is L2/L3, Phase 05 runs
@@ -59,10 +86,12 @@ Per round (up to `review_loop.max_iterations[risk]`):
    claim-hash)` so resurfaced items don't churn.
 2. **REFUTE** — exactly `review_loop.refuters` refuters run for the round; each judges ALL
    fresh findings in one batched pass (not one refuter per finding — that fanned out to
-   refuters×findings subagents and re-read each file per finding). A finding survives only
-   if refuting votes `< ⌈refuters/2⌉` (majority, tallied per finding — identical result).
-   Refuters bias to "refuted when uncertain", so weak findings drop; a wrongly-dropped real
-   issue is caught by the human BLOCKED path.
+   refuters×findings subagents and re-read each file per finding). A finding is dropped only
+   when refuting votes `> refuters/2` (strict majority, tallied per finding); a tie survives,
+   so with `refuters: 2` one refuter cannot drop a finding alone. Refuters bias to "refuted when
+   uncertain", so weak findings drop; a wrongly-dropped real issue is caught by the human
+   BLOCKED path. A P0/P1 raised only by the cross-model peer is not dropped by host refuters
+   alone — the dispute goes into the next round's packet for the peer to re-check.
 3. **TRIAGE** — surviving findings are classified `within_design` vs `architecture_change`.
    An `architecture_change` at L3 stops the loop and escalates to a human (never auto-reworked).
 4. **TERMINATION** (fixed priority): no survivors → APPROVED(CONVERGED); `dry_rounds`

@@ -350,152 +350,204 @@
     }
   },
   "core_renders": {
-    "claude/agents/convention-checker": {
-      "base_sha256": "3925aabf6aa28abf6cc66757c64aef8c482d82226b569103f155455118a9ab50",
-      "sage_version": "1.1.1"
-    },
-    "claude/agents/implementer-a": {
-      "base_sha256": "4a245377b2804f93182a9150ac4a05b72ce576da033a9745c189c5e9a939112c",
-      "sage_version": "1.1.1"
-    },
-    "claude/agents/implementer-b": {
-      "base_sha256": "4b2753e0ba4746d153c99eeee7b613b152e24f396a192354fbf3cd237c36ff95",
-      "sage_version": "1.1.1"
-    },
-    "claude/agents/leader": {
-      "base_sha256": "bfdea822c6eabefa95c3f38a86a44c9316157fea7aeb106840e5add0037b3bf6",
-      "sage_version": "1.1.1"
-    },
-    "claude/agents/qa": {
-      "base_sha256": "5446067cf0829c1a5c967470b7153dab591f92493f052b70db122533d489d3ed",
-      "sage_version": "1.1.1"
-    },
-    "claude/agents/reviewer": {
-      "base_sha256": "be241674e9e087c83f89033efc413f12f4c4965f34cf1c8fa0fa8b0770b11c6f",
-      "sage_version": "1.1.1"
-    },
-    "claude/framework/AGENT_GUIDE": {
-      "base_sha256": "0145dbfa6f8fbb430c3ff9381315e90f17eece7ceaa9595f82582d37091a1893",
-      "sage_version": "1.1.1"
-    },
-    "claude/framework/CLAUDE": {
-      "base_sha256": "38a08dbc1e8fcd3f79917fa297c099a6df26bf20311dbe020d63c9af103d00f9",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-asset": {
-      "base_sha256": "5c726bef91a99f64d970eff7d2d543af23cc1998399805db4fd9c8d60f60ea71",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-asset-override": {
-      "base_sha256": "ad8cc775f1ad150ed6d3340d9658d52333f7dd5ec9ca342002f98480c170a4da",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-cycle": {
-      "base_sha256": "9da9b3c63edd1f996e1de6241a4b7378f0be4cc7a44bf3ab08e2a4e3abaf8bf8",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-cycle-fast": {
-      "base_sha256": "3bb6f52109596a5f1d156f60dec47483935bbad98563f2eab917304f015b526c",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-feedback": {
-      "base_sha256": "9439f81382ff5364d1a7165d1b34ebf28c7b0d2ed7c8b98b02221d6754bfab45",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-init": {
-      "base_sha256": "e18bdc9b1c8e4825c6012fe5a9849705fb5bd685e76a432c98b198a655ef0670",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-init-local": {
-      "base_sha256": "ad47bffe720a7b5f17526948d8c10093d36390e2431cc74fc8b5b3f56cf15600",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-plan": {
-      "base_sha256": "5868c8637db29c72a5eca294727439cfc95898a6002f78967da765d2076c2d7d",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-plan-fast": {
-      "base_sha256": "4a8904c717a991983b18decc3d14ef9d22efdd3a4468812717757685821f10c9",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-profile-modify": {
-      "base_sha256": "c26a75e6f42d0c7fb691c51eacc395459942654b2c1e573a23a10146f4b7b302",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-review": {
-      "base_sha256": "6f16feda63bff8ae855bbe12b307bf95f0c276bcbb5265ac997adc99d61230bc",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-team": {
-      "base_sha256": "9be5fb7ef244c26cbb94235fd359daf5f88045dbe8e67eb55981da8a120ced5a",
-      "sage_version": "1.1.1"
-    },
-    "claude/skills/sage-team-fast": {
-      "base_sha256": "1200726d27ee63fd14d20c52277114ccd74c2e3b36433404e25f9840bb8aae2f",
-      "sage_version": "1.1.1"
+    "shared/framework-doc/docs/agent/language-policy": {
+      "base_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f",
+      "sage_version": "1.2.0",
+      "semantic_source": "core/framework/docs/agent/language-policy.md",
+      "semantic_source_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f"
     },
     "codex/agents/convention-checker": {
       "base_sha256": "84156230368c6491e8f3acf702b2a6efe6e794cf2131784d41019b7feae2d4a9",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/agents/implementer-a": {
       "base_sha256": "c6c66d303872152500e0c334fc02b2e6e7f12379168a248425d6ef9b033b5a1e",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/agents/implementer-b": {
       "base_sha256": "477fbe1fd724c545eb95e918505030a1bcd9203385239a89870b5574cb9f82a7",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/agents/leader": {
       "base_sha256": "1d5c893cd00fb2035d42eb9c63409e1181eaed11a6b28435d483f915070e08d9",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/agents/qa": {
       "base_sha256": "f8bd65e245eab1090ad702e22c5d81d81c1a214aed5a592e41bdd6a79cad8daa",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/agents/reviewer": {
       "base_sha256": "b51c4827fc8e8f991ae47a456b88d6738248be987594073a7965fc518426988b",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
-    "codex/framework/AGENTS": {
-      "base_sha256": "4882e9a3f74eba56fbd1539923f8a78f9bed61c7d28c2e48462f2f18f5cb9b96",
-      "sage_version": "1.1.1"
+    "codex/skills/sage-asset": {
+      "base_sha256": "5c726bef91a99f64d970eff7d2d543af23cc1998399805db4fd9c8d60f60ea71",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-asset-override": {
+      "base_sha256": "ad8cc775f1ad150ed6d3340d9658d52333f7dd5ec9ca342002f98480c170a4da",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-cycle": {
+      "base_sha256": "9da9b3c63edd1f996e1de6241a4b7378f0be4cc7a44bf3ab08e2a4e3abaf8bf8",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-cycle-fast": {
+      "base_sha256": "3bb6f52109596a5f1d156f60dec47483935bbad98563f2eab917304f015b526c",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-feedback": {
+      "base_sha256": "9439f81382ff5364d1a7165d1b34ebf28c7b0d2ed7c8b98b02221d6754bfab45",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-init": {
+      "base_sha256": "36a5fc1c6346c60fa8c644e0b5a5fbe9c9d5627262579d28356021fbf58a905c",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-init-local": {
+      "base_sha256": "ad47bffe720a7b5f17526948d8c10093d36390e2431cc74fc8b5b3f56cf15600",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-plan": {
+      "base_sha256": "5868c8637db29c72a5eca294727439cfc95898a6002f78967da765d2076c2d7d",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-plan-fast": {
+      "base_sha256": "4a8904c717a991983b18decc3d14ef9d22efdd3a4468812717757685821f10c9",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-profile-modify": {
+      "base_sha256": "c26a75e6f42d0c7fb691c51eacc395459942654b2c1e573a23a10146f4b7b302",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-review": {
+      "base_sha256": "64b70bb43b516c338ebfff1673b3e09b1bcfce1e8330ab3b3b6c43507282acbb",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-team": {
+      "base_sha256": "9be5fb7ef244c26cbb94235fd359daf5f88045dbe8e67eb55981da8a120ced5a",
+      "sage_version": "1.2.0"
+    },
+    "codex/skills/sage-team-fast": {
+      "base_sha256": "1200726d27ee63fd14d20c52277114ccd74c2e3b36433404e25f9840bb8aae2f",
+      "sage_version": "1.2.0"
     },
     "codex/framework/AGENT_GUIDE": {
       "base_sha256": "0145dbfa6f8fbb430c3ff9381315e90f17eece7ceaa9595f82582d37091a1893",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
     "codex/framework/CODEX": {
       "base_sha256": "03525f5b911ed4fa9cc0e6c7243235756697dea1ecc35b3d8c3013169bb7be08",
-      "sage_version": "1.1.1"
+      "sage_version": "1.2.0"
     },
-    "shared/framework-doc/docs/agent/language-policy": {
-      "base_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f",
-      "sage_version": "1.1.1",
-      "semantic_source": "core/framework/docs/agent/language-policy.md",
-      "semantic_source_sha256": "695373d0a620e7b0a80ea9fb3ab33784622b02e89d9373b2548546e97d24ad1f"
+    "codex/framework/AGENTS": {
+      "base_sha256": "4882e9a3f74eba56fbd1539923f8a78f9bed61c7d28c2e48462f2f18f5cb9b96",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/convention-checker": {
+      "base_sha256": "3925aabf6aa28abf6cc66757c64aef8c482d82226b569103f155455118a9ab50",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/implementer-a": {
+      "base_sha256": "4a245377b2804f93182a9150ac4a05b72ce576da033a9745c189c5e9a939112c",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/implementer-b": {
+      "base_sha256": "4b2753e0ba4746d153c99eeee7b613b152e24f396a192354fbf3cd237c36ff95",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/leader": {
+      "base_sha256": "bfdea822c6eabefa95c3f38a86a44c9316157fea7aeb106840e5add0037b3bf6",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/qa": {
+      "base_sha256": "5446067cf0829c1a5c967470b7153dab591f92493f052b70db122533d489d3ed",
+      "sage_version": "1.2.0"
+    },
+    "claude/agents/reviewer": {
+      "base_sha256": "be241674e9e087c83f89033efc413f12f4c4965f34cf1c8fa0fa8b0770b11c6f",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-asset": {
+      "base_sha256": "5c726bef91a99f64d970eff7d2d543af23cc1998399805db4fd9c8d60f60ea71",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-asset-override": {
+      "base_sha256": "ad8cc775f1ad150ed6d3340d9658d52333f7dd5ec9ca342002f98480c170a4da",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-cycle": {
+      "base_sha256": "9da9b3c63edd1f996e1de6241a4b7378f0be4cc7a44bf3ab08e2a4e3abaf8bf8",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-cycle-fast": {
+      "base_sha256": "3bb6f52109596a5f1d156f60dec47483935bbad98563f2eab917304f015b526c",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-feedback": {
+      "base_sha256": "9439f81382ff5364d1a7165d1b34ebf28c7b0d2ed7c8b98b02221d6754bfab45",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-init": {
+      "base_sha256": "36a5fc1c6346c60fa8c644e0b5a5fbe9c9d5627262579d28356021fbf58a905c",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-init-local": {
+      "base_sha256": "ad47bffe720a7b5f17526948d8c10093d36390e2431cc74fc8b5b3f56cf15600",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-plan": {
+      "base_sha256": "5868c8637db29c72a5eca294727439cfc95898a6002f78967da765d2076c2d7d",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-plan-fast": {
+      "base_sha256": "4a8904c717a991983b18decc3d14ef9d22efdd3a4468812717757685821f10c9",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-profile-modify": {
+      "base_sha256": "c26a75e6f42d0c7fb691c51eacc395459942654b2c1e573a23a10146f4b7b302",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-review": {
+      "base_sha256": "64b70bb43b516c338ebfff1673b3e09b1bcfce1e8330ab3b3b6c43507282acbb",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-team": {
+      "base_sha256": "9be5fb7ef244c26cbb94235fd359daf5f88045dbe8e67eb55981da8a120ced5a",
+      "sage_version": "1.2.0"
+    },
+    "claude/skills/sage-team-fast": {
+      "base_sha256": "1200726d27ee63fd14d20c52277114ccd74c2e3b36433404e25f9840bb8aae2f",
+      "sage_version": "1.2.0"
+    },
+    "claude/framework/AGENT_GUIDE": {
+      "base_sha256": "0145dbfa6f8fbb430c3ff9381315e90f17eece7ceaa9595f82582d37091a1893",
+      "sage_version": "1.2.0"
+    },
+    "claude/framework/CLAUDE": {
+      "base_sha256": "38a08dbc1e8fcd3f79917fa297c099a6df26bf20311dbe020d63c9af103d00f9",
+      "sage_version": "1.2.0"
     }
   },
   "core_skill_receipts": {
     "claude": {
-      "sage_version": "1.1.1",
+      "sage_version": "1.2.0",
       "scope": "project-local"
     },
     "codex": {
-      "sage_version": "1.1.1",
-      "scope": "global"
+      "sage_version": "1.2.0",
+      "scope": "project-local"
     }
   },
   "dirty_flag": false,
-  "generator_version": "1.1.1",
+  "generator_version": "1.2.0",
   "hook_runtime_hash": {
     "claude": "sha256:2d0318a75804defae4ac5b53e3ea9e4fe5766c21a937c1c091f45bb780be8254",
     "codex": "sha256:3519535630dd81a83cbe191b51fa3668d09ed3a9c46842e5948145a3737c941c",
-    "shared": "sha256:acad917c576f16f6baaca3004512be12a8902597038c870a8c648fb29147c0d8"
+    "shared": "sha256:ce23aad8da8587eb1ae20e2a1bc96fca3367a586b2717d81cdf768867d45b561"
   },
   "host_runtime": "codex",
-  "installed_core_content_hash": "sha256:e8ce8f38ae0b7725bdb2cac1d2690820e9ee183333042a69a0e7cb1c9dbd104b",
+  "installed_core_content_hash": "sha256:ce62ead0b0f0204ef3018566006699f3ec188aa7c8d1a9ed0a4768cfb3929b21",
   "installed_hosts": [
     "codex",
     "claude"
@@ -505,7 +557,7 @@
     "required": 1
   },
   "sage_source_commit": "unknown",
-  "sage_version": "1.1.1",
-  "source_core_content_hash": "sha256:e8ce8f38ae0b7725bdb2cac1d2690820e9ee183333042a69a0e7cb1c9dbd104b",
+  "sage_version": "1.2.0",
+  "source_core_content_hash": "sha256:ce62ead0b0f0204ef3018566006699f3ec188aa7c8d1a9ed0a4768cfb3929b21",
   "template_version": "1"
 }

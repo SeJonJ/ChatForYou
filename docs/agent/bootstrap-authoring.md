@@ -185,7 +185,7 @@ If **off**, leave `review_loop.enabled: false` and skip the rest. If **on**, aut
 | Which perspectives? (propose from the stack) | `lenses` | FIND lenses, from the engine vocabulary: correctness / security / concurrency / convention / lifecycle / performance / error_handling / data_integrity / api_contract. **One lens = one reviewer subagent per round.** |
 | Maximum rounds for L2 and L3? | `max_iterations` | Without convergence the run is BLOCKED at this count (defaults L2:1, L3:3) |
 | Token budget? | `budget_tokens` | BLOCKED once the cumulative total is exceeded (defaults L2:150k, L3:600k) |
-| How many refuters? | `refuters` | Refuters **per round**. They judge all findings in one batch, so the count is independent of how many findings there are. A finding survives when disproving votes stay below a majority (default 2) |
+| How many refuters? | `refuters` | Refuters **per round**. They judge all findings in one batch, so the count is independent of how many findings there are. A finding is dropped only when more than half of them disprove it — a tie survives, so with the default 2 one refuter cannot drop a finding alone |
 | Consecutive dry rounds? | `dry_rounds` | K consecutive rounds with zero new findings means convergence (default 1) |
 | Severities that block approval? | `severity_block` | APPROVED is blocked while any of these is unresolved (default [P0,P1]) |
 | Cross-model refutation? | `cross_model` | Tied to `options.cross_model` — reuse that answer if it was already asked; do not ask again |
