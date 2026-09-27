@@ -56,6 +56,22 @@ else
 fi
 rm -rf "$tmp"
 
+# ── 3-1. ES 모듈 파일 커밋 → PASS(exit 0) ───────────────────────────────────
+# import/export 를 쓰는 파일은 Node 버전과 관계없이 구문 오류가 아니다.
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/committed-esm.XXXXXX")"
+make_repo "$tmp"
+printf "import { a } from './dep.js';\nexport const b = a;\n" > "$tmp/nodejs-frontend/static/js/module.js"
+printf "export const a = 1;\n" > "$tmp/nodejs-frontend/static/js/dep.js"
+git -C "$tmp" add . >/dev/null 2>&1
+git -C "$tmp" commit -q -m "esm commit"
+out=$(CODEX_PROJECT_ROOT="$tmp" bash "$SCRIPT" HEAD 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "COMMITTED-TREE PASS"; then
+    record_pass "esm_commit_pass (exit 0)"
+else
+    record_fail "esm_commit_pass" "exit $rc (expected 0 PASS)" "$out"
+fi
+rm -rf "$tmp"
+
 # ── 4. 잘못된 ref → exit 1 ──────────────────────────────────────────────────
 out=$(bash "$SCRIPT" definitely-not-a-ref 2>&1); rc=$?
 if [ "$rc" -eq 1 ]; then

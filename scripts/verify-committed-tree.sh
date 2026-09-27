@@ -109,13 +109,30 @@ if $backend_target; then
 fi
 
 # frontend: node --check (구문) — 커밋트리 내 JS 전체
+# static/js 에는 ES 모듈과 전역 <script> 파일이 섞여 있다. node --check 는 확장자로 파싱 목표를
+# 정하고, Node 22 미만은 import/export 를 자동 감지하지 않으므로 .mjs 로 먼저, 실패하면 .cjs 로
+# 파싱해 한쪽이라도 되면 통과로 본다. 오류 메시지는 스크립트 목표 쪽 결과를 보여 준다.
+check_js_syntax() {
+    local source_file="$1" check_dir
+    check_dir=$(mktemp -d)
+    cp "$source_file" "$check_dir/candidate.mjs"
+    if node --check "$check_dir/candidate.mjs" >/dev/null 2>&1; then
+        rm -rf "$check_dir"; return 0
+    fi
+    cp "$source_file" "$check_dir/candidate.cjs"
+    node --check "$check_dir/candidate.cjs"
+    local rc=$?
+    rm -rf "$check_dir"
+    return $rc
+}
+
 if $frontend_target; then
     if ! command -v node >/dev/null 2>&1; then
         RESULTS+=("frontend:syntax|DEGRADE|node 부재"); degrade=true
     else
         while IFS= read -r jf; do
             [ -z "$jf" ] && continue
-            run_check "frontend:syntax:$(basename "$jf")" node --check "$jf"
+            run_check "frontend:syntax:$(basename "$jf")" check_js_syntax "$jf"
         done < <(find "$WT/nodejs-frontend/static/js" -name '*.js' -type f 2>/dev/null; [ -f "$WT/nodejs-frontend/server.js" ] && echo "$WT/nodejs-frontend/server.js")
     fi
 fi
