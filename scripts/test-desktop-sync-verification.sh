@@ -89,6 +89,45 @@ printf 'window.__CONFIG__ = { API_BASE_URL: "http://localhost" };\n' > "$FIXTURE
 cp "$FIXTURE_FRONTEND/config/config.js" "$FIXTURE_FRONTEND/config/config.local.js"
 cp "$FIXTURE_FRONTEND/config/config.js" "$FIXTURE_FRONTEND/config/config.prod.js"
 
+# vite build 대역. 실제 빌드처럼 매번 dist 를 비우고 static·templates·config 와 build 청크를 만든다.
+# 동기화와 검증 게이트는 dist 를 소비하기 전에 이 빌드를 먼저 부르므로 원본 변경이 곧바로 비교에 반영된다.
+cat > "$FIXTURE_FRONTEND/fixture-build.js" <<'BUILD'
+const fs = require('fs');
+const path = require('path');
+if (fs.existsSync(path.join(__dirname, 'FAIL_BUILD'))) {
+    console.error('fixture build failure');
+    process.exit(1);
+}
+const dist = path.join(__dirname, 'dist');
+fs.rmSync(dist, { recursive: true, force: true });
+// PARTIAL_BUILD 는 static 복사 도중 실패한 빌드를 흉내 낸다. app.js 가 빠지고 완료 표식이 없다.
+if (fs.existsSync(path.join(__dirname, 'PARTIAL_BUILD'))) {
+    fs.cpSync(path.join(__dirname, 'templates'), path.join(dist, 'templates'), { recursive: true });
+    fs.cpSync(path.join(__dirname, 'static'), path.join(dist, 'static'), {
+        recursive: true,
+        filter: (source) => !source.endsWith(`${path.sep}app.js`)
+    });
+    fs.mkdirSync(path.join(dist, 'config'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, 'config', 'config.js'), path.join(dist, 'config', 'config.js'));
+    fs.mkdirSync(path.join(dist, 'build'), { recursive: true });
+    fs.writeFileSync(path.join(dist, 'build', 'entry.js'), 'export {};\n');
+    console.error('fixture partial build failure');
+    process.exit(1);
+}
+// static/js/entry 는 번들에 흡수되는 모듈 소스 대역이라 dist 로 복사하지 않는다.
+fs.cpSync(path.join(__dirname, 'static'), path.join(dist, 'static'), {
+    recursive: true,
+    filter: (source) => !source.includes(`${path.sep}static${path.sep}js${path.sep}entry`)
+});
+fs.cpSync(path.join(__dirname, 'templates'), path.join(dist, 'templates'), { recursive: true });
+fs.mkdirSync(path.join(dist, 'config'), { recursive: true });
+fs.copyFileSync(path.join(__dirname, 'config', 'config.js'), path.join(dist, 'config', 'config.js'));
+fs.mkdirSync(path.join(dist, 'build'), { recursive: true });
+fs.writeFileSync(path.join(dist, 'build', 'entry.js'), 'export {};\n');
+fs.writeFileSync(path.join(dist, '.build-complete'), 'fixture\n');
+BUILD
+printf '{ "name": "fixture-frontend", "private": true, "scripts": { "build": "node fixture-build.js" } }\n' > "$FIXTURE_FRONTEND/package.json"
+
 (
     cd "$FIXTURE_DESKTOP" &&
     node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
@@ -204,6 +243,250 @@ CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh
 CONFIG_DRIFT_RC=$?
 expect_rc "시간 필드 외 config 변경 FAIL" 1 "$CONFIG_DRIFT_RC"
 cp "$FIXTURE_FRONTEND/config/config.js" "$FIXTURE_FRONTEND/config/config.local.js"
+
+echo "## Desktop sync check 빌드 실패"
+touch "$FIXTURE_FRONTEND/FAIL_BUILD"
+BEFORE_BUILD_FAIL=$(tree_digest "$FIXTURE_DESKTOP")
+CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh" >/dev/null 2>&1
+BUILD_FAIL_RC=$?
+AFTER_BUILD_FAIL=$(tree_digest "$FIXTURE_DESKTOP")
+expect_rc "빌드 실패 DEGRADE" 3 "$BUILD_FAIL_RC"
+if [ "$BEFORE_BUILD_FAIL" = "$AFTER_BUILD_FAIL" ]; then
+    ok "빌드 실패 후 Desktop 트리 불변"
+else
+    bad "빌드 실패 검증이 Desktop 트리를 변경함"
+fi
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "빌드 실패 시 sync 도 중단" 1 $?
+rm "$FIXTURE_FRONTEND/FAIL_BUILD"
+
+echo "## Desktop sync 번들로 대체된 사본 정리"
+# 모듈 전환 전에 동기화된 classic 사본이 남아 있는 Desktop 트리를 재현한다.
+mkdir -p "$FIXTURE_FRONTEND/static/js/entry" "$FIXTURE_DESKTOP/src/static/js/entry"
+printf 'export const entry = 1;\n' > "$FIXTURE_FRONTEND/static/js/entry/main.js"
+printf 'console.log("classic");\n' > "$FIXTURE_DESKTOP/src/static/js/entry/main.js"
+printf 'console.log("electron-only");\n' > "$FIXTURE_DESKTOP/src/static/js/electron-only.js"
+printf 'static/js/electron-only.js\n' > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh" >/dev/null 2>&1
+expect_rc "남은 classic 사본 drift FAIL" 1 $?
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --dry-run --skip-backup >/dev/null 2>&1
+)
+if [ -f "$FIXTURE_DESKTOP/src/static/js/entry/main.js" ]; then
+    ok "dry-run 은 사본을 지우지 않음"
+else
+    bad "dry-run 이 사본을 지움"
+fi
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "사본 정리 sync 성공" 0 $?
+if [ ! -e "$FIXTURE_DESKTOP/src/static/js/entry" ]; then
+    ok "번들로 대체된 사본과 빈 디렉터리 삭제"
+else
+    bad "번들로 대체된 사본이 남음"
+fi
+if [ -f "$FIXTURE_DESKTOP/src/static/js/electron-only.js" ]; then
+    ok "Desktop 전용 파일 보존"
+else
+    bad "Desktop 전용 파일이 삭제됨"
+fi
+CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh" >/dev/null 2>&1
+expect_rc "정리 후 PASS" 0 $?
+rm -rf "$FIXTURE_FRONTEND/static/js/entry"
+rm "$FIXTURE_DESKTOP/src/static/js/electron-only.js"
+: > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+
+echo "## Desktop sync 완성되지 않은 dist 거부"
+touch "$FIXTURE_FRONTEND/PARTIAL_BUILD"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1)
+BEFORE_PARTIAL=$(tree_digest "$FIXTURE_DESKTOP")
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-build --skip-backup >/dev/null 2>&1
+)
+expect_rc "완료 표식 없는 dist 로 sync 중단" 1 $?
+AFTER_PARTIAL=$(tree_digest "$FIXTURE_DESKTOP")
+if [ "$BEFORE_PARTIAL" = "$AFTER_PARTIAL" ]; then
+    ok "부분 빌드 dist 로 Desktop 트리 불변"
+else
+    bad "부분 빌드 dist 가 Desktop 트리를 변경함"
+fi
+rm "$FIXTURE_FRONTEND/PARTIAL_BUILD"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+
+echo "## Desktop sync 동기화 중 dist 재빌드 감지"
+# 1단계 동기화 직후 다른 빌드가 dist 를 다시 쓰기 시작한 상황: 표식이 새로 생기고 app.js 가 아직 없다.
+cat > "$FIXTURE_DESKTOP/race-harness.js" <<'HARNESS'
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const originalSync = script.syncEngine.sync.bind(script.syncEngine);
+script.syncEngine.sync = async (...args) => {
+    const result = await originalSync(...args);
+    const dist = path.join(script.frontendDistPath);
+    fs.rmSync(path.join(dist, '.build-complete'), { force: true });
+    fs.rmSync(path.join(dist, 'static', 'js', 'app.js'), { force: true });
+    fs.writeFileSync(path.join(dist, '.build-complete'), 'rebuilt\n');
+    return result;
+};
+script.run();
+HARNESS
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node race-harness.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "동기화 중 재빌드된 dist 로 sync 중단" 1 $?
+if [ -f "$FIXTURE_DESKTOP/src/static/js/app.js" ]; then
+    ok "재빌드 중인 dist 로 Desktop 사본을 지우지 않음"
+else
+    bad "재빌드 중인 dist 때문에 Desktop 사본이 삭제됨"
+fi
+rm "$FIXTURE_DESKTOP/race-harness.js"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
+) || exit 1
+
+echo "## Desktop sync 정리 목록 확정 후 dist 재빌드 감지"
+# 삭제 목록을 만드는 도중 다른 빌드가 dist 를 비운 상황: 목록에는 살아 있어야 할 파일까지 담긴다.
+cat > "$FIXTURE_DESKTOP/prune-race-harness.js" <<'HARNESS'
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const originalPrune = script.pruneBundledSources.bind(script);
+script.pruneBundledSources = async () => {
+    const originalExistsSync = fs.existsSync;
+    let fired = false;
+    // 목록을 만드는 첫 dist 조회 시점에 재빌드가 시작된 것으로 꾸민다.
+    fs.existsSync = (target) => {
+        if (!fired && String(target).startsWith(path.join(script.frontendDistPath, 'static'))) {
+            fired = true;
+            fs.rmSync(path.join(script.frontendDistPath, 'static'), { recursive: true, force: true });
+            fs.rmSync(path.join(script.frontendDistPath, '.build-complete'), { force: true });
+            fs.writeFileSync(path.join(script.frontendDistPath, '.build-complete'), 'rebuilt\n');
+        }
+        return originalExistsSync(target);
+    };
+    try {
+        return await originalPrune();
+    } finally {
+        fs.existsSync = originalExistsSync;
+    }
+};
+script.run();
+HARNESS
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node prune-race-harness.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "정리 도중 재빌드된 dist 로 sync 중단" 1 $?
+if [ -f "$FIXTURE_DESKTOP/src/static/js/app.js" ]; then
+    ok "정리 도중 재빌드에도 Desktop 사본 보존"
+else
+    bad "정리 도중 재빌드로 Desktop 사본이 삭제됨"
+fi
+rm "$FIXTURE_DESKTOP/prune-race-harness.js"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
+) || exit 1
+
+echo "## Desktop sync web 에서 삭제된 파일 정리"
+# web 원본에서 지운 파일의 Desktop 사본은 다시 sync 하면 사라져야 한다. 남으면 검증이 영구히 drift 를 낸다.
+printf 'console.log("retired");\n' > "$FIXTURE_FRONTEND/static/js/retired.js"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+(cd "$FIXTURE_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1) || exit 1
+rm "$FIXTURE_FRONTEND/static/js/retired.js"
+(cd "$FIXTURE_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1)
+expect_rc "web 삭제 후 재sync 성공" 0 $?
+if [ -e "$FIXTURE_DESKTOP/src/static/js/retired.js" ]; then
+    bad "web 에서 삭제된 파일의 Desktop 사본이 남음"
+else
+    ok "web 에서 삭제된 파일의 Desktop 사본 정리"
+fi
+CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh" >/dev/null 2>&1
+expect_rc "web 삭제 후 재sync 한 트리 PASS" 0 $?
+
+echo "## Desktop sync Desktop 전용 baseline 보존"
+printf 'console.log("electron-only");\n' > "$FIXTURE_DESKTOP/src/static/js/electron-only.js"
+printf 'static/js/electron-only.js\n' > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+(cd "$FIXTURE_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1)
+expect_rc "baseline 파일이 있는 트리 sync 성공" 0 $?
+if [ -f "$FIXTURE_DESKTOP/src/static/js/electron-only.js" ]; then
+    ok "baseline 에 있는 Desktop 전용 파일 보존"
+else
+    bad "baseline 에 있는 Desktop 전용 파일이 삭제됨"
+fi
+mv "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt" "$FIXTURE_SCRIPTS/baseline.moved"
+(cd "$FIXTURE_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1)
+expect_rc "baseline 목록 없이 sync 중단" 1 $?
+if [ -f "$FIXTURE_DESKTOP/src/static/js/electron-only.js" ]; then
+    ok "baseline 목록이 없어도 Desktop 전용 파일 보존"
+else
+    bad "baseline 목록이 없을 때 Desktop 전용 파일이 삭제됨"
+fi
+mv "$FIXTURE_SCRIPTS/baseline.moved" "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+rm "$FIXTURE_DESKTOP/src/static/js/electron-only.js"
+: > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+
+echo "## Desktop sync check dist 에 없는 web 원본 baseline"
+# 번들에 흡수돼 dist 에 없는 web 원본 경로를 Desktop 전용으로 등록하면 전환된 원본의 사본을 숨기게 된다.
+mkdir -p "$FIXTURE_FRONTEND/static/js/entry" "$FIXTURE_DESKTOP/src/static/js/entry"
+printf 'export const entry = 1;\n' > "$FIXTURE_FRONTEND/static/js/entry/bundled.js"
+cp "$FIXTURE_FRONTEND/static/js/entry/bundled.js" "$FIXTURE_DESKTOP/src/static/js/entry/bundled.js"
+printf 'static/js/entry/bundled.js\n' > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+CODEX_PROJECT_ROOT="$FIXTURE_ROOT" bash "$FIXTURE_SCRIPTS/verify-desktop-sync.sh" >/dev/null 2>&1
+expect_rc "dist 에 없는 web 원본 baseline DEGRADE" 3 $?
+: > "$FIXTURE_SCRIPTS/desktop-sync-extra-baseline.txt"
+rm -rf "$FIXTURE_FRONTEND/static/js/entry" "$FIXTURE_DESKTOP/src/static/js/entry"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+
+echo "## Desktop sync 완료 표식이 계속 없는 dist 거부"
+# 표식 확인 직후 다른 빌드가 표식을 지우고 계속 쓰는 상황: 표식이 없는 상태끼리 같다고 보면 끝까지 통과한다.
+cat > "$FIXTURE_DESKTOP/marker-gap-harness.js" <<'HARNESS'
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const marker = path.join(script.frontendDistPath, '.build-complete');
+const originalExistsSync = fs.existsSync;
+const originalValidate = script.validateEnvironment.bind(script);
+script.validateEnvironment = async () => {
+    const originalBuild = script.buildFrontend.bind(script);
+    script.buildFrontend = () => {
+        originalBuild();
+        fs.rmSync(marker, { force: true });
+        fs.existsSync = (target) => (target === marker ? true : originalExistsSync(target));
+    };
+    try {
+        return await originalValidate();
+    } finally {
+        fs.existsSync = originalExistsSync;
+    }
+};
+script.run();
+HARNESS
+printf 'console.log("keep");\n' > "$FIXTURE_DESKTOP/src/static/js/keep-me.js"
+(cd "$FIXTURE_DESKTOP" && node marker-gap-harness.js --skip-backup >/dev/null 2>&1)
+expect_rc "완료 표식이 사라진 dist 로 sync 중단" 1 $?
+if [ -f "$FIXTURE_DESKTOP/src/static/js/keep-me.js" ]; then
+    ok "완료 표식이 사라진 dist 로 Desktop 사본을 지우지 않음"
+else
+    bad "완료 표식이 사라진 dist 로 Desktop 사본이 삭제됨"
+fi
+rm -f "$FIXTURE_DESKTOP/marker-gap-harness.js" "$FIXTURE_DESKTOP/src/static/js/keep-me.js"
+(cd "$FIXTURE_FRONTEND" && npm run build >/dev/null 2>&1) || exit 1
+(cd "$FIXTURE_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1) || exit 1
 
 echo "## Desktop sync check config 산출물 누락"
 rm -rf "$FIXTURE_DESKTOP/src/config"

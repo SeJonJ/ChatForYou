@@ -2,16 +2,13 @@ name: CI/CD Pipeline with GitHub Actions for K8S
 
 on:
   push:
-    branches: [ "infra/cicd-test", "chatforyou_v2_sage" ]
+    branches: [ "infra/cicd-test", "chatforyou_v2_sage", "feat/151" ]
 #    branches: [ "master-webrtc-catchmind", "infra/cicd-test" ]
 #  pull_request:
 #    branches: [ "master" ]
 
 jobs:
   changes:
-    # 새 브랜치 최초 push는 GitHub default 전환 전이므로 배포하지 않는다.
-    # infra/cicd-test는 기존 명시적 검증 경로를 유지한다.
-    if: github.ref_name == github.event.repository.default_branch || github.ref_name == 'infra/cicd-test'
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}

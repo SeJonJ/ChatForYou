@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    # 빌드 job 은 저장소를 읽기만 한다. 설치 스크립트가 도는 job 이라 쓰기 권한 토큰을 두지 않는다.
+    permissions:
+      contents: read
     
     strategy:
       matrix:
@@ -35,14 +38,24 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        persist-credentials: false
       
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
-        cache-dependency-path: chatforyou-desktop/package-lock.json
-        
+        cache-dependency-path: |
+          nodejs-frontend/package-lock.json
+          chatforyou-desktop/package-lock.json
+
+    # 데스크톱 빌드의 동기화 단계가 nodejs-frontend 에서 Vite 빌드를 직접 실행하므로 프론트 의존성 설치가 선행해야 한다.
+    - name: Install frontend dependencies
+      run: |
+        cd nodejs-frontend
+        npm ci
+
     - name: Install dependencies
       run: |
         cd chatforyou-desktop
@@ -53,7 +66,6 @@ jobs:
         cd chatforyou-desktop
         npm run ${{ matrix.build-script }}
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CSC_IDENTITY_AUTO_DISCOVERY: false
         
     ## 보안 설정 이슈로 인한 mac 자동 업데이트(zip 파일 빌드) 임시 비활성화 -> 추후 해결 시 활성화 예정     

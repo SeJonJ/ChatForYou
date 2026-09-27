@@ -1,6 +1,10 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import { test } from 'vitest';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 
+// 대상 파일은 브라우저 전역과 CommonJS 양쪽으로 내보내는 비모듈 스크립트다.
+// 번들러 interop 에 맡기지 않고 CommonJS 로 그대로 읽어 원본 계약을 검증한다.
+const require = createRequire(import.meta.url);
 const ReconnectPolicy = require('../static/js/rtc/reconnectPolicy.js');
 
 function createTrack() {

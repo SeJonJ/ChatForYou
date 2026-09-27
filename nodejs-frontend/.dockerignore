@@ -1,0 +1,6 @@
+node_modules
+dist
+.dist-build.lock
+.git
+test
+plan_docs

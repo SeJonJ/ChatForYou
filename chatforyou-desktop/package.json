@@ -1,6 +1,6 @@
 {
   "name": "chatforyou-desktop",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "ChatForYou Desktop Application built with Electron",
   "main": "src/main/electron-main.js",
   "scripts": {
@@ -21,10 +21,11 @@
     "sync:verbose": "node build-scripts/sync-frontend.js --verbose",
     "sync:prod": "node build-scripts/sync-frontend.js --env prod",
     "sync:check": "bash ../scripts/verify-desktop-sync.sh",
+    "smoke:modules": "electron build-scripts/smoke-module-loading.js",
     "scss:build": "npx sass src/static/scss:src/static/css --style=compressed --no-source-map",
     "scss:dev": "npx sass src/static/scss:src/static/css --style=expanded --source-map",
     "scss:watch": "npx sass src/static/scss:src/static/css --watch --style=expanded --source-map",
-    "clean": "npx rimraf dist src/static src/templates src/config",
+    "clean": "npx rimraf dist src/static src/templates src/config src/build",
     "clean:all": "npm run clean && npx rimraf node_modules",
     "info": "node build-scripts/build-log.js --env=local --platform=info --type=info",
     "info:prod": "node build-scripts/build-log.js --env=prod --platform=info --type=info --save",
@@ -42,6 +43,7 @@
   "author": "sejon",
   "license": "by-nc-sa 4.0",
   "devDependencies": {
+    "@electron/fuses": "^1.8.0",
     "electron": "^39.8.10",
     "electron-builder": "^24.0.0",
     "sass": "^1.89.2",
@@ -59,6 +61,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "build-scripts/verify-electron-fuses.js",
     "extraResources": [
       {
         "from": "auto-update/app-update.yml",

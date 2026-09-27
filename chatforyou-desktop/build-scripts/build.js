@@ -109,6 +109,9 @@ class ChatForYouBuilder {
       log.success('프론트엔드 동기화 완료');
     } catch (error) {
       log.error('프론트엔드 동기화 실패');
+      // 동기화 스크립트는 실패 원인(프론트 빌드 오류 포함)을 stdout 에 쓴다. 파이프로 받았으므로 여기서 남긴다.
+      if (error.stdout && error.stdout.length) process.stdout.write(error.stdout);
+      if (error.stderr && error.stderr.length) process.stderr.write(error.stderr);
       throw error;
     }
   }

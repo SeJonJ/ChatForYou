@@ -1,3 +1,8 @@
+import { getApiBaseUrl } from '../common/config.js';
+
+// ajaxUtil.js·common.js·popup-loader.js 는 아직 비모듈 스크립트라 전역으로 참조한다.
+// 모듈은 classic 스크립트가 전부 실행된 뒤에 평가되므로 참조 시점에 전역이 이미 있다.
+
 const roomList = {
   roomId: null,
   originPwd: '',
@@ -13,7 +18,7 @@ const roomList = {
   },
   loadRoomList: function() {
     const self = this;
-    ajax(window.__CONFIG__.API_BASE_URL + '/chat/room/list', 'GET', true, '', function(response) {
+    ajax(getApiBaseUrl() + '/chat/room/list', 'GET', true, '', function(response) {
       const { data } = response || {};
       const $tbody = $('#roomTableBody');
       $tbody.empty();
@@ -58,7 +63,7 @@ const roomList = {
   },
   initSse: function() {
     const self = this;
-    const eventSource = new EventSource(window.__CONFIG__.API_BASE_URL + '/sse/room-events');
+    const eventSource = new EventSource(getApiBaseUrl() + '/sse/room-events');
     let hasShownConnectionError = false;
 
     function parseEventData(event, eventName) {
@@ -155,7 +160,7 @@ const roomList = {
   },
   // 방문자 수 조회
   checkVisitor: function() {
-    let url = window.__CONFIG__.API_BASE_URL + "/visitor";
+    let url = getApiBaseUrl() + "/visitor";
     let data = {
       "isVisitedToday": sessionStorage.getItem("isVisitedToday") === 'true' ? 'true' : 'false'
     };
@@ -194,7 +199,7 @@ const roomList = {
     // roomConfigModal 열릴 때 현재 방 정보로 input 초기화 및 기존 비밀번호 저장
     $('#roomConfigModal').on('show.bs.modal', function () {
       if (!self.roomId) return;
-      tokenAjax(window.__CONFIG__.API_BASE_URL + '/chat/room/' + self.roomId, 'GET', true, '', function(response) {
+      tokenAjax(getApiBaseUrl() + '/chat/room/' + self.roomId, 'GET', true, '', function(response) {
           const { data } = response || {};
           if (data) {
             $('#configRoomName').val(data.roomName);
@@ -251,7 +256,7 @@ const roomList = {
     // 이용약관 동의는 방문자 수 갱신과 별도 API 호출이 함께 일어나므로 한 곳에서 처리한다.
     $("#agreeBtn").on('click', function(){
       self.checkVisitor();
-      fetchJson(window.__CONFIG__.API_BASE_URL + "/user_agree", { method: 'GET' }, '이용약관 동의 처리에 실패했습니다.')
+      fetchJson(getApiBaseUrl() + "/user_agree", { method: 'GET' }, '이용약관 동의 처리에 실패했습니다.')
         .then(() => { console.info("user agree!!") })
         .catch(error => { console.error("Error in user agree API:", error); });
       $('#announcementModal').modal('hide');

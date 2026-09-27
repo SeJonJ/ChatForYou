@@ -8,6 +8,10 @@
 # 대상: nodejs-frontend/server.js + nodejs-frontend/static/js/**/*.js
 #       (nodejs-frontend/routes/ 는 존재하지 않아 실질 진입점만 검사)
 #
+# 모듈/스크립트 혼재: static/js 아래에는 ES 모듈로 전환된 파일과 아직 전역 <script>
+#       로 로드되는 파일이 섞여 있다. node --check 는 확장자(.mjs/.cjs)로 파싱 목표를
+#       정하므로, 각 파일을 두 확장자로 복사해 한쪽이라도 파싱되면 PASS 로 본다.
+#
 # 사용:
 #   scripts/verify-frontend-syntax.sh              # 검증
 #   scripts/verify-frontend-syntax.sh --update-baseline   # 현재 실패 목록을 baseline 으로 재고정
@@ -50,11 +54,26 @@ if [ "$TARGET_COUNT" -eq 0 ]; then
     exit 3
 fi
 
+CHECK_DIR=$(mktemp -d)
+trap 'rm -rf "$CHECK_DIR"' EXIT INT TERM
+
+# ES 모듈 목표(.mjs)로 먼저 파싱하고, 실패하면 스크립트 목표(.cjs)로 재시도한다.
+# 둘 다 실패해야 구문 오류로 판정한다.
+check_syntax() {
+    source_file="$1"
+    cp "$source_file" "$CHECK_DIR/candidate.mjs"
+    if node --check "$CHECK_DIR/candidate.mjs" >/dev/null 2>&1; then
+        return 0
+    fi
+    cp "$source_file" "$CHECK_DIR/candidate.cjs"
+    node --check "$CHECK_DIR/candidate.cjs" >/dev/null 2>&1
+}
+
 # 현재 구문 실패 파일 집합 수집 (상대경로, 정렬)
 CURRENT_FAILS=""
 while IFS= read -r rel; do
     [ -z "$rel" ] && continue
-    if ! node --check "$PROJECT_ROOT/$rel" >/dev/null 2>&1; then
+    if ! check_syntax "$PROJECT_ROOT/$rel"; then
         CURRENT_FAILS="$CURRENT_FAILS$rel
 "
     fi

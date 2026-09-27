@@ -196,8 +196,9 @@ updaterCacheDirName: chatforyou-updater
 
 ### 일반 개발
 ```bash
-# 1. 의존성 설치
+# 1. 의존성 설치 (동기화가 nodejs-frontend 를 Vite 로 빌드하므로 양쪽 다 필요하다. Node 22.13+)
 npm install
+(cd ../nodejs-frontend && npm install)
 
 # 2. 개발 모드 실행
 npm run dev

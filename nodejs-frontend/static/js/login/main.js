@@ -1,3 +1,6 @@
+// 로그인 화면 진입 모듈. 설정 값은 window.__CONFIG__ 를 직접 읽지 않고 접근 모듈을 거친다.
+import { getApiBaseUrl, getBaseUrl, getGoogleOAuth } from '../common/config.js';
+
 // const { initializeApp } = require("firebase/app");
 //import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 
@@ -93,9 +96,9 @@
     function initializeFirebaseAppIfNeeded() {
         if (!firebase.apps.length) {
             firebase.initializeApp({
-                projectId: window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID,
-                apiKey: window.__CONFIG__.GOOGLE_OAUTH.API_KEY,
-                authDomain: window.__CONFIG__.GOOGLE_OAUTH.AUTH_DOMAIN
+                projectId: getGoogleOAuth().PROJECT_ID,
+                apiKey: getGoogleOAuth().API_KEY,
+                authDomain: getGoogleOAuth().AUTH_DOMAIN
             });
         } else {
             firebase.app();
@@ -155,7 +158,7 @@
                             localStorage.setItem('email', data.email);
                             localStorage.setItem('type', data.type);
                             localStorage.setItem('nickname', data.email.split('@')[0]);
-                            window.location.href = window.__CONFIG__.BASE_URL + '/';
+                            window.location.href = getBaseUrl() + '/';
                         } else {
                             showApiErrorToast('로그인에 실패하였습니다.');
                         }
@@ -164,7 +167,7 @@
                         console.error(error);
                         handleApiError(error);
                     };
-                    const url = window.__CONFIG__.API_BASE_URL + '/login/googleOauth';
+                    const url = getApiBaseUrl() + '/login/googleOauth';
                     ajax(url, 'POST', true, requestData, successCallback, errorCallback);
                 }).catch(function(error) {
                     console.error('[Login] Firebase ID 토큰 조회 실패:', error);
@@ -178,7 +181,7 @@
     });
 
     $('#qrLoginBtn').on('click', function() {
-        window.open(window.__CONFIG__.BASE_URL + '/templates/login/qr/qrlogin.html');
+        window.open(getBaseUrl() + '/templates/login/qr/qrlogin.html');
     });
 
     // Electron 환경에서 소셜 로그인 버튼 숨기기
@@ -204,10 +207,10 @@
             // Electron 환경과 일반 웹 환경 구분
             if (isElectron()) {
                 console.log('[Login] Electron 환경 감지');
-                window.location.href = window.__CONFIG__.BASE_URL + '/templates/roomlist.html';
+                window.location.href = getBaseUrl() + '/templates/roomlist.html';
             } else {
                 console.log('[Login] 일반 웹 환경 감지');
-                window.location.href = window.__CONFIG__.BASE_URL + '/';
+                window.location.href = getBaseUrl() + '/';
             }
         }
     });

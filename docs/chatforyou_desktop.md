@@ -24,3 +24,4 @@
 - build-scripts 는 nodejs-frontend 의 src 파일을 빌드하는 폴더인데, 이곳을 수정하는 경우가 있다면 알리고, 어느 부분을 어떻게 수정해야하고, 왜 수정해야하는지 알려줘.
 - auto-update 는 자동 업데이트 관련 폴더인데, 이곳을 수정하는 경우가 있다면 알리고, 어느 부분을 어떻게 수정해야하고, 왜 수정해야하는지 알려줘.
 - frontend 개발 후 npm run sync 및 scss:build 를 실행하여 동기화 해줘. 단 에러가 발생한 경우 반드시 알려줘야해.
+- npm run sync 는 nodejs-frontend 를 Vite 로 빌드해(Node 22.13+, nodejs-frontend 의존성 설치 필요) 그 dist 를 src 로 옮긴다. 소스 트리를 그대로 복사하지 않는다.
