@@ -230,8 +230,19 @@ class FrontendSyncScript {
     }
     this.assertDistUnchanged();
 
-    fs.rmSync(targetBuildDir, { recursive: true, force: true });
-    fs.cpSync(sourceBuildDir, targetBuildDir, { recursive: true });
+    // 먼저 지우고 복사하면 복사가 실패했을 때 src/build 가 비어 앱을 띄울 수 없다. 옆 경로에 끝까지
+    // 복사한 뒤에만 교체하므로 실패하면 이전 청크가 그대로 남는다. 강제 종료로 남은 임시 경로는
+    // 패키징에 섞이지 않게 시작할 때 지운다.
+    const stagingBuildDir = `${targetBuildDir}.sync-staging`;
+    fs.rmSync(stagingBuildDir, { recursive: true, force: true });
+    try {
+      fs.cpSync(sourceBuildDir, stagingBuildDir, { recursive: true });
+      fs.rmSync(targetBuildDir, { recursive: true, force: true });
+      fs.renameSync(stagingBuildDir, targetBuildDir);
+    } catch (error) {
+      fs.rmSync(stagingBuildDir, { recursive: true, force: true });
+      throw error;
+    }
 
     const chunkCount = fs.readdirSync(targetBuildDir).length;
     this.logger.info(`✅ 빌드 산출물 동기화 완료 (${chunkCount}개 파일)`);

@@ -401,6 +401,59 @@ rm "$FIXTURE_DESKTOP/prune-race-harness.js"
     node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
 ) || exit 1
 
+echo "## Desktop sync 빌드 청크 복사 실패 시 기존 청크 보존"
+# 청크 복사가 도중에 실패하면 이전 sync 의 src/build 가 그대로 남아야 한다. 먼저 지우고 복사하면 비어 버린다.
+printf 'previous\n' > "$FIXTURE_DESKTOP/src/build/entry.js"
+cat > "$FIXTURE_DESKTOP/copy-fail-harness.js" <<'HARNESS'
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const sourceBuildDir = path.join(script.frontendDistPath, 'build');
+const originalCpSync = fs.cpSync;
+fs.cpSync = (source, destination, options) => {
+    if (path.resolve(String(source)) === sourceBuildDir) {
+        fs.mkdirSync(destination, { recursive: true });
+        fs.writeFileSync(path.join(destination, 'partial.js'), 'partial\n');
+        throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+    }
+    return originalCpSync(source, destination, options);
+};
+script.run();
+HARNESS
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node copy-fail-harness.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "청크 복사 실패로 sync 중단" 1 $?
+if [ "$(cat "$FIXTURE_DESKTOP/src/build/entry.js" 2>/dev/null)" = "previous" ] && [ ! -e "$FIXTURE_DESKTOP/src/build/partial.js" ]; then
+    ok "복사 실패 후 기존 src/build 그대로 유지"
+else
+    bad "복사 실패로 기존 src/build 가 지워지거나 일부만 바뀜"
+fi
+if ls -d "$FIXTURE_DESKTOP"/src/build.* >/dev/null 2>&1; then
+    bad "복사 실패 후 임시 청크 디렉터리가 남음"
+else
+    ok "복사 실패 후 임시 청크 디렉터리 정리"
+fi
+rm "$FIXTURE_DESKTOP/copy-fail-harness.js"
+
+echo "## Desktop sync 빌드 청크 대상이 없거나 이전 임시 디렉터리가 남은 경우"
+# 처음 sync 하는 트리(src/build 없음)와, 강제 종료된 sync 가 남긴 임시 디렉터리가 있는 트리 모두 정상 교체돼야 한다.
+rm -rf "$FIXTURE_DESKTOP/src/build"
+mkdir -p "$FIXTURE_DESKTOP/src/build.sync-staging"
+printf 'stale\n' > "$FIXTURE_DESKTOP/src/build.sync-staging/stale.js"
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "src/build 없는 트리 sync 성공" 0 $?
+if [ -f "$FIXTURE_DESKTOP/src/build/entry.js" ] && [ ! -e "$FIXTURE_DESKTOP/src/build/stale.js" ] && ! ls -d "$FIXTURE_DESKTOP"/src/build.* >/dev/null 2>&1; then
+    ok "dist 청크로 src/build 생성, 남은 임시 디렉터리 제거"
+else
+    bad "src/build 생성 또는 남은 임시 디렉터리 정리 실패"
+fi
+
 echo "## Desktop sync web 에서 삭제된 파일 정리"
 # web 원본에서 지운 파일의 Desktop 사본은 다시 sync 하면 사라져야 한다. 남으면 검증이 영구히 drift 를 낸다.
 printf 'console.log("retired");\n' > "$FIXTURE_FRONTEND/static/js/retired.js"
