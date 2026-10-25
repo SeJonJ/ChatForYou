@@ -192,6 +192,63 @@ if lines_at_head is not None:
     check("diff 범위가 merge-base..head 다", any(c[:2] == ["git", "diff"] and "mb123..head456" in c for c in calls))
     check("현재 PR diff(gh pr diff)를 다시 받지 않는다", not any(c[0] == "gh" for c in calls))
 
+    check("문맥 줄 수를 GitHub 과 같은 3줄로 고정한다", any(c[:2] == ["git", "diff"] and "-U3" in c for c in calls))
+
+print("## base 원격 추적 ref 갱신")
+calls = []
+pr.run = recording_run
+guarded("fetch", lambda: pr.fetch_pr("main", 158, "/r"))
+pr.run = real_run
+fetch = next((c for c in calls if c[:2] == ["git", "fetch"]), [])
+check("base 를 원격 추적 ref 까지 명시해 받는다", "+refs/heads/main:refs/remotes/origin/main" in fetch)
+check("PR head 도 받는다", "pull/158/head" in fetch)
+
+print("## 리뷰 게시 실패 처리")
+import contextlib
+import io
+import json as _json
+import os as _os
+import re
+
+payload = {"body": "b", "comments": [{"path": "a.js", "line": 1, "body": "c"}]}
+fallback = {"body": "b + c", "comments": []}
+
+
+def scripted_post(codes):
+    sent = []
+
+    def fake(cmd, **kwargs):
+        sent.append(_json.loads(kwargs["input"]))
+        code = codes[len(sent) - 1]
+        return SimpleNamespace(stdout="", stderr="" if code == 0 else "HTTP 422: line could not be resolved",
+                               returncode=code)
+    return fake, sent
+
+
+pr.run, sent = scripted_post([1, 0])
+err = io.StringIO()
+with contextlib.redirect_stderr(err):
+    posted = guarded("인라인 거부", lambda: pr.post_review("o/r", 158, payload, fallback))
+check("인라인이 거부되면 본문 버전으로 다시 게시한다", posted == "인라인을 본문으로 옮겨" and sent[-1] == fallback)
+check("거부 사유(gh 오류)를 보여 준다", "HTTP 422" in err.getvalue())
+
+pr.run, sent = scripted_post([1, 1])
+err = io.StringIO()
+with contextlib.redirect_stderr(err):
+    posted = guarded("둘 다 거부", lambda: pr.post_review("o/r", 158, payload, fallback))
+saved = re.search(r"(\S+\.json) 에 남겼습니다", err.getvalue()) if posted is None else None
+check("둘 다 실패하면 None 과 결과 파일", saved is not None and _os.path.exists(saved.group(1)))
+if saved:
+    kept = guarded("결과 파일 읽기", lambda: _json.load(open(saved.group(1))))
+    check("남긴 파일에 인라인 지적이 그대로 있다", kept is not None and kept["comments"] == payload["comments"])
+    _os.unlink(saved.group(1))
+
+pr.run, sent = scripted_post([1])
+with contextlib.redirect_stderr(io.StringIO()):
+    guarded("인라인 없음", lambda: pr.post_review("o/r", 158, fallback, fallback))
+check("인라인이 없으면 같은 내용으로 다시 보내지 않는다", len(sent) == 1)
+pr.run = real_run
+
 print(f"\n== 결과: PASS={passed} FAIL={failed} ==")
 sys.exit(1 if failed else 0)
 PY

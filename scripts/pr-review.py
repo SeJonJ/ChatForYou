@@ -223,11 +223,46 @@ def commentable_lines(base_ref, head, root):
 
     GitHub 인라인 위치는 `--since` 와 무관하게 PR 전체 diff(merge-base..head) 기준이다. 리뷰가 끝난 뒤
     `gh pr diff` 로 다시 받으면 그 사이 push 된 커밋의 diff 로 위치를 판정하게 되므로 head 로 고정한다.
+    문맥 줄 수는 GitHub 과 같은 3줄로 고정한다. 개인 설정(diff.context)을 따르면 GitHub diff 에 없는 줄을
+    인라인 대상으로 잡아 리뷰 전체가 거부된다.
     """
     merge_base = run(["git", "merge-base", f"origin/{base_ref}", head], cwd=root).stdout.strip()
-    patch = run(["git", "diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/",
+    patch = run(["git", "diff", "--no-color", "-U3", "--src-prefix=a/", "--dst-prefix=b/",
                  f"{merge_base}..{head}"], cwd=root).stdout
     return right_side_lines(patch)
+
+
+def fetch_pr(base_ref, number, root):
+    """base 브랜치와 PR head 를 받는다. base 는 원격 추적 ref 까지 명시해 갱신한다.
+
+    `git fetch origin <base>` 만으로는 fetch 설정을 좁힌 클론에서 origin/<base> 가 옛 값으로 남고, 그 값으로
+    merge-base 를 구하면 이미 병합된 변경까지 리뷰하게 된다.
+    """
+    run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base_ref}:refs/remotes/origin/{base_ref}",
+         f"pull/{number}/head"], cwd=root)
+
+
+def post_review(repo, number, payload, fallback):
+    """리뷰를 게시한다. 실패하면 gh 오류를 보여 주고 인라인 없는 `fallback` 으로 한 번 더 게시한다.
+
+    GitHub 은 인라인 댓글 하나만 잘못돼도 리뷰 전체를 거부한다. 그때 리뷰 결과를 버리지 않기 위해서다.
+    게시에 쓴 시도 이름을 돌려주고, 둘 다 실패하면 payload 를 임시 파일로 남기고 None 을 돌려준다.
+    """
+    endpoint = ["gh", "api", "--method", "POST", f"repos/{repo}/pulls/{number}/reviews", "--input", "-"]
+    attempts = [("인라인 포함", payload)]
+    if payload.get("comments"):
+        attempts.append(("인라인을 본문으로 옮겨", fallback))
+    for label, body in attempts:
+        proc = run(endpoint, check=False, input=json.dumps(body))
+        if proc.returncode == 0:
+            return label
+        detail = (proc.stderr or proc.stdout or "").strip()
+        print(f"게시 실패({label}): {detail or f'exit {proc.returncode}'}", file=sys.stderr)
+    with tempfile.NamedTemporaryFile("w", suffix=".json", prefix="pr-review-", delete=False,
+                                     encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+    print(f"리뷰 결과를 {handle.name} 에 남겼습니다.", file=sys.stderr)
+    return None
 
 
 def build_review_body(scope, outcomes, rest):
@@ -273,7 +308,7 @@ def main():
     repo = gh_json(["repo", "view", "--json", "nameWithOwner"])["nameWithOwner"]
     head = pr["headRefOid"]
 
-    run(["git", "fetch", "--quiet", "origin", pr["baseRefName"], f"pull/{args.pr}/head"], cwd=root)
+    fetch_pr(pr["baseRefName"], args.pr, root)
     run(["git", "cat-file", "-e", head], cwd=root)
     base = args.since or run(["git", "merge-base", f"origin/{pr['baseRefName']}", head], cwd=root).stdout.strip()
     scope = f"`{base[:7]}..{head[:7]}`" + (" (추가 커밋만)" if args.since else " (PR 전체)")
@@ -330,9 +365,13 @@ def main():
     if args.dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
-    run(["gh", "api", "--method", "POST", f"repos/{repo}/pulls/{args.pr}/reviews", "--input", "-"],
-        input=json.dumps(payload))
-    print(f"게시 완료: 인라인 {len(inline)}건, 본문 {len(rest)}건", file=sys.stderr)
+    fallback = dict(payload, comments=[], body=build_review_body(scope, outcomes, inline + rest))
+    posted = post_review(repo, args.pr, payload, fallback)
+    if posted is None:
+        return 1
+    counts = (f"인라인 {len(inline)}건, 본문 {len(rest)}건" if posted == "인라인 포함"
+              else f"본문 {len(inline) + len(rest)}건")
+    print(f"게시 완료({posted}): {counts}", file=sys.stderr)
     return 0
 
 
