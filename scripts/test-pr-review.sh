@@ -179,6 +179,8 @@ def recording_run(cmd, **kwargs):
     calls.append(cmd)
     if cmd[:2] == ["git", "merge-base"]:
         return SimpleNamespace(stdout="mb123\n", stderr="", returncode=0)
+    if cmd[:2] == ["git", "rev-parse"]:
+        return SimpleNamespace(stdout="fetched789\n", stderr="", returncode=0)
     return SimpleNamespace(stdout="diff --git a/x.js b/x.js\n--- a/x.js\n+++ b/x.js\n@@ -1 +1 @@\n-a\n+b\n",
                            stderr="", returncode=0)
 
@@ -197,11 +199,11 @@ if lines_at_head is not None:
 print("## base 원격 추적 ref 갱신")
 calls = []
 pr.run = recording_run
-guarded("fetch", lambda: pr.fetch_pr("main", 158, "/r"))
+fetched = guarded("fetch", lambda: pr.fetch_pr("main", 158, "/r"))
 pr.run = real_run
 fetch = next((c for c in calls if c[:2] == ["git", "fetch"]), [])
 check("base 를 원격 추적 ref 까지 명시해 받는다", "+refs/heads/main:refs/remotes/origin/main" in fetch)
-check("PR head 도 받는다", "pull/158/head" in fetch)
+check("PR head 를 고정 ref 로 받는다", "+refs/pull/158/head:refs/pr-review/158" in fetch)
 
 print("## 리뷰 게시 실패 처리")
 import contextlib
@@ -229,7 +231,7 @@ pr.run, sent = scripted_post([1, 0])
 err = io.StringIO()
 with contextlib.redirect_stderr(err):
     posted = guarded("인라인 거부", lambda: pr.post_review("o/r", 158, payload, fallback))
-check("인라인이 거부되면 본문 버전으로 다시 게시한다", posted == "인라인을 본문으로 옮겨" and sent[-1] == fallback)
+check("인라인이 거부되면 본문 버전으로 다시 게시한다", posted == "커밋 지정 없이 본문으로" and sent[-1] == fallback)
 check("거부 사유(gh 오류)를 보여 준다", "HTTP 422" in err.getvalue())
 
 pr.run, sent = scripted_post([1, 1])
@@ -243,11 +245,94 @@ if saved:
     check("남긴 파일에 인라인 지적이 그대로 있다", kept is not None and kept["comments"] == payload["comments"])
     _os.unlink(saved.group(1))
 
-pr.run, sent = scripted_post([1])
+body_only = {"commit_id": "h1", "body": "b", "comments": []}
+pr.run, sent = scripted_post([1, 0])
 with contextlib.redirect_stderr(io.StringIO()):
-    guarded("인라인 없음", lambda: pr.post_review("o/r", 158, fallback, fallback))
-check("인라인이 없으면 같은 내용으로 다시 보내지 않는다", len(sent) == 1)
+    posted = guarded("인라인 없음", lambda: pr.post_review("o/r", 158, body_only, fallback))
+check("인라인이 없어도 커밋 지정이 거부되면 commit_id 없이 다시 게시한다(force-push)",
+      posted is not None and len(sent) == 2 and "commit_id" not in sent[-1])
 pr.run = real_run
+
+print("## 게시 단계 명령 실패")
+def head_check_fails(cmd, **kwargs):
+    if cmd[:3] == ["gh", "pr", "view"]:
+        raise subprocess.CalledProcessError(1, cmd, output="", stderr="HTTP 401: Bad credentials")
+    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+
+pr.run = head_check_fails
+err = io.StringIO()
+args = SimpleNamespace(pr=158, dry_run=False)
+with contextlib.redirect_stderr(err):
+    rc = guarded("head 확인 실패", lambda: pr.publish_safely(args, "o/r", "h1", "s", outcomes, {}))
+pr.run = real_run
+check("안내용 head 확인이 실패해도 게시한다", rc == 0 and "게시 완료" in err.getvalue())
+check("그 실패의 gh stderr 를 보여 준다", "HTTP 401: Bad credentials" in err.getvalue())
+
+def post_fails(cmd, **kwargs):
+    if cmd[:3] == ["gh", "pr", "view"]:
+        return SimpleNamespace(stdout='{"headRefOid": "h1"}', stderr="", returncode=0)
+    raise subprocess.CalledProcessError(1, cmd, output="", stderr="HTTP 502: upstream")
+
+
+pr.run = post_fails
+err = io.StringIO()
+with contextlib.redirect_stderr(err):
+    rc = guarded("게시 중 명령 예외", lambda: pr.publish_safely(args, "o/r", "h1", "s", outcomes, {}))
+pr.run = real_run
+saved = re.search(r"(\S+\.json) 에 남겼습니다", err.getvalue())
+check("게시 단계 명령 예외도 stderr 를 보여 주고 결과를 남긴다",
+      rc == 1 and "HTTP 502: upstream" in err.getvalue() and saved is not None)
+if saved:
+    _os.unlink(saved.group(1))
+
+check("리뷰할 head 는 실제로 받은 커밋이다", fetched == "fetched789" and ["git", "rev-parse", "refs/pr-review/158"] in calls)
+
+print("## 리뷰어 출력 형식 방어")
+for value in (None, 3, ["x"], {"a": 1}):
+    data = pr.extract_result('```json\n' + _json.dumps({"summary": value, "findings": []}) + '\n```')
+    check(f"summary={value!r} 는 빈 문자열로 맞춘다", data is not None and data["summary"] == "")
+    body = guarded(f"summary={value!r} 본문", lambda: pr.build_review_body(
+        "s", {"claude": {"status": "COMPLETE", "review": "", "data": data}}, []))
+    check(f"summary={value!r} 여도 본문을 만든다", body is not None and "지적 0건" in body)
+
+print("## 본문 전용 재게시")
+outcomes = {"claude": {"status": "COMPLETE", "review": "", "data": {"summary": "요약", "findings": []}}}
+inline_item = ("claude", {"severity": "P2", "path": "a.js", "line": 3, "title": "인라인지적", "body": "", "scenario": ""})
+built = guarded("payload 구성", lambda: pr.build_payloads("h1", "s", outcomes, [inline_item], []))
+if built:
+    first, second = built
+    check("인라인 리뷰는 리뷰한 커밋을 지정한다", first["commit_id"] == "h1" and len(first["comments"]) == 1)
+    check("본문 전용 리뷰는 commit_id 가 없다(force-push 대응)", "commit_id" not in second)
+    check("본문 전용 리뷰에 인라인 지적이 위치와 함께 들어간다",
+          not second.get("comments") and "인라인지적" in second["body"] and "a.js:3" in second["body"])
+
+print("## 리뷰 뒤 처리 실패 시 결과 보존")
+real_publish = pr.publish
+pr.publish = lambda *a: (_ for _ in ()).throw(KeyError("headRefOid"))
+err = io.StringIO()
+with contextlib.redirect_stderr(err):
+    rc = guarded("publish 예외", lambda: pr.publish_safely(None, "o/r", "h1", "s", outcomes, {}))
+pr.publish = real_publish
+saved = re.search(r"(\S+\.json) 에 남겼습니다", err.getvalue())
+check("리뷰 뒤 예외는 1 로 끝나고 결과 파일을 남긴다", rc == 1 and saved is not None)
+if saved:
+    kept = guarded("보존 파일 읽기", lambda: _json.load(open(saved.group(1))))
+    check("보존 파일에 리뷰 결과가 있다", kept is not None and kept["outcomes"]["claude"]["data"]["summary"] == "요약")
+    _os.unlink(saved.group(1))
+
+print("## git·gh 명령 실패 메시지")
+import tempfile as _tempfile
+with _tempfile.TemporaryDirectory() as empty:
+    proc = subprocess.run([sys.executable, sys.argv[1], "1", "--dry-run"], cwd=empty,
+                          capture_output=True, text=True, env=dict(_os.environ, GIT_CEILING_DIRECTORIES=empty))
+check("git 저장소 밖에서는 traceback 없이 실패 원인을 보여 준다",
+      proc.returncode == 1 and "명령 실패: git rev-parse" in proc.stderr and "Traceback" not in proc.stderr)
+
+print("## 임시 패킷 정리 실패")
+with contextlib.redirect_stderr(io.StringIO()):
+    result = guarded("이미 지워진 파일", lambda: pr.discard("/nonexistent/pr-review-packet.md") or "ok")
+check("이미 지워진 임시 파일을 정리해도 예외를 내지 않는다", result == "ok")
 
 print(f"\n== 결과: PASS={passed} FAIL={failed} ==")
 sys.exit(1 if failed else 0)

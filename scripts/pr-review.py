@@ -84,6 +84,12 @@ def run(cmd, check=True, **kwargs):
     return subprocess.run(cmd, check=check, text=True, capture_output=True, **kwargs)
 
 
+def command_error(exc):
+    """capture_output 로 가려진 git·gh 실패 원인을 명령과 stderr 로 보여 준다."""
+    detail = (exc.stderr or exc.stdout or "").strip()
+    return f"{' '.join(map(str, exc.cmd))}\n{detail}".rstrip()
+
+
 def gh_json(args):
     return json.loads(run(["gh"] + args).stdout)
 
@@ -124,7 +130,10 @@ def extract_result(review_text):
         except json.JSONDecodeError:
             continue
         if isinstance(data, dict) and isinstance(data.get("findings"), list):
-            return data
+            # 리뷰어가 낸 값은 형식을 믿지 않는다. 본문 구성에서 쓰는 값은 여기서 모두 문자열·리스트로 맞춘다.
+            summary = data.get("summary")
+            return {"summary": summary.strip() if isinstance(summary, str) else "",
+                    "findings": data["findings"]}
     return None
 
 
@@ -233,39 +242,58 @@ def commentable_lines(base_ref, head, root):
 
 
 def fetch_pr(base_ref, number, root):
-    """base 브랜치와 PR head 를 받는다. base 는 원격 추적 ref 까지 명시해 갱신한다.
+    """base 브랜치와 PR head 를 받고, 받은 PR head 커밋을 돌려준다. 둘 다 ref 를 명시해 갱신한다.
 
     `git fetch origin <base>` 만으로는 fetch 설정을 좁힌 클론에서 origin/<base> 가 옛 값으로 남고, 그 값으로
-    merge-base 를 구하면 이미 병합된 변경까지 리뷰하게 된다.
+    merge-base 를 구하면 이미 병합된 변경까지 리뷰하게 된다. head 는 API 로 따로 읽지 않고 실제로 받은
+    커밋을 쓴다 — 읽은 직후 push 가 들어오면 읽은 커밋이 로컬에 없을 수 있다.
     """
+    head_ref = f"refs/pr-review/{number}"
     run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base_ref}:refs/remotes/origin/{base_ref}",
-         f"pull/{number}/head"], cwd=root)
+         f"+refs/pull/{number}/head:{head_ref}"], cwd=root)
+    return run(["git", "rev-parse", head_ref], cwd=root).stdout.strip()
+
+
+FIRST_ATTEMPT = "리뷰한 커밋 지정"
 
 
 def post_review(repo, number, payload, fallback):
-    """리뷰를 게시한다. 실패하면 gh 오류를 보여 주고 인라인 없는 `fallback` 으로 한 번 더 게시한다.
+    """리뷰를 게시한다. 실패하면 gh 오류를 보여 주고 커밋 지정·인라인이 없는 `fallback` 으로 한 번 더 게시한다.
 
-    GitHub 은 인라인 댓글 하나만 잘못돼도 리뷰 전체를 거부한다. 그때 리뷰 결과를 버리지 않기 위해서다.
+    GitHub 은 인라인 댓글 하나만 잘못돼도, 또는 리뷰한 커밋이 force-push 로 PR 에서 빠져도 리뷰 전체를
+    거부한다. 인라인 유무와 상관없이 재게시해야 리뷰 결과를 버리지 않는다.
     게시에 쓴 시도 이름을 돌려주고, 둘 다 실패하면 payload 를 임시 파일로 남기고 None 을 돌려준다.
     """
     endpoint = ["gh", "api", "--method", "POST", f"repos/{repo}/pulls/{number}/reviews", "--input", "-"]
-    attempts = [("인라인 포함", payload)]
-    if payload.get("comments"):
-        attempts.append(("인라인을 본문으로 옮겨", fallback))
+    attempts = [(FIRST_ATTEMPT, payload), ("커밋 지정 없이 본문으로", fallback)]
     for label, body in attempts:
         proc = run(endpoint, check=False, input=json.dumps(body))
         if proc.returncode == 0:
             return label
         detail = (proc.stderr or proc.stdout or "").strip()
         print(f"게시 실패({label}): {detail or f'exit {proc.returncode}'}", file=sys.stderr)
-    with tempfile.NamedTemporaryFile("w", suffix=".json", prefix="pr-review-", delete=False,
-                                     encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-    print(f"리뷰 결과를 {handle.name} 에 남겼습니다.", file=sys.stderr)
+    save_results(payload)
     return None
 
 
-def build_review_body(scope, outcomes, rest):
+def discard(path):
+    """임시 파일을 지운다. 지우지 못해도(이미 없거나 권한 문제) 끝난 리뷰 처리를 막지 않는다."""
+    try:
+        os.unlink(path)
+    except OSError as exc:
+        print(f"임시 파일 정리 실패(무시): {exc}", file=sys.stderr)
+
+
+def save_results(data):
+    """게시하지 못한 리뷰 결과를 임시 파일로 남기고 경로를 알린다."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", prefix="pr-review-", delete=False,
+                                     encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=2, default=str)
+    print(f"리뷰 결과를 {handle.name} 에 남겼습니다.", file=sys.stderr)
+    return handle.name
+
+
+def build_review_body(scope, outcomes, rest, rest_title="diff 밖 또는 위치 없는 지적"):
     lines = ["## 자동 교차 리뷰 (Claude · codex)", "", f"리뷰 범위: {scope}", ""]
     for reviewer, outcome in outcomes.items():
         if outcome["status"].startswith("COMPLETE"):
@@ -274,11 +302,11 @@ def build_review_body(scope, outcomes, rest):
                 lines.append(f"- **{reviewer}**: 완료, 결과 형식을 읽지 못해 원문을 아래에 붙임")
             else:
                 count = len(data.get("findings") or [])
-                lines.append(f"- **{reviewer}**: 완료 · 지적 {count}건 — {data.get('summary', '').strip()}")
+                lines.append(f"- **{reviewer}**: 완료 · 지적 {count}건 — {data['summary']}")
         else:
             lines.append(f"- **{reviewer}**: 건너뜀 ({outcome['reason']})")
     if rest:
-        lines += ["", "### diff 밖 또는 위치 없는 지적", ""]
+        lines += ["", f"### {rest_title}", ""]
         lines += [format_finding(finding, reviewer, with_location=True) + "\n" for reviewer, finding in rest]
     for reviewer, outcome in outcomes.items():
         if outcome["status"].startswith("COMPLETE") and outcome.get("data") is None:
@@ -304,12 +332,9 @@ def main():
         parser.error(f"--reviewers 는 claude, codex 중에서 고른다: {args.reviewers}")
 
     root = run(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
-    pr = gh_json(["pr", "view", str(args.pr), "--json", "title,body,baseRefName,headRefOid"])
+    pr = gh_json(["pr", "view", str(args.pr), "--json", "title,body,baseRefName"])
     repo = gh_json(["repo", "view", "--json", "nameWithOwner"])["nameWithOwner"]
-    head = pr["headRefOid"]
-
-    fetch_pr(pr["baseRefName"], args.pr, root)
-    run(["git", "cat-file", "-e", head], cwd=root)
+    head = fetch_pr(pr["baseRefName"], args.pr, root)
     base = args.since or run(["git", "merge-base", f"origin/{pr['baseRefName']}", head], cwd=root).stdout.strip()
     scope = f"`{base[:7]}..{head[:7]}`" + (" (추가 커밋만)" if args.since else " (PR 전체)")
 
@@ -333,8 +358,46 @@ def main():
     try:
         outcomes = run_reviewers(reviewers, packet_path, args.timeout, root)
     finally:
-        os.unlink(packet_path)
+        discard(packet_path)
 
+    if not any(outcome["status"].startswith("COMPLETE") for outcome in outcomes.values()):
+        for reviewer, outcome in outcomes.items():
+            print(f"[{reviewer}] 건너뜀: {outcome['reason']} {outcome.get('error', '')}".rstrip(),
+                  file=sys.stderr)
+        print("모든 리뷰어가 실패해 게시하지 않습니다.", file=sys.stderr)
+        return 1
+    return publish_safely(args, repo, head, scope, outcomes, commentable)
+
+
+def publish_safely(args, repo, head, scope, outcomes, commentable):
+    """리뷰가 끝난 뒤 실패하면 그 리뷰를 잃는다. 어떤 예외든 결과를 파일로 남기고 1 로 끝낸다."""
+    try:
+        return publish(args, repo, head, scope, outcomes, commentable)
+    except Exception as exc:
+        detail = command_error(exc) if isinstance(exc, subprocess.CalledProcessError) else f"{type(exc).__name__}: {exc}"
+        print(f"리뷰 결과 처리 실패: {detail}", file=sys.stderr)
+        save_results({"commit_id": head, "scope": scope, "outcomes": outcomes})
+        return 1
+
+
+def build_payloads(head, scope, outcomes, inline, rest):
+    """인라인 포함 리뷰와, 그게 거부될 때 쓸 본문 전용 리뷰를 만든다.
+
+    본문 전용 리뷰에는 commit_id 를 넣지 않는다. 리뷰 중 force-push 로 리뷰한 커밋이 PR 에서 빠지면
+    GitHub 이 그 commit_id 를 거부하는데, 인라인이 없으면 커밋을 지정할 이유가 없다.
+    """
+    payload = {
+        "commit_id": head,
+        "event": "COMMENT",
+        "body": build_review_body(scope, outcomes, rest),
+        "comments": [{"path": f["path"], "line": f["line"], "side": "RIGHT", "body": format_finding(f, r)}
+                     for r, f in inline],
+    }
+    fallback = {"event": "COMMENT", "body": build_review_body(scope, outcomes, inline + rest, "지적")}
+    return payload, fallback
+
+
+def publish(args, repo, head, scope, outcomes, commentable):
     findings = []
     for reviewer, outcome in outcomes.items():
         if outcome["status"].startswith("COMPLETE"):
@@ -346,34 +409,33 @@ def main():
         else:
             print(f"[{reviewer}] 건너뜀: {outcome['reason']} {outcome.get('error', '')}".rstrip(),
                   file=sys.stderr)
-    if not any(outcome["status"].startswith("COMPLETE") for outcome in outcomes.values()):
-        print("모든 리뷰어가 실패해 게시하지 않습니다.", file=sys.stderr)
-        return 1
 
     # 리뷰 중 push 가 있어도 commit_id 가 리뷰한 커밋을 가리키므로 위치는 그 커밋 기준으로 맞는다.
-    latest = gh_json(["pr", "view", str(args.pr), "--json", "headRefOid"])["headRefOid"]
+    # 안내용 확인이라 실패해도 게시는 계속한다.
+    try:
+        latest = gh_json(["pr", "view", str(args.pr), "--json", "headRefOid"])["headRefOid"]
+    except subprocess.CalledProcessError as exc:
+        print(f"PR head 확인 실패(게시는 계속): {command_error(exc)}", file=sys.stderr)
+        latest = head
     if latest != head:
         print(f"리뷰 중 새 커밋이 push 됨 — 리뷰는 {head[:7]} 기준이다(현재 {latest[:7]}).", file=sys.stderr)
     inline, rest = split_findings(findings, commentable)
-    payload = {
-        "commit_id": head,
-        "event": "COMMENT",
-        "body": build_review_body(scope, outcomes, rest),
-        "comments": [{"path": f["path"], "line": f["line"], "side": "RIGHT", "body": format_finding(f, r)}
-                     for r, f in inline],
-    }
+    payload, fallback = build_payloads(head, scope, outcomes, inline, rest)
     if args.dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
-    fallback = dict(payload, comments=[], body=build_review_body(scope, outcomes, inline + rest))
     posted = post_review(repo, args.pr, payload, fallback)
     if posted is None:
         return 1
-    counts = (f"인라인 {len(inline)}건, 본문 {len(rest)}건" if posted == "인라인 포함"
+    counts = (f"인라인 {len(inline)}건, 본문 {len(rest)}건" if posted == FIRST_ATTEMPT
               else f"본문 {len(inline) + len(rest)}건")
     print(f"게시 완료({posted}): {counts}", file=sys.stderr)
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except subprocess.CalledProcessError as exc:
+        print(f"명령 실패: {command_error(exc)}", file=sys.stderr)
+        sys.exit(1)
