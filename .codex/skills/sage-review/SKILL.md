@@ -480,10 +480,23 @@ lifecycle·correctness 렌즈는 위 두 렌즈에 한해 다음을 추가로 �
 패킷 규약·리뷰어 계약·peer 실패 처리는 CORE(`docs/agent/review-protocol.md` Review packet,
 `sage cross-check` 출력)를 따른다. 여기에는 이 프로젝트의 운영 규칙만 더한다.
 
-- peer 가 실패하면 `REVIEWER_BLOCK_REASON` 값과, `--on-peer-failure same-runtime` 으로 대신
-  진행했다면 사용자 승인 기록을 05 문서의 해당 라운드에 남긴다.
+- peer 가 실패해 `REVIEWER_STATUS: BLOCKED` 가 나오면 `REVIEWER_BLOCK_REASON` 을 05 문서의 해당
+  라운드에 남기고, 사용자에게 이번 사이클의 남은 라운드를 same-runtime 으로 진행할지 묻는다. 허가 단위는
+  **사이클**이다 — 허가하면 그 사이클의 이후 라운드는 다시 묻지 않고
+  `sage cross-check --on-peer-failure same-runtime` 으로 실행한다(peer 를 먼저 시도하고, 실패할 때만 자체
+  리뷰). 허가는 다음 사이클로 넘어가지 않는다.
+- 허가한 시점·사유와, 라운드마다 `REVIEWER_FALLBACK_REASON` 을 05 문서에 남긴다. 사람 허가 없이
+  same-runtime 으로 넘어가지 않는다.
+- 실패 사유가 `timeout` 으로 반복되면 라운드마다 peer 를 기다리지 말고, run 을 same_runtime 으로 다시
+  열지 사용자에게 묻는다(폴백 리뷰는 남은 시간의 절반만 받는다).
+- 사용자가 사이클 시작 전이나 도중에 "이번에는 교차 리뷰 없이 진행" 처럼 **명시**하면, 그 사이클은 처음부터
+  same-runtime 으로 진행한다. 이 경우 `--on-peer-failure` 를 쓰지 않는다(peer 가 살아 있으면 교차 리뷰를
+  해 버린다). 대신 이 워크트리의 `sage/project-profile.local.yaml` 에 `cross_model: { enabled: false }` 를
+  두고 `sage review` 로 리뷰하며, run 은 `--reviewer-requested same_runtime` 으로 연다. 06 을 쓰기 전에
+  로컬 값을 원래대로 되돌리고, 사용자 지시 원문을 05 문서에 남긴다.
 - `COMPLETE_DEGRADED` 나 `*_degraded` 라운드만으로 사이클을 닫지 않는다. **사이클당 최소
-  1라운드는 `REVIEWER_STATUS: COMPLETE` 인 교차 리뷰**로 끝나야 한다.
+  1라운드는 `REVIEWER_STATUS: COMPLETE` 인 교차 리뷰**로 끝나야 한다. 단 위의 사이클 단위 허가나 사용자
+  명시가 있으면 교차 리뷰 없이 닫을 수 있고, 05 잔여 위험에 "교차 리뷰 없음 — 독립성 제한" 을 기록한다.
 - peer 가 P1 급 결함을 놓쳤다고 판단되면, 다음 사이클에서 탐색 예산을 늘리기 전에 패킷의
   컨텍스트 지도(호출자·피호출자·저장소 시그니처)부터 보강한다.
 

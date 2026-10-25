@@ -438,11 +438,78 @@ else
 fi
 rm "$FIXTURE_DESKTOP/copy-fail-harness.js"
 
+echo "## Desktop sync 빌드 청크 교체 단계 실패 시 기존 청크 복원"
+# 복사는 끝났지만 교체(rename)가 실패한 경우다. 기존 청크를 먼저 지우면 새 청크와 함께 둘 다 사라진다.
+for failing in staging target; do
+    printf 'previous\n' > "$FIXTURE_DESKTOP/src/build/entry.js"
+    cat > "$FIXTURE_DESKTOP/rename-fail-harness.js" <<HARNESS
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const target = path.join(script.desktopSrcPath, 'build');
+const failingSource = '$failing' === 'staging' ? target + '.sync-staging' : target;
+const originalRenameSync = fs.renameSync;
+fs.renameSync = (source, destination) => {
+    if (path.resolve(String(source)) === failingSource) {
+        throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+    }
+    return originalRenameSync(source, destination);
+};
+script.run();
+HARNESS
+    (
+        cd "$FIXTURE_DESKTOP" &&
+        node rename-fail-harness.js --skip-backup >/dev/null 2>&1
+    )
+    expect_rc "$failing 교체 실패로 sync 중단" 1 $?
+    if [ "$(cat "$FIXTURE_DESKTOP/src/build/entry.js" 2>/dev/null)" = "previous" ] && ! ls -d "$FIXTURE_DESKTOP"/src/build.* >/dev/null 2>&1; then
+        ok "$failing 교체 실패 후 기존 src/build 복원, 임시 디렉터리 없음"
+    else
+        bad "$failing 교체 실패로 기존 src/build 가 사라지거나 임시 디렉터리가 남음"
+    fi
+    rm "$FIXTURE_DESKTOP/rename-fail-harness.js"
+done
+
+echo "## Desktop sync 교체 도중 강제 종료된 트리 복구"
+# 기존 청크를 옮겨 둔 직후 종료되면 src/build 는 없고 옮겨 둔 사본만 남는다. 다음 sync 의 복사가 실패해도
+# 그 사본이 src/build 로 돌아와야 한다.
+mv "$FIXTURE_DESKTOP/src/build" "$FIXTURE_DESKTOP/src/build.sync-previous"
+printf 'previous\n' > "$FIXTURE_DESKTOP/src/build.sync-previous/entry.js"
+cat > "$FIXTURE_DESKTOP/copy-fail-harness.js" <<'HARNESS'
+const fs = require('fs');
+const path = require('path');
+const FrontendSyncScript = require('./build-scripts/sync-frontend.js');
+const script = new FrontendSyncScript();
+const sourceBuildDir = path.join(script.frontendDistPath, 'build');
+const originalCpSync = fs.cpSync;
+fs.cpSync = (source, destination, options) => {
+    if (path.resolve(String(source)) === sourceBuildDir) {
+        throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+    }
+    return originalCpSync(source, destination, options);
+};
+script.run();
+HARNESS
+(
+    cd "$FIXTURE_DESKTOP" &&
+    node copy-fail-harness.js --skip-backup >/dev/null 2>&1
+)
+expect_rc "강제 종료 흔적 + 복사 실패로 sync 중단" 1 $?
+if [ "$(cat "$FIXTURE_DESKTOP/src/build/entry.js" 2>/dev/null)" = "previous" ] && ! ls -d "$FIXTURE_DESKTOP"/src/build.* >/dev/null 2>&1; then
+    ok "옮겨 둔 사본을 src/build 로 복원"
+else
+    bad "옮겨 둔 사본이 복원되지 않음"
+fi
+rm "$FIXTURE_DESKTOP/copy-fail-harness.js"
+
 echo "## Desktop sync 빌드 청크 대상이 없거나 이전 임시 디렉터리가 남은 경우"
 # 처음 sync 하는 트리(src/build 없음)와, 강제 종료된 sync 가 남긴 임시 디렉터리가 있는 트리 모두 정상 교체돼야 한다.
 rm -rf "$FIXTURE_DESKTOP/src/build"
 mkdir -p "$FIXTURE_DESKTOP/src/build.sync-staging"
 printf 'stale\n' > "$FIXTURE_DESKTOP/src/build.sync-staging/stale.js"
+mkdir -p "$FIXTURE_DESKTOP/src/build.sync-previous"
+printf 'stale\n' > "$FIXTURE_DESKTOP/src/build.sync-previous/stale.js"
 (
     cd "$FIXTURE_DESKTOP" &&
     node build-scripts/sync-frontend.js --skip-backup >/dev/null 2>&1
