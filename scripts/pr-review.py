@@ -187,16 +187,47 @@ def parse_cross_check(stdout):
 
 
 def call_reviewer(reviewer, packet_path, timeout, root):
+    """리뷰어 한 명을 실행한다. 실행 중 어떤 예외든 이 리뷰어만의 BLOCKED 로 돌려준다.
+
+    예외가 밖으로 나가면 병렬로 끝난 다른 리뷰어 결과까지 게시되지 않는다.
+    """
     sage = shlex.split(os.environ.get("SAGE_BIN", "sage"))
     cmd = sage + ["cross-check", "--packet-file", packet_path,
                   "--host", REVIEWER_HOSTS[reviewer], "--timeout", str(timeout)]
-    proc = run(cmd, check=False, cwd=root, timeout=timeout + 120)
-    result = parse_cross_check(proc.stdout)
-    if not result["status"].startswith("COMPLETE"):
-        result["reason"] = result["reason"] or f"exit {proc.returncode}"
-        tail = proc.stderr.strip().splitlines()[-1:] if proc.stderr.strip() else []
-        result["error"] = tail[0] if tail else ""
-    return result
+    try:
+        proc = run(cmd, check=False, cwd=root, timeout=timeout + 120)
+        result = parse_cross_check(proc.stdout)
+        if not result["status"].startswith("COMPLETE"):
+            result["reason"] = result["reason"] or f"exit {proc.returncode}"
+            tail = proc.stderr.strip().splitlines()[-1:] if proc.stderr.strip() else []
+            result["error"] = tail[0] if tail else ""
+        return result
+    except subprocess.TimeoutExpired:
+        reason, error = "timeout", f"{timeout + 120}초 안에 끝나지 않음"
+    except OSError as exc:
+        reason, error = "exec_error", str(exc)
+    except Exception as exc:
+        reason, error = type(exc).__name__, str(exc)
+    return {"status": "BLOCKED", "reason": reason, "review": "", "error": error}
+
+
+def run_reviewers(reviewers, packet_path, timeout, root):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(reviewers)) as pool:
+        futures = {name: pool.submit(call_reviewer, name, packet_path, timeout, root)
+                   for name in reviewers}
+        return {name: future.result() for name, future in futures.items()}
+
+
+def commentable_lines(base_ref, head, root):
+    """리뷰한 head 의 PR 전체 diff 에서 인라인 댓글을 달 수 있는 줄을 구한다.
+
+    GitHub 인라인 위치는 `--since` 와 무관하게 PR 전체 diff(merge-base..head) 기준이다. 리뷰가 끝난 뒤
+    `gh pr diff` 로 다시 받으면 그 사이 push 된 커밋의 diff 로 위치를 판정하게 되므로 head 로 고정한다.
+    """
+    merge_base = run(["git", "merge-base", f"origin/{base_ref}", head], cwd=root).stdout.strip()
+    patch = run(["git", "diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/",
+                 f"{merge_base}..{head}"], cwd=root).stdout
+    return right_side_lines(patch)
 
 
 def build_review_body(scope, outcomes, rest):
@@ -262,12 +293,10 @@ def main():
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as handle:
         handle.write(packet)
         packet_path = handle.name
+    commentable = commentable_lines(pr["baseRefName"], head, root)
     print(f"패킷 {len(packet):,}자, 리뷰어 {', '.join(reviewers)} 실행 중…", file=sys.stderr)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(reviewers)) as pool:
-            futures = {name: pool.submit(call_reviewer, name, packet_path, args.timeout, root)
-                       for name in reviewers}
-            outcomes = {name: future.result() for name, future in futures.items()}
+        outcomes = run_reviewers(reviewers, packet_path, args.timeout, root)
     finally:
         os.unlink(packet_path)
 
@@ -286,8 +315,10 @@ def main():
         print("모든 리뷰어가 실패해 게시하지 않습니다.", file=sys.stderr)
         return 1
 
-    # 인라인 위치는 GitHub 이 보여 주는 PR 전체 diff 기준이어야 한다(--since 범위와 무관).
-    commentable = right_side_lines(run(["gh", "pr", "diff", str(args.pr)], cwd=root).stdout)
+    # 리뷰 중 push 가 있어도 commit_id 가 리뷰한 커밋을 가리키므로 위치는 그 커밋 기준으로 맞는다.
+    latest = gh_json(["pr", "view", str(args.pr), "--json", "headRefOid"])["headRefOid"]
+    if latest != head:
+        print(f"리뷰 중 새 커밋이 push 됨 — 리뷰는 {head[:7]} 기준이다(현재 {latest[:7]}).", file=sys.stderr)
     inline, rest = split_findings(findings, commentable)
     payload = {
         "commit_id": head,

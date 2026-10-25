@@ -118,6 +118,80 @@ check("실패 리뷰어는 건너뜀 사유가 들어간다", "codex**: 건너�
 raw = {"claude": {"status": "COMPLETE", "review": "원문 리뷰", "data": None}}
 check("형식을 못 읽으면 원문을 붙인다", "원문 리뷰" in pr.build_review_body("s", raw, []))
 
+print("## 리뷰어 실행 예외 격리")
+import subprocess
+from types import SimpleNamespace
+
+real_run, real_parse = pr.run, pr.parse_cross_check
+COMPLETE_OUT = "===== CODEX CROSS-MODEL REVIEW =====\n본문\n===== END CODEX REVIEW =====\nREVIEWER_STATUS: COMPLETE\n"
+
+
+def failing_run(exc):
+    def fake(cmd, **kwargs):
+        raise exc
+    return fake
+
+
+def guarded(name, fn):
+    try:
+        return fn()
+    except Exception as exc:
+        check(f"{name} (예외 {type(exc).__name__})", False)
+        return None
+
+
+cases = [
+    ("하드 타임아웃", subprocess.TimeoutExpired(["sage"], 660), "timeout"),
+    ("실행 파일 없음", FileNotFoundError("sage"), "exec_error"),
+]
+for name, exc, reason in cases:
+    pr.run = failing_run(exc)
+    result = guarded(name, lambda: pr.call_reviewer("claude", "/p", 540, "/r"))
+    if result is not None:
+        check(f"{name} 은 그 리뷰어만 BLOCKED({reason})",
+              result["status"] == "BLOCKED" and result["reason"] == reason)
+pr.run = lambda cmd, **kwargs: SimpleNamespace(stdout=COMPLETE_OUT, stderr="", returncode=0)
+pr.parse_cross_check = lambda stdout: (_ for _ in ()).throw(ValueError("bad"))
+result = guarded("출력 해석 예외", lambda: pr.call_reviewer("claude", "/p", 540, "/r"))
+if result is not None:
+    check("출력 해석 예외도 BLOCKED 와 예외 이름", result["status"] == "BLOCKED" and result["reason"] == "ValueError")
+pr.parse_cross_check = real_parse
+
+
+def one_side_times_out(cmd, **kwargs):
+    if cmd[cmd.index("--host") + 1] == "codex":
+        raise subprocess.TimeoutExpired(cmd, 660)
+    return SimpleNamespace(stdout=COMPLETE_OUT, stderr="", returncode=0)
+
+
+pr.run = one_side_times_out
+outcomes = guarded("한쪽 타임아웃", lambda: pr.run_reviewers(["claude", "codex"], "/p", 540, "/r"))
+if outcomes is not None:
+    check("한쪽이 타임아웃이어도 다른 리뷰어 결과가 남는다",
+          outcomes["claude"]["status"] == "BLOCKED" and outcomes["codex"]["status"] == "COMPLETE")
+pr.run = real_run
+
+print("## 인라인 위치 diff 스냅샷")
+calls = []
+
+
+def recording_run(cmd, **kwargs):
+    calls.append(cmd)
+    if cmd[:2] == ["git", "merge-base"]:
+        return SimpleNamespace(stdout="mb123\n", stderr="", returncode=0)
+    return SimpleNamespace(stdout="diff --git a/x.js b/x.js\n--- a/x.js\n+++ b/x.js\n@@ -1 +1 @@\n-a\n+b\n",
+                           stderr="", returncode=0)
+
+
+pr.run = recording_run
+lines_at_head = guarded("스냅샷 diff", lambda: pr.commentable_lines("main", "head456", "/r"))
+pr.run = real_run
+if lines_at_head is not None:
+    check("인라인 줄을 그 head 의 diff 로 계산한다", lines_at_head == {"x.js": {1}})
+    check("merge-base 를 리뷰한 head 로 구한다", ["git", "merge-base", "origin/main", "head456"] in calls)
+    check("diff 범위가 merge-base..head 다", any(c[:2] == ["git", "diff"] and "mb123..head456" in c for c in calls))
+    check("현재 PR diff(gh pr diff)를 다시 받지 않는다", not any(c[0] == "gh" for c in calls))
+
 print(f"\n== 결과: PASS={passed} FAIL={failed} ==")
 sys.exit(1 if failed else 0)
 PY
