@@ -2,9 +2,11 @@
 """PR 을 Claude 와 codex 로 한 번씩 리뷰하고 결과를 PR 리뷰로 게시한다.
 
 사용법:
-  scripts/pr-review.py <PR번호> [--since <commit>] [--context <file>] [--dry-run]
-                       [--reviewers claude,codex] [--timeout <초>]
+  python3 scripts/pr-review.py <PR번호> [--since <commit>] [--context <file>] [--dry-run]
+                               [--reviewers claude,codex] [--timeout <초>]
 
+- 리뷰할 PR 브랜치를 체크아웃한 최신 상태에서 실행한다. 리뷰어가 diff 밖 코드를 확인할 때 리뷰 대상
+  커밋이 아니라 현재 체크아웃의 파일을 읽는다.
 - 리뷰어 호출은 `sage cross-check` 에 맡긴다. `--host codex` 로 부르면 Claude 가, `--host claude` 로
   부르면 codex 가 리뷰한다. 실행 중인 호스트와 무관하게 두 모델을 한 번씩 돌리기 위해서다.
 - 한 리뷰어가 사용 한도·시간 초과 등으로 실패하면 재시도하거나 다른 모델로 대체하지 않고 그 리뷰어만
