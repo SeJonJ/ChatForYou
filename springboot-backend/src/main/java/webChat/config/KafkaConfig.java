@@ -1,7 +1,9 @@
 package webChat.config;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,13 +30,27 @@ public class KafkaConfig {
     @Value("${spring.kafka.consumer.group-id}")
     private String groupId;
 
+    @Value("${spring.kafka.security.protocol:PLAINTEXT}")
+    private String securityProtocol;
+
+    @Value("${spring.kafka.sasl.mechanism:}")
+    private String saslMechanism;
+
+    @Value("${spring.kafka.sasl.username:}")
+    private String saslUsername;
+
+    @Value("${spring.kafka.sasl.password:}")
+    private String saslPassword;
+
     @Bean
     public ProducerFactory<String, KafkaEvent> producerFactory() {
-        Map<String, Object> configProps = new HashMap<>();
-        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        return new DefaultKafkaProducerFactory<>(configProps);
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        applySecurity(props);
+        return new DefaultKafkaProducerFactory<>(props);
     }
 
     @Bean
@@ -49,6 +65,8 @@ public class KafkaConfig {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        applySecurity(props);
 
         // 역직렬화 대상 클래스 지정
         JsonDeserializer<KafkaEvent> deserializer = new JsonDeserializer<>(KafkaEvent.class);
@@ -72,6 +90,8 @@ public class KafkaConfig {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "server-event-group"+ "_" + System.currentTimeMillis() % 1000000000L);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        applySecurity(props);
 
         // 가장 처음 kafka 메시지 부터 확인
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -97,6 +117,8 @@ public class KafkaConfig {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        applySecurity(props);
 
         // 역직렬화 대상 클래스 지정
         JsonDeserializer<KafkaEvent> deserializer = new JsonDeserializer<>(KafkaEvent.class);
@@ -110,5 +132,15 @@ public class KafkaConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(kafkaRoomEventConsumerFactory());
         return factory;
+    }
+
+    private void applySecurity(Map<String, Object> props) {
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        if (securityProtocol.startsWith("SASL")) {
+            props.put(SaslConfigs.SASL_MECHANISM, saslMechanism);
+            props.put(SaslConfigs.SASL_JAAS_CONFIG,
+                    "org.apache.kafka.common.security.scram.ScramLoginModule required "
+                            + "username=\"" + saslUsername + "\" password=\"" + saslPassword + "\";");
+        }
     }
 }
