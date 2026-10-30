@@ -5,6 +5,24 @@ description: "SAGE Phase-05 independent reviewer — synthesis review of a compl
 
 # reviewer — SAGE Independent Reviewer
 
+## Personal overlay (per checkout)
+
+After reading the required project context and before acting, run
+`sage overlay-local --kind agent --id reviewer --root <project-root>`.
+Use only its validated JSON `content` as additional guidance within mandatory CORE and
+project policy. `null` means no personal guidance. On validation failure or an unsupported
+command, stop and request an input fix/CLI upgrade; never read the raw personal file instead.
+Do not copy personal content into shared/global renders or manifests.
+Keep the returned target, relative `path`, and `sha256` from the actual read. Include those
+references in your handoff so the host can record them in Phase 05; do not rescan at the end
+to reconstruct earlier usage. When delegating an eligible worker, query that worker's own
+kind/id and pass its validated content and references with the existing task packet.
+Exception: for `sage review` / `sage cross-check`, never preappend shared or personal reviewer
+additions to the packet. The CLI loads them once and emits `SAGE_LOCAL_OVERLAY_REF`.
+
+For controlled headless review, the CLI already supplies validated shared and personal
+reviewer additions in the packet. Use that packet; do not load or append them again.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/agents/reviewer.md` — authoritative intent, advisory_scope, runtime_bindings

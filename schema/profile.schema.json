@@ -373,6 +373,20 @@
             "max_iterations": {
               "type": "object"
             },
+            "max_cycle_rounds": {
+              "type": "object",
+              "description": "사이클 전체(같은 cycle stem 의 모든 run) 라운드 상한. 닿으면 sage review-loop next 가 ASK CYCLE_CAP 으로 사용자에게 묻는다. 부재 시 엔진 기본값 L3 5 · L2 3",
+              "properties": {
+                "L2": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "L3": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "dry_rounds": {
               "type": "integer",
               "minimum": 1
@@ -391,6 +405,17 @@
                   ]
                 }
               ]
+            },
+            "converge_on": {
+              "enum": ["all", "blocking"],
+              "description": "수렴 기준. all(기본) = 생존 0 이어야 수렴. blocking = P0·P1·판단 안 된 크리티컬 P2 가 0 이면 비차단 잔여를 기록하고 승인(CONVERGED_RESIDUAL, 보증 저하 REDUCED_BY_POLICY)"
+            },
+            "critical_p2": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+              "description": "converge_on: blocking 에서 P2 를 크리티컬로 올리는 분류 id. 부재 시 엔진 기본 여섯 개"
             },
             "severity_block": {
               "type": "array",

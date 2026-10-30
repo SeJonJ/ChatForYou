@@ -117,7 +117,41 @@ def block_reason(path: str):
         return "guard.core_render", {"path": path, "overlay": overlay}
     if _is_blocked_core_render(path):
         return "guard.core_render_blocked", {"path": path}
+    interpretive = _interpretive_render(path)
+    if interpretive:
+        kind, asset_id = interpretive
+        return "guard.interpretive_render", {"path": path, "kind": kind, "id": asset_id}
     return "guard.generated_asset", {"path": path}
+
+
+def _interpretive_render(path):
+    """project agent·skill 렌더면 `(kind, id)`. 판정(차단)은 같고 복구 경로만 다르다.
+
+    hook 은 spec 이 산출물을 만든다. agent·skill 은 반대로 렌더에서 spec 을 뽑는다 — 그래서
+    「정본 spec 을 고쳐라」는 안내를 따르면 렌더가 생기지 않고, 고친 spec 은 다음 generate 에
+    덮어써진다. 이 자산의 출구는 초안 폴더 + `sage generate --from-drafts` 다.
+    """
+    asset = _host_asset(_parts(path))
+    if not asset:
+        return None
+    _host, kind, tail = asset
+    # 판정은 소문자로 하지만 복구 명령의 id 는 원래 철자다. 대소문자를 가리는 파일시스템에서
+    # 소문자 id 로 안내하면 다른 자산을 만들거나 원래 자산을 찾지 못한다.
+    original = _original_tail(path, len(tail))
+    if kind == "agents" and len(tail) == 1 and tail[0].endswith(".md"):
+        return "agent", original[0][:-3]
+    if kind == "skills" and len(tail) >= 2:
+        return "skill", original[0]
+    return None
+
+
+def _original_tail(path, count):
+    """`_parts()` 와 같은 정규화에서 소문자화만 뺀 마지막 `count` 개 구성 요소."""
+    value = path.strip().replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    parts = PurePosixPath(value).parts
+    return parts[len(parts) - count:]
 
 
 def _hook_catalog():
@@ -151,7 +185,7 @@ def block_message(path: str, language: str = None) -> str:
         # 명령이라 번역이 필요 없다 — 문장을 못 만드는 것과 다음 행동을 못 주는 것은 다르다.
         # 여기서 포기하면 가장 깨진 설치에서 사용자가 가장 적은 정보를 받는다.
         return "\n".join([f"⛔ SAGE write guard [{code}]",
-                          *_recovery_lines(code, path, None, None)])
+                          *_recovery_lines(code, path, None, None, arguments)])
     language = language or catalog.DEFAULT_LANGUAGE
     # `frag` 를 쓰는 이유는 이 키들이 `message_key` 가 아니기 때문이다. `MESSAGES` 는 게이트
     # 결정이 싣는 message_key 의 테이블이고, 여기 code 는 그 계약에 속하지 않는다.
@@ -161,7 +195,7 @@ def block_message(path: str, language: str = None) -> str:
     except (KeyError, IndexError, ValueError):
         body = f"[SAGE] {code}"
     return "\n".join([f"⛔ SAGE write guard [{code}]", body,
-                      *_recovery_lines(code, path, catalog, language)])
+                      *_recovery_lines(code, path, catalog, language, arguments)])
 
 
 # 복구 표조차 못 읽을 때의 바닥값. 표를 못 읽는다는 이유로 사용자에게 아무 다음 행동도
@@ -169,7 +203,7 @@ def block_message(path: str, language: str = None) -> str:
 _LAST_RESORT = ["Next: sage status"]
 
 
-def _recovery_lines(code, path, catalog, language):
+def _recovery_lines(code, path, catalog, language, arguments=None):
     """이 code 의 복구 줄. catalog 가 없으면 번역이 필요 없는 `Next:` 만 남긴다."""
     try:
         from .runtime import recovery as recovery_module
@@ -178,13 +212,16 @@ def _recovery_lines(code, path, catalog, language):
             recovery_module = __import__("recovery")
         except Exception:
             return list(_LAST_RESORT)
+    # 복구 명령이 자산 종류·id 를 채울 수 있게 판정 인자를 함께 넘긴다(경로·host 는 고정 키).
+    context = {key: value for key, value in (arguments or {}).items()
+               if key not in ("path", "host")}
     try:
         if catalog is not None:
             lines = recovery_module.render(code, lambda key: catalog.frag(language, key),
-                                           path=path, host="<host>")
+                                           path=path, host="<host>", **context)
         else:
             lines = [line for line in recovery_module.render(code, lambda key: key,
-                                                             path=path, host="<host>")
+                                                             path=path, host="<host>", **context)
                      if line.startswith("Next:")]
     except Exception:
         return list(_LAST_RESORT)

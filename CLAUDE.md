@@ -32,7 +32,10 @@ rules: `docs/agent/language-policy.md`.
 
 - Use the Claude runtime asset ecosystem (`.claude/agents`, `.claude/skills`,
   `.claude/hooks`) which are generated from `docs/sage_harness/` specs.
-- Do not modify generated artifacts directly — edit the spec and run
-  `sage generate`. (Exception: hand-shipped CORE bootstrap renders under
-  `.claude/skills/{sage-init,sage-init-local,sage-cycle,sage-plan,sage-team,sage-review,sage-asset,sage-asset-override,sage-profile-modify,sage-feedback}` and `.claude/agents/`
-  CORE roster are not generated and are write-guard exempt — edit directly.)
+- Do not modify generated artifacts directly. A hook: edit its spec and run
+  `sage generate`. A project agent/skill: write both renders as drafts under
+  `sage/asset_drafts/` and place them with `sage generate --from-drafts` (`/sage-asset`
+  drives this). The hand-shipped CORE bootstrap renders under
+  `.claude/skills/{sage-init,sage-init-local,sage-cycle,sage-plan,sage-team,sage-review,sage-asset,sage-asset-override,sage-profile-modify,sage-feedback}` and the `.claude/agents/`
+  CORE roster are install-owned and write-guarded as well — customize them with
+  `/sage-asset-override`, update them by reinstalling.

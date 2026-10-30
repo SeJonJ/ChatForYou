@@ -49,9 +49,10 @@ preference. Full rules: `docs/agent/language-policy.md`.
 ## Hard rules
 
 - **Never edit generated artifacts to "change" an asset.** The write-guard blocks
-  direct edits of `.claude/.codex/{agents,hooks,skills}` (except CORE bootstrap
-  renders). To change an asset: edit its spec (hook) or render (agent/skill) source,
-  then re-run `sage generate`.
+  editing tools on `.claude/.codex/{agents,hooks,skills}`. To change an asset: edit its
+  spec (hook) and re-run `sage generate`, or write its renders as **drafts** under
+  `sage/asset_drafts/` (agent/skill) and let `sage generate --from-drafts` place them.
+  Never copy a render into place with a shell command to get around the guard.
 - **codex 함께 — author BOTH runtimes.** Every agent/skill gets a claude render AND
   a codex render. `sage generate --kind agent/skill` requires both (reverse-extract
   derives the required-claims from their intersection); a single render fails closed.
@@ -96,29 +97,42 @@ Gather, for the asset:
 2. For a new hook, hand off: `sage generate --kind hook --id <id> --write --target both`.
    This validates both bindings and atomically registers settings, adapters, shims, and manifest.
 
-### agent / skill (interpretive — author BOTH renders)
-1. Author the **claude render**:
-   - agent → `.claude/agents/<id>.md` (frontmatter `name`+`description` + body)
-   - skill → `.claude/skills/<id>/SKILL.md`
-2. Author the **codex render** (codex 함께 — same intent, codex idioms):
-   - agent → `.codex/agents/<id>.md`
-   - skill → `.codex/skills/<id>/SKILL.md`
+### agent / skill (interpretive — author BOTH renders as drafts)
+The render paths (`.claude|.codex/{agents,skills}/…`) are write-guarded, so you author the
+renders as **drafts** and the CLI places them in Step 4. The drafts are the full render
+files, not notes:
+1. Author the **claude render** → `sage/asset_drafts/<kind>s/<id>/claude-render.md`
+   (agent: frontmatter `name`+`description` + body; skill: the `SKILL.md` content).
+2. Author the **codex render** (codex 함께 — same intent, codex idioms) →
+   `sage/asset_drafts/<kind>s/<id>/codex-render.md`.
 3. Keep the two renders semantically equivalent — their **intersection** becomes the
    required-claims; per-runtime wording differences become allowed variation.
 
-For **modify**: edit the existing render(s) (agent/skill) or spec+core (hook). Do not
-touch the generated `docs/sage_harness/.../<id>.md` spec for agent/skill — it is
-re-derived from the renders by the next step.
+Use exactly these file names. `claude.md`/`codex.md` are framework-document names and the
+guard blocks them anywhere.
+
+For **modify**: copy the current renders into the two draft files first (read
+`.claude/…` and `.codex/…`, write the drafts), edit the drafts, and place them with
+`--replace` in Step 4. For a hook, edit its spec + core. Do not touch the generated
+`docs/sage_harness/.../<id>.md` spec for agent/skill — it is re-derived from the renders.
 
 ## Step 4 — Handoff to the deterministic backend
 
 ### agent / skill
 ```
-sage generate --kind <agent|skill> --id <id> --write
+sage generate --kind <agent|skill> --id <id> --from-drafts --write             # add
+sage generate --kind <agent|skill> --id <id> --from-drafts --replace --write   # modify
 ```
-This reverse-extracts the spec + claims from the two renders and registers the asset
-in the manifest (render_hash for both claude and codex). It **fails closed** if either
-render is missing — author both first.
+This checks both drafts, extracts the spec + claims from them, places them at the render
+paths (both or neither), registers the asset in the manifest (render_hash for claude and
+codex), and leaves the drafts in place (delete them once you have checked the renders). It **fails closed** and changes nothing if a draft
+is missing, the id is a CORE asset, or a render already exists without `--replace`. Run
+it without `--write` first to see which renders it would create or replace.
+
+On a **codex host**, the default workspace-write sandbox keeps the workspace `.codex/`
+read-only, and a shell command inherits that sandbox. Run the placement command with
+approval to run outside the sandbox, or ask the user to run it in their own terminal.
+`--deploy-codex` writes to `$CODEX_HOME` and needs the same.
 
 For a **skill** that codex must discover, also deploy it to the codex global dir:
 ```

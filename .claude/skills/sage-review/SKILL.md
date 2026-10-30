@@ -28,6 +28,21 @@ reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revi
 English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
 preference. Full rules: `docs/agent/language-policy.md`.
 
+## Personal overlay (per checkout)
+
+After reading the required project context and before acting, run
+`sage overlay-local --kind skill --id sage-review --root <project-root>`.
+Use only its validated JSON `content` as additional guidance within mandatory CORE and
+project policy. `null` means no personal guidance. On validation failure or an unsupported
+command, stop and request an input fix/CLI upgrade; never read the raw personal file instead.
+Do not copy personal content into shared/global renders or manifests.
+Keep the returned target, relative `path`, and `sha256` from the actual read. Include those
+references in your handoff so the host can record them in Phase 05; do not rescan at the end
+to reconstruct earlier usage. When delegating an eligible worker, query that worker's own
+kind/id and pass its validated content and references with the existing task packet.
+Exception: for `sage review` / `sage cross-check`, never preappend shared or personal reviewer
+additions to the packet. The CLI loads them once and emits `SAGE_LOCAL_OVERLAY_REF`.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/skills/sage-review.md` — authoritative spec: procedure, drift_checks
@@ -128,6 +143,16 @@ so it records to the one canonical `.sage/loop_audit.jsonl` regardless of the cu
 directory — open/round/close stay on the same trail. Pass the captured `$RUN_ID` to every
 subsequent `round`/`close`.
 
+A run is always bound to a cycle. Without `--cycle-stem`, `open` uses the declared cycle
+(`SAGE_CYCLE_STEM`, then `.sage/cycle.json` — the same resolution the gates use) and refuses
+when none resolves. Rounds are counted **per cycle across every run**, so opening a new run does
+not reset the count; the cycle cap is `cfg.max_cycle_rounds[risk]` (default L3 5 · L2 3).
+
+**Write user decisions down where they are made.** A decision the user gives in conversation
+goes into the current phase document's decision section in that same turn; decisions inside the
+loop are recorded by `sage review-loop decide` or by the close itself. Context can be compacted
+at any time, and a decision that lives only in the conversation is not recovered.
+
 Then repeat each round until a termination rule fires (max `cfg.max_iterations[risk]`):
 
 ### 1. FIND (parallel lenses + cross-model peer)
@@ -140,8 +165,13 @@ in `docs/agent/review-protocol.md` (propositions, context map, verification summ
 or plan documents) and run `sage cross-check --packet-file <f>`; it invokes the peer
 (`codex exec`/`claude -p`) under process controls and prints the peer's findings. Keep the packet
 body fixed across rounds and append each round's delta at the end (the unchanged prefix keeps the
-peer's prompt cache warm). Capture the `REVIEWER_ACTUAL: <mode>` line as `ACTUAL` and the
-`REVIEWER_TOKENS:` line as `PEER_TOKENS`. Use the
+peer's prompt cache warm). The packet's decisions-and-residuals section is **generated, not
+rewritten by hand**: paste the output of `sage review-loop ledger render` (scope decisions,
+known pre-existing defects, residuals and refuted findings carried across runs). Add an
+out-of-scope decision or a known pre-existing defect (for example a Phase 04 `F-n`) with
+`sage review-loop ledger add --kind out_of_scope|preexisting --source <doc or F-n> --reason <...>`
+instead of retyping it into a new packet. Capture the `REVIEWER_ACTUAL: <mode>` line as `ACTUAL`
+and the `REVIEWER_TOKENS:` line as `PEER_TOKENS`. Use the
 **FIND prompt** (§ skeletons) for host lenses. Collect findings. **Dedup**: drop any finding whose key `(norm(file), line_bucket, lens, sha(norm(claim)))`
 is already in `seen` (prevents tail/resurfacing churn).
 
@@ -178,17 +208,87 @@ Do not eyeball this. After recording each round (§ below), run:
 sage review-loop next --run-id $RUN_ID
 ```
 It reads the recorded rounds + profile cfg and prints the deterministic decision —
-`NEXT: CONTINUE` or `NEXT: STOP result=<..> reason=<..>` — moving the continue/stop call
-from host judgment to SAGE. It is advisory (writes nothing); on `STOP`, pass the printed
-`result`/`reason` straight to `close`.
+`NEXT: CONTINUE`, `NEXT: STOP result=<..> reason=<..>`, `NEXT: ASK kind=CYCLE_CAP
+cycle_rounds=<n> cap=<m>`, or (blocking convergence only) `NEXT: ASK kind=CRITICAL_P2
+findings=<ids>` — moving the continue/stop call from host judgment to SAGE. It is
+advisory (writes nothing); on `STOP`, pass the printed `result`/`reason` straight to `close`.
+On `ASK`, the user decides — see **Cycle cap** and **Blocking convergence** below. Do not open
+another round first: `round` is refused while either question is open.
 
 Evaluation order it uses (highest precedence first — budget/iteration limits win over
 convergence, matching what `close` accepts):
 1. architecture escalation recorded (`arch > 0`) → **BLOCKED** (`BLOCKED_ARCH`)
 2. cumulative tokens ≥ `cfg.budget_tokens[risk]` → **BLOCKED** (`BUDGET_TOK`)
-3. iteration ≥ `cfg.max_iterations[risk]` → **APPROVED** (`CONVERGED`) if last-round survivors == 0, else **BLOCKED** (`BUDGET_ITER`)
-4. last-round survivors == 0 → **APPROVED** (`CONVERGED`)
-5. otherwise → **CONTINUE**
+3. (`converge_on: blocking` only) a critical P2 in the last round has no decision → **ASK** (`CRITICAL_P2`)
+4. iteration ≥ `cfg.max_iterations[risk]` → **APPROVED** if the loop has converged (below), else **BLOCKED** (`BUDGET_ITER`)
+5. cycle rounds (every run of this cycle) ≥ the cycle cap → **APPROVED** if converged, else **ASK** (`CYCLE_CAP`) — also on a fresh run with no round yet
+6. converged → **APPROVED** (`CONVERGED` when nothing survived; `CONVERGED_RESIDUAL` when only non-blocking findings survived under `converge_on: blocking`)
+7. otherwise → **CONTINUE** (also when the loop converged below a Fast run's minimum rounds)
+
+"Converged" means zero survivors under the default `converge_on: all`. Under `converge_on:
+blocking` it means no blocking finding is left (see below).
+
+### Cycle cap (`NEXT: ASK kind=CYCLE_CAP`)
+Stop and ask the user, showing the cycle rounds, what still survives (`sage review-loop ledger
+show`) and the three choices. Never pick one yourself:
+1. **Continue** — `sage review-loop decide --run-id $RUN_ID --cycle continue --extend <N>
+   --reason "<the user's words>" --decided-by "<the name the user states>"`, then `next` again.
+   `N` is 1–10; the decision is refused unless the cycle is at its cap.
+2. **Approve the residual** — the early-completion close below (needs a completed round in this
+   run and the `early_completion` opt-in).
+3. **Stop** — `sage review-loop close --run-id $RUN_ID --result BLOCKED --reason CYCLE_CAP
+   --iterations <n> --reviewer-actual $ACTUAL`.
+
+`--cycle continue` raises the cycle cap, not the run's own `max_iterations`. When the run itself
+has stopped (`NEXT: STOP result=BLOCKED reason=BUDGET_ITER`) and the user wants another round
+rather than early completion, close that run with the result and reason `next` printed, open a
+new run on the same `--cycle-stem` and follow its `next`. Rounds keep counting per cycle, so a
+cycle already at its cap asks `CYCLE_CAP` again on the new run, and the continue decision is made
+there.
+
+### Blocking convergence (`converge_on: blocking`)
+The default `converge_on: all` keeps every rule above as it is — skip this section. When the run
+was opened under `cfg.converge_on: blocking` (the open snapshot decides; changing the profile
+mid-run changes nothing), these rules apply on top:
+
+- **Critical P2.** A P2 in one of the `cfg.critical_p2` categories (default:
+  `unauthenticated_crash`, `exposure_or_traversal`, `wrong_content_served`, `deploy_breakage`,
+  `security_setting_regression`, `silent_data_corruption`) is marked `critical: true` with its
+  `critical_category`. Refuters may dispute the category. `critical` is for P2 only.
+- **`NEXT: ASK kind=CRITICAL_P2`.** Do not rework. Report each listed finding to the developer —
+  the verbatim claim, the evidence and the expected fix scope — and let them choose per finding.
+  Record each answer in that turn with the user's own words, passing the `[claim <hash>]` shown
+  next to that finding so an answer never lands on a claim that changed since:
+  `sage review-loop decide --run-id $RUN_ID --finding <id> --claim <hash> --fix|--accept
+  --reason "<…>" --decided-by "<…>"`. `--fix` → rework, then the next round. `--accept` → the finding becomes an
+  accepted residual. A decision binds to that round's finding text; if the same critical
+  survives the next round, it is asked again.
+- **Convergence.** Nothing surviving is still a normal `CONVERGED` close (no receipt needed).
+  With findings surviving, `CONVERGED`/`DRY` closes are refused — the only approval is the
+  residual one below.
+  When findings survive, blocking = survivors at P0, P1 (always) and the other `cfg.severity_block`
+  severities + undecided
+  critical P2 + critical P2 decided `--fix`. The loop converges when that is zero, no refutation
+  is pending, no lens is unexplored, and the last round has a sidecar receipt (a round recorded
+  without `--findings-file` cannot show it). `next` then prints `STOP result=APPROVED
+  reason=CONVERGED_RESIDUAL`; close with that reason. The close records reduced assurance
+  `REDUCED_BY_POLICY`.
+- **Phase 05 and 06 markers.** After a `CONVERGED_RESIDUAL` close write, outside fenced code,
+  exactly one each of `Review-Assurance: REDUCED_BY_POLICY`, `Review-Close-Reason:
+  CONVERGED_RESIDUAL`, `Review-Rounds: <n> (configured max: <m>)` and `Residual-Findings:
+  P0=<n>, P1=<n>, P2=<n>, P3=<n>` (from the close), plus the residual list from `sage review-loop
+  ledger show`. The 06←05 gate and CI check them against the audit.
+- **Rework scope.** Fix a non-blocking survivor only when the fix is local — no new state, lock,
+  marker, protocol or background process. Otherwise set `disposition: residual`. When a
+  blocking finding's fix needs such a mechanism, triage it `architecture_change`.
+  A rework lists the findings it closes in `closes`; the next round's FIND checks each and
+  writes the result to the sidecar `closure` list.
+- **Pre-existing defects.** Mark a finding that also exists at the cycle base `preexisting: true`
+  with `exposure`: `touched` (this diff edits that line), `reach_changed` (this diff changes who
+  can reach it, its input or its permission) or `unchanged`. Refuters drop a pre-existing finding
+  with `drop_reason: out_of_scope_preexisting` — it goes to the ledger as a known pre-existing
+  defect (a separate issue candidate). A P0/P1 or critical finding may be dropped that way only
+  when `exposure` is `unchanged`; `round` refuses otherwise.
 
 `DRY` (dry-convergence: `cfg.dry_rounds` consecutive rounds with 0 new findings) remains a
 valid `close` reason for a resolved loop, but `next` reports resolved loops as `CONVERGED`
@@ -220,6 +320,31 @@ PASS; if either fails, retry the round (within the iteration cap). If the rework
 acceptance coverage, update Phase 03 and Phase 04 before the next review pass.
 
 ### Record the round (every iteration)
+Write the round's findings to a sidecar file and pass it; the counts and the per-severity
+receipt are then derived from it, so you do not type them:
+```
+sage review-loop round --run-id $RUN_ID --iteration <n> --findings-file <round.json> \
+  --tokens <cumulative> --peer-tokens "$PEER_TOKENS"
+```
+The sidecar (`sage.review-round/1`) is JSON:
+`{"schema": "sage.review-round/1", "run_id": "<RUN_ID>", "iteration": <n>, "findings": [...]}`.
+Each finding carries `id` (unique in the round), `source` `{"kind": "lens"|"peer", "name": ...}`,
+`file`, `line`, `severity` (`P0`–`P3`), the **verbatim** `claim`, `status` (`survived` |
+`refuted`), the refuters' votes in `refute` (`refuter`, `verdict` `refuted|upheld|uncertain`,
+`reason`, `drop_reason` `not_a_defect|out_of_scope_preexisting|insufficient_evidence|null`),
+`triage` (`local` | `architecture_change`), `disposition` (`fix` | `residual` | `rejected` |
+`pending`), `closes` (ids `<run_id>:<iteration>:<id>` this rework claims to close) and
+`ledger_ref` (`L-<n>` when it re-raises a ledger entry). Blocking convergence adds
+`critical_category`, `preexisting` and `exposure` (see above). Optional round fields: `packet`
+(`path`, `sha256`), `usage` (`host`, `peer` copied verbatim from `PEER_TOKENS`, per-lens
+`lenses`), `unexplored` (lenses that were truncated or timed out) and `closure`
+(`{"ref": "<run_id>:<iteration>:<id>", "closed": true|false, "note": ...}` per finding a
+previous rework claimed to close). SAGE stores it under
+`.sage/review-rounds/`, records its sha256 in the audit, and saves the working-tree delta since
+the previous round as a patch. Counts you also pass by hand must match the sidecar or nothing is
+written.
+
+Without a sidecar the round is still recorded (marked `sidecar: absent`), with the counts by hand:
 ```
 sage review-loop round --run-id $RUN_ID --iteration <n> \
   --found <N> --survived <N> --accepted <N> --arch <N> --tokens <cumulative> \
@@ -240,8 +365,13 @@ rejects a receipt whose sum disagrees.
 
 ### Early completion by user authorization
 Available only when `pdca.review_loop.early_completion.enabled` is true, and only while
-`sage review-loop next` still recommends `CONTINUE` — a loop that already reached `STOP` or
-`CONVERGED` closes normally instead.
+`sage review-loop next` still recommends `CONTINUE`, or stopped at a ceiling where the user is
+the one to decide: `STOP` with `BUDGET_ITER` (the run's iteration cap) or `ASK` with `CYCLE_CAP`
+(the cycle cap). A loop that `CONVERGED` closes normally instead, and `BUDGET_TOK` or
+`BLOCKED_ARCH` cannot be closed by an authorization at all, and neither can `ASK CRITICAL_P2`
+(decide the critical findings first). Under `converge_on: blocking` the "no blocking finding"
+check uses the blocking count above instead of `severity_block` alone. Before asking, show the
+user what stays open: the close prints the residual findings from the last round's sidecar.
 
 If that key is absent or false, early completion is unavailable: say so, keep running the loop
 to convergence or its configured maximum, and **never propose editing the profile mid-loop to
@@ -272,7 +402,8 @@ summarise, translate, or improve them into a reason they did not give.
 
 What an authorization can never waive — the command refuses each of these and appends nothing:
 zero completed rounds (or fewer than `minimum_completed_rounds`), unresolved findings at a
-`severity_block` severity, architecture escalation or `BLOCKED_ARCH`, unresolved Done Criteria or
+`severity_block` severity, architecture escalation or `BLOCKED_ARCH`, a token budget overrun
+(`BUDGET_TOK`), unresolved Done Criteria or
 a revision rerun that has not happened, acceptance `FAIL`, a required `NOT TESTED` without an
 active exact waiver, audit damage or chain/sequence failure, and a binding mismatch. The
 acceptance judgment is the same policy and the same parser the Phase-06 report gate uses, so a
@@ -415,7 +546,7 @@ AGENT_GUIDE·phase·review·verification·안전 경계를 **완화할 수 없�
 `chatforyou_dual_implementation_doc_gate` 사이클(2026-08-02~08, 1~4차 리뷰)에서 반복 관찰된
 패턴에 대한 보강이다: REWORK가 지적된 사례 하나만 닫고 그 사례가 속한 부류를 안 닫아서,
 같은 결함이 다음 라운드에 형태만 바꿔 재지적되는 일이 4연속(F1→G3, F4→G2, G3→H2, H3→S1)
-있었다. CORE의 FIND/REFUTE/TRIAGE/REWORK 골격은 그대로 두고, 아래 세 지점만 추가한다.
+있었다. CORE의 FIND/REFUTE/TRIAGE/REWORK 골격은 그대로 두고, 아래 두 지점만 추가한다.
 
 ### REWORK — 부류 단위 수정 (CORE §REWORK 에 추가)
 
@@ -430,21 +561,6 @@ CORE `[TASK]` 뒤에 다음을 추가로 지킨다:
   3. 제출 전 **수정하기 전 코드로 그 회귀를 돌려 실제로 실패하는지** 확인하고 결과를
      `[OUTPUT]` 표에 한 줄로 보고한다 — 실패하지 않는 회귀는 아무것도 고정하지 않은 것이므로
      그 자체가 finding 미해결로 취급된다.
-
-### TRIAGE — severity 분기 (CORE §TRIAGE 출력에 필드 추가)
-
-CORE 는 scope(within_design/architecture_change)만 분기한다. 여기에 severity 분기를 더한다
-— **REFUTE 를 생략하거나 finding 을 폐기하는 것이 아니라**, TRIAGE 이후 REWORK 로 보낼지를
-가르는 추가 분기다. survivor 는 여전히 전부 `[OUTPUT]` 표에 남고 05 문서에 기록된다.
-
-- `severity` 가 `profile.pdca.review_loop.severity_block`(예: `[P0, P1]`) 에 **없으면**
-  기본 `disposition` 은 **`accept`** 다 — 05 잔여 위험 절에 근거와 함께 기록하고 REWORK 로
-  보내지 않는다.
-- `disposition: rework` 로 올리려면 (a) 한 줄 수정으로 끝나거나 (b) 리더가 명시 승인해야
-  한다. 승인 근거는 이 자산의 **위협 모델**(상대가 누구인가)을 한 줄로 명시하는 것으로 한다.
-- `[OUTPUT]` 에 `severity`(finding 원본에서 그대로 가져옴)와 `disposition: rework|accept`
-  두 필드를 추가한다: `{ "finding_id":"{id}", "scope":"...", "severity":"P0|P1|P2|P3",
-  "disposition":"rework|accept", "reason":"..." }`
 
 ### FIND (lifecycle/correctness 렌즈) — 04 의 미검증 주장 탐지 (CORE §FIND 에 추가)
 
@@ -475,31 +591,6 @@ lifecycle·correctness 렌즈는 위 두 렌즈에 한해 다음을 추가로 �
   테스트를 함께 추가한다. 기존 테스트가 어긋난 입력을 정상으로 전제하고 있으면 테스트 계약부터
   고친다.
 
-### cross-model 라운드 운영 (CORE §FIND·§Record the round 에 추가)
-
-패킷 규약·리뷰어 계약·peer 실패 처리는 CORE(`docs/agent/review-protocol.md` Review packet,
-`sage cross-check` 출력)를 따른다. 여기에는 이 프로젝트의 운영 규칙만 더한다.
-
-- peer 가 실패해 `REVIEWER_STATUS: BLOCKED` 가 나오면 `REVIEWER_BLOCK_REASON` 을 05 문서의 해당
-  라운드에 남기고, 사용자에게 이번 사이클의 남은 라운드를 same-runtime 으로 진행할지 묻는다. 허가 단위는
-  **사이클**이다 — 허가하면 그 사이클의 이후 라운드는 다시 묻지 않고
-  `sage cross-check --on-peer-failure same-runtime` 으로 실행한다(peer 를 먼저 시도하고, 실패할 때만 자체
-  리뷰). 허가는 다음 사이클로 넘어가지 않는다.
-- 허가한 시점·사유와, 라운드마다 `REVIEWER_FALLBACK_REASON` 을 05 문서에 남긴다. 사람 허가 없이
-  same-runtime 으로 넘어가지 않는다.
-- 실패 사유가 `timeout` 으로 반복되면 라운드마다 peer 를 기다리지 말고, run 을 same_runtime 으로 다시
-  열지 사용자에게 묻는다(폴백 리뷰는 남은 시간의 절반만 받는다).
-- 사용자가 사이클 시작 전이나 도중에 "이번에는 교차 리뷰 없이 진행" 처럼 **명시**하면, 그 사이클은 처음부터
-  same-runtime 으로 진행한다. 이 경우 `--on-peer-failure` 를 쓰지 않는다(peer 가 살아 있으면 교차 리뷰를
-  해 버린다). 대신 이 워크트리의 `sage/project-profile.local.yaml` 에 `cross_model: { enabled: false }` 를
-  두고 `sage review` 로 리뷰하며, run 은 `--reviewer-requested same_runtime` 으로 연다. 06 을 쓰기 전에
-  로컬 값을 원래대로 되돌리고, 사용자 지시 원문을 05 문서에 남긴다.
-- `COMPLETE_DEGRADED` 나 `*_degraded` 라운드만으로 사이클을 닫지 않는다. **사이클당 최소
-  1라운드는 `REVIEWER_STATUS: COMPLETE` 인 교차 리뷰**로 끝나야 한다. 단 위의 사이클 단위 허가나 사용자
-  명시가 있으면 교차 리뷰 없이 닫을 수 있고, 05 잔여 위험에 "교차 리뷰 없음 — 독립성 제한" 을 기록한다.
-- peer 가 P1 급 결함을 놓쳤다고 판단되면, 다음 사이클에서 탐색 예산을 늘리기 전에 패킷의
-  컨텍스트 지도(호출자·피호출자·저장소 시그니처)부터 보강한다.
-
 `feat_151_frontend_vite_esm_phase1` 사이클(2026-09-24, run 7개)에서 확인된 보강이 아래에
 이어진다. 라운드 범위·종료 판정·트리아지 기준은 CORE 리뷰 규칙을 따르고 여기서 다루지 않는다.
 
@@ -509,4 +600,10 @@ lifecycle·correctness 렌즈는 위 두 렌즈에 한해 다음을 추가로 �
   delta 에 누적해 적는다(본문 고정 규칙 유지). 항목마다 실험 결과와 그 실험이 의존하는 파일을
   적고, 리뷰어는 유효한 항목을 다시 돌리지 않는다.
 - 이후 재작업이 그 파일 중 하나라도 건드리면 해당 항목은 무효이고 다시 검증 대상이 된다.
+
+### REWORK — 메타 테스트 금지 (위 REWORK 절에 추가)
+
+- 테스트를 검증하는 테스트(판정기·정규식 계약 검사기를 다시 검사하는 테스트)는 만들지 않는다.
+  회귀는 제품 코드의 동작을 직접 확인한다. 판정기를 새로 만들면 그 판정기가 다음 라운드의
+  finding 표면이 된다.
 <!-- <<< SAGE OVERLAY v1 END -->

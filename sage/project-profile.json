@@ -1,6 +1,6 @@
 {
   "sage": {
-    "required_version": "1.2.0"
+    "required_version": "1.3.6"
   },
   "project": {
     "name": "ChatForYou v2",
@@ -500,6 +500,7 @@
         "P0",
         "P1"
       ],
+      "converge_on": "blocking",
       "architecture_escalation": "from_risk.l3",
       "termination_enforce": "advisory",
       "report_gate_enforce": "advisory",

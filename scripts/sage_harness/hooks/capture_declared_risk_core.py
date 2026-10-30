@@ -57,8 +57,72 @@ _QUESTION_ENDING = re.compile(
 def _is_hypothetical(sentence: str) -> bool:
     return bool(_HYPOTHETICAL.search(sentence) or _QUESTION_ENDING.search(sentence))
 
+# 호스트가 프롬프트 맨 앞에 붙여 넣는 봉투. claude 는 서브에이전트 결과를 `<agent-message …>` 로 감싸
+# UserPromptSubmit 프롬프트로 넘긴다(2026-10 실측). 그 안의 「L3로 진행했습니다」·「위험도 선언 해제」는
+# 사람이 한 말이 아니므로 선언 판정에서 뺀다.
+_HOST_ENVELOPES = ("agent-message", "task-notification")
+
+# 정확한 한 줄 표식. 자연어 규칙과 별개의 추가 통로이고, 표식이 있으면 자연어는 보지 않는다.
+_EXPLICIT = re.compile(r"^ {0,3}SAGE-RISK:[ \t]*(L[0-3]|clear)[ \t]*$", re.IGNORECASE)
+_FENCE_ANYWHERE = re.compile(r"`{3,}|~{3,}")
+
 _CLEANUP_PATTERN = "declared-risk-*.json"
 _CLEANUP_OLDER_THAN_SECONDS = 2 * 86400  # 2일
+
+
+def _strip_host_envelopes(prompt: str):
+    """프롬프트 맨 앞의 호스트 봉투를 걷어 낸 나머지. 맨 앞 봉투가 닫히지 않으면 None.
+
+    맨 앞만 본다 — 호스트 봉투는 프롬프트 시작에 붙고, 중간에 나온 태그(사람이 코드 예시로 적은
+    것)를 봉투로 보면 그 뒤의 사람 글까지 지운다. 닫는 태그는 0열 줄만 인정한다. claude 는 보고 본문을
+    모두 들여 쓰므로 0열 줄은 호스트만 만들 수 있고, 보고가 닫는 태그를 흉내 내 구간을 일찍 끝낼 수
+    없다. 닫히지 않은 봉투는 프롬프트 전체를 호스트 글로 본다 — 상태를 바꾸지 않는 방향이다.
+    """
+    lines = (prompt or "").splitlines()
+    index = 0
+    while True:
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+        if index >= len(lines):
+            return ""
+        head = lines[index]
+        tag = next((name for name in _HOST_ENVELOPES
+                    if head.startswith(f"<{name}") and head[len(name) + 1:len(name) + 2] in (">", " ")),
+                   None)
+        if tag is None:
+            return "\n".join(lines[index:])
+        closing = f"</{tag}>"
+        end = next((j for j in range(index + 1, len(lines)) if lines[j].rstrip() == closing), None)
+        if end is None:
+            return None
+        index = end + 1
+
+
+def _lines_before_code(text: str):
+    """첫 코드 펜스보다 앞의 줄. 붙여 넣은 문서·로그의 예시 줄이 선언·해제가 되지 않게 한다.
+
+    펜스 안팎을 끝까지 추적하지 않는다. 닫는 펜스 판정(같은 문자·길이·뒤 글자, 목록·인용 문맥,
+    상대 들여쓰기)은 리뷰마다 새 반례가 나온 표면이었고, 하나라도 틀리면 코드 예시가 선언·해제로
+    실행된다. 표식은 보통 프롬프트 맨 위에 쓰므로 「어디든 펜스 모양(``` · ~~~)이 처음 나오기 전까지만
+    본다」로 닫는다. 그 뒤의 표식은 받지 않을 뿐이고, 자연어 규칙은 지금처럼 전체를 본다.
+    들여쓰기 코드 줄(탭·4칸)도 받지 않는다.
+    """
+    for raw in (text or "").splitlines():
+        if _FENCE_ANYWHERE.search(raw):
+            return
+        if raw.startswith("\t") or raw.startswith("    "):
+            continue
+        yield raw
+
+
+def _explicit_values(text: str) -> set:
+    values = set()
+    for line in _lines_before_code(text):
+        match = _EXPLICIT.match(line)
+        if match:
+            value = match.group(1)
+            values.add("clear" if value.lower() == "clear" else value.upper())
+    return values
 
 
 def _sentences(text: str) -> list:
@@ -103,12 +167,32 @@ def decide(event: dict) -> dict:
     event: { prompt, session_id, now_utc, ... }
     decision: { action: capture|noop, level, session_key, state_file, state, cleanup, exit_code, message_key }
     """
-    prompt = event.get("prompt") or ""
+    raw_prompt = event.get("prompt") or ""
     session_key = _sanitize_session(event.get("session_id") or "nosession")
     now_utc = event.get("now_utc")  # adapter 가 실행시각/고정값을 주입 (core는 시간 호출 안 함)
 
     cleanup = {"pattern": _CLEANUP_PATTERN, "older_than_seconds": _CLEANUP_OLDER_THAN_SECONDS}
     state_file = f"declared-risk-{session_key}.json"
+
+    def _captured(level, source):
+        # `source` 는 기록용이다. 읽는 쪽(게이트)은 `level` 만 본다 — 이 필드가 없는 기존 상태
+        # 파일도 그대로 유효하다.
+        return {
+            "kind": "capture_declared_risk",
+            "action": "capture",
+            "level": level,
+            "session_key": session_key,
+            "state_file": state_file,
+            "state": {
+                "level": level,
+                "ts": now_utc,
+                "source": source,
+                "excerpt": prompt[:120].replace("\n", " "),
+            },
+            "cleanup": cleanup,
+            "exit_code": 0,
+            "message_key": "risk_declared",
+        }
 
     def _plain(action, level=None, file=None, message_key=None):
         return {
@@ -122,6 +206,23 @@ def decide(event: dict) -> dict:
             "exit_code": 0,
             "message_key": ("risk_declaration_cleared" if action == "clear" else message_key),
         }
+
+    prompt = _strip_host_envelopes(raw_prompt)
+    if not prompt:
+        return _plain("noop")
+
+    explicit = _explicit_values(prompt)
+    if not explicit and any(_EXPLICIT.match(line) for line in prompt.splitlines()):
+        # 표식을 썼지만 인정 위치(첫 코드 펜스 앞)에 없다. 표식을 쓴 사람은 표식 통로로 정하려 한
+        # 것이므로 자연어 규칙으로 넘어가지 않는다 — 넘어가면 코드 블록 안 예시 문장이 선언을
+        # 해제하거나 낮춘다. 상태를 바꾸지 않고 위치만 알린다.
+        return _plain("noop", message_key="risk_declaration_marker_position")
+    if len(explicit) > 1:
+        return _plain("noop", message_key="risk_declaration_ambiguous")
+    if explicit == {"clear"}:
+        return _plain("clear", file=state_file)
+    if explicit:
+        return _captured(explicit.pop(), "explicit")
 
     # 해제를 포착보다 먼저 본다. 잘못 잡힌 선언을 지우려는 프롬프트가 다시 선언으로 잡히면
     # 사용자에게 남는 탈출구가 없다.
@@ -141,19 +242,4 @@ def decide(event: dict) -> dict:
     if len(set(levels)) != 1:
         return _plain("noop", message_key="risk_declaration_ambiguous")
 
-    level = levels[0]
-    return {
-        "kind": "capture_declared_risk",
-        "action": "capture",
-        "level": f"L{level}",
-        "session_key": session_key,
-        "state_file": f"declared-risk-{session_key}.json",
-        "state": {
-            "level": f"L{level}",
-            "ts": now_utc,
-            "excerpt": prompt[:120].replace("\n", " "),
-        },
-        "cleanup": cleanup,
-        "exit_code": 0,
-        "message_key": "risk_declared",
-    }
+    return _captured(f"L{levels[0]}", "natural")

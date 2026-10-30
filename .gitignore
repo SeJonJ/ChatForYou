@@ -269,6 +269,7 @@ venv/
 
 # >>> SAGE LOCAL PROFILE
 /sage/project-profile.local.yaml
+/sage/asset_overrides.local/
 # <<< SAGE LOCAL PROFILE
 # >>> SAGE LOCAL STATE
 !/.sage/

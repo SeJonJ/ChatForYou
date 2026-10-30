@@ -130,6 +130,45 @@ def make_rel(root):
     return rel
 
 
+def _outside_confirmed(root, p):
+    """`make_rel` 이 밖이라고 본 경로가 **확실히** 프로젝트 밖인가 — 세션 선언 면제 판단 전용.
+
+    `make_rel` 은 문자열만 비교해 별칭·대소문자 변형으로 쓴 프로젝트 파일도 밖으로 본다. 그 판정은
+    여기서 바꾸지 않는다(경로 표기 정규화는 별도 과제). 이 함수는 의심이 하나라도 있으면 거짓을
+    돌려줄 뿐이다. 틀리는 방향은 둘이고 둘 다 지금보다 느슨해지지 않는다 — 진짜 밖인데 거짓이면
+    지금처럼 선언으로 상향되고, 프로젝트 파일인데 참이면(`realpath` 가 못 푸는 bind mount 같은
+    별칭) 그 쓰기는 선언 없는 세션에서도 이미 통과한다.
+
+    `..` 를 접기 **전** 경로를 `realpath` 에 넘긴다. 링크 뒤의 `..` 는 링크 대상의 부모라서, 먼저
+    접으면 링크를 거쳐 프로젝트로 들어가는 경로를 밖으로 읽는다.
+    """
+    try:
+        supplied = str(p).replace("\\", os.sep)
+        raw = supplied if os.path.isabs(supplied) else os.path.join(root, supplied)
+
+        def under(path, base):
+            path, base = path.casefold(), base.casefold()
+            return path == base or path.startswith(base.rstrip(os.sep) + os.sep)
+
+        # 대소문자를 무시하고 비교한다. 대소문자 구분 볼륨의 「이름만 다른 진짜 밖 폴더」도 면제를
+        # 못 받지만, 그건 지금 동작(상향) 그대로라 보수 방향이다.
+        if (under(os.path.realpath(raw), os.path.realpath(root))
+                or under(os.path.abspath(raw), os.path.abspath(root))):
+            return False
+        # 프로젝트 파일의 하드 링크는 폴더 비교로 잡히지 않는다. `os.path.isfile` 은 권한 오류를
+        # 삼키고 거짓을 돌려주므로 쓰지 않는다 — 「없음」만 일반 파일이 아닌 것으로 보고, 그 밖의
+        # 조회 오류는 아래 except 로 확인 실패가 된다.
+        try:
+            info = os.stat(raw)
+        except (FileNotFoundError, NotADirectoryError):
+            info = None
+        if info is not None and stat.S_ISREG(info.st_mode) and info.st_nlink >= 2:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def build_snapshot(profile, root, rel):
     """plan_files / review_candidates / phase_docs 스냅샷. glob 은 profile 주입(경로 하드코딩 없음)."""
     pg = (profile.get("risk") or {}).get("plan_glob", "")   # 미설정/무효 → plan scan 없음(graceful)
@@ -178,22 +217,12 @@ def build_snapshot(profile, root, rel):
             phase_docs[pid] = docs
 
         # Fast Cycle uses one physical 00 document as deterministic virtual 01..04 documents.
-        # The shared parser is also used by the CLI and server-side consumers.
+        # The CLI and server-side consumers expand through the same shared function.
         try:
-            from fast_cycle_contract import parse_fast_plan
-            for doc in list(phase_docs.get("00") or []):
-                plan, issues = parse_fast_plan(doc.get("content") or "")
-                if plan is None or issues or plan.metadata.get("Cycle-Mode") != "FAST":
-                    continue
-                header = (f"Cycle-Stem: `{plan.metadata.get('Cycle-Stem', '')}`\n"
-                          f"Risk Level: {plan.metadata.get('Risk Level', '')}\n")
-                for virtual_id in ("01", "02", "03", "04"):
-                    phase_docs.setdefault(virtual_id, []).append({
-                        "path": doc.get("path"),
-                        "content": header + plan.sections.get(virtual_id, ""),
-                        "recent": doc.get("recent", False),
-                        "virtual_fast": True,
-                    })
+            from fast_cycle_contract import virtual_phase_docs
+            virtual, _issues = virtual_phase_docs(list(phase_docs.get("00") or []))
+            for virtual_id, docs in virtual.items():
+                phase_docs.setdefault(virtual_id, []).extend(docs)
         except Exception:
             # Core receives parser/audit failures separately and closes only active Fast runs.
             pass
@@ -306,6 +335,10 @@ _NON_OVERRIDABLE_BLOCKS = {
     # 감사를 못 쓰는 상태에서 감사로 우회한다는 건 성립하지 않는다. waiver 기록 실패와 같은 취급.
     "block_cycle_stem_audit_failure",
     "block_fast_cycle_audit",
+    # 이미 끝난 Fast run 의 사이클. abort 사이클은 「완결」이 아니라 완결 차단이 걸리지 않으므로,
+    # 여기서 override 를 열면 그 사이클의 소스 수정까지 열린다. 같은 입력이 전에 받던
+    # `block_fast_cycle_audit` 도 override 불가였다 — 키와 안내만 갈라진다.
+    "block_fast_cycle_terminal",
 }
 
 
@@ -689,8 +722,25 @@ def run_pre_implementation_gate(io, root, core_dir, raw_text):
         return 0
 
     rel = make_rel(root)
-    changes = io.extract_changes(raw, rel)       # ← 런타임별 (file_path vs apply_patch)
+    # 밖으로 판정된 원래 경로를 모은다. 세션 선언 면제는 이 경로들이 **모두** 확인된 밖일 때만
+    # 준다 — 상대 경로 `<outside-project>` 만으로는 별칭으로 쓴 프로젝트 파일과 구분되지 않는다.
+    outside_raw = []
+
+    def rel_recording(p):
+        result = rel(p)
+        if result == "<outside-project>":
+            outside_raw.append(p)
+        return result
+
+    changes = io.extract_changes(raw, rel_recording)  # ← 런타임별 (file_path vs apply_patch)
     _attach_post_image(root, changes)
+    # 확인하지 못한 밖 경로는 게이트가 경고한다 — 별칭으로 쓴 프로젝트 파일이 위험 규칙을 조용히
+    # 비켜 가지 않게 한다. 경로 판정(`make_rel`) 자체는 바꾸지 않는다.
+    outside_unconfirmed = list(dict.fromkeys(
+        str(p) for p in outside_raw if not _outside_confirmed(root, p)))
+    outside_confirmed = (bool(changes) and bool(outside_raw)
+                         and all((change.get("path") or "") == "<outside-project>" for change in changes)
+                         and not outside_unconfirmed)
     declared = io.read_declared_level(raw, root)  # ← 런타임별 ($host/logs)
     # 선언은 env(SAGE_CYCLE_STEM) 와 `<root>/.sage/cycle.json` 두 통로다. 기원을 함께 실어야
     # 표시·감사가 "어느 통로로 읽었는지" 를 갈라 말할 수 있다 — env 가 이기는데 화면이
@@ -705,7 +755,8 @@ def run_pre_implementation_gate(io, root, core_dir, raw_text):
              "session_id": raw.get("session_id", "") or "", "branch": resolve_branch(root, ""),
              "cycle_stem": cycle_stem, "cycle_stem_origin": cycle_origin,
              "cycle_document_language": document_language,
-             "declared_max": declared, "changes": changes}
+             "declared_max": declared, "outside_confirmed": outside_confirmed,
+             "outside_unconfirmed": outside_unconfirmed, "changes": changes}
     snapshot = build_snapshot(profile, root, rel)
     feedback_state = _build_feedback_state(profile, root, changes)
     if feedback_state is not None:
@@ -719,11 +770,19 @@ def run_pre_implementation_gate(io, root, core_dir, raw_text):
     decision = _record_acceptance_waiver_uses(hid, root, decision)
     # override 우회보다 먼저 기록한다 — 우회로 통과하든 게이트가 통과시키든 선언 사실은 남아야 한다.
     decision = _record_declared_cycle_stem(hid, root, decision, event.get("session_id") or "")
+    # 감사 실패·코어 예외는 판정을 새 차단으로 통째로 바꾼다. 경로 진단은 그 차단에도 붙어야 한다.
+    if outside_unconfirmed and isinstance(decision, dict) and not decision.get("outside_unconfirmed"):
+        decision["outside_unconfirmed"] = list(outside_unconfirmed)
     # 선언 파일이 있는데 못 읽은 상태는 선언 부재로 degrade 하되 반드시 보이게 한다. 부재·손상이
     # 똑같이 조용하면 파일을 1바이트만 잘라도 완결 사이클 차단이 사라지고 아무도 모른다.
     if cycle_error and isinstance(decision, dict):
         decision["cycle_declaration_error"] = cycle_error
     if _maybe_override(hid, root, decision, changes):   # P1-5: 활성 override 면 BLOCK 우회(감사 기록)
+        # override 알림은 stderr 뿐이라 통과한 호출에서는 모델에게 닿지 않는다. 경로 진단은
+        # 비차단 컨텍스트 채널(경고 렌더)로 따로 보낸다.
+        if isinstance(decision, dict) and decision.get("outside_unconfirmed"):
+            io.render_gate(core.outside_unconfirmed_warning(decision["outside_unconfirmed"]),
+                           profile, root)
         return 0
     return io.render_gate(decision, profile, root)   # ← 런타임별 채널/포맷/exit
 
@@ -842,14 +901,14 @@ def run_capture_declared_risk(io, root, core_dir, raw_text):
         try:
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump(decision["state"], fh, ensure_ascii=False)
-            io.render_declared_capture(decision["level"])
+            io.render_declared_capture(decision["level"], root)
         except Exception:
             pass
-    elif decision.get("message_key") == "risk_declaration_ambiguous":
+    elif decision.get("message_key") in ("risk_declaration_ambiguous", "risk_declaration_marker_position"):
         # 기각을 알리는 것뿐이므로 상태 파일은 건드리지 않는다. UserPromptSubmit 은 exit 0 stdout 이
         # 컨텍스트로 올라가는 이벤트라 양 런타임에서 실제로 보인다.
         try:
-            io.render_declared_ambiguous()
+            io.render_declared_ambiguous(root, decision["message_key"])
         except Exception:
             pass
     elif decision["action"] == "clear":
@@ -860,7 +919,7 @@ def run_capture_declared_risk(io, root, core_dir, raw_text):
             existed = os.path.exists(path)
             if existed:
                 os.remove(path)
-            io.render_declared_clear(existed)
+            io.render_declared_clear(existed, root)
         except Exception as exc:
             print(f"[{hid}] 선언 해제 실패 — 수동으로 {path} 를 지우세요: "
                   f"{type(exc).__name__}: {exc}", file=sys.stderr)
@@ -1915,7 +1974,28 @@ def run_session_start_snapshot(io, root, core_dir, raw_text):
     overlay_rc = _session_start_overlay_l1(io, root)
     if overlay_rc:
         return overlay_rc
-    return _ensure_session_06_snapshot(io, root, core_dir, raw_text)
+    rc = _ensure_session_06_snapshot(io, root, core_dir, raw_text)
+    # 압축 직후에만 재진입 문맥을 넣는다. 06 baseline 은 session_id 가 같아 write-once 로 그대로다.
+    # baseline 이 실패(rc≠0)해도 문맥은 낸다 — 그 실패는 이미 stderr 로 드러났고, 문맥까지 빠지면
+    # 압축 뒤 에이전트가 어디서 이어 가야 하는지 모른다.
+    _emit_compact_reentry(io, root, raw_text)
+    return rc
+
+
+def _emit_compact_reentry(io, root, raw_text):
+    raw = parse_input_fail_open("session-start-snapshot", raw_text, surface=False)
+    if not isinstance(raw, dict) or raw.get("source") != "compact":
+        return
+    render = getattr(io, "render_session_context", None)
+    if render is None:
+        return
+    try:
+        import compact_reentry
+        text = compact_reentry.build(root, load_profile_fail_open("session-start-snapshot"))
+    except Exception as e:  # noqa: BLE001 - 문맥 생성 실패를 조용히 넘기지 않는다
+        text = ("[SAGE] 재진입 문맥 생성 실패 / re-entry context failed: "
+                f"{type(e).__name__}: {str(e)[:200]} — /sage-team (codex: $sage-team)")
+    render(text)
 
 
 def retro_gate_result(profile, root, raw, session_entries, snapshot_06=None, snapshot_status="ok"):

@@ -9,6 +9,16 @@ from typing import Literal
 
 
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+# CommonMark 의 줄 끝은 LF·CR·CRLF 뿐이다(`str.splitlines()` 는 U+2028 등도 나눈다).
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def _markdown_lines(content):
+    """줄 끝을 LF·CR·CRLF 로만 나눈 줄 목록. 맨 끝 줄바꿈 뒤의 빈 조각은 `splitlines()` 처럼 뺀다."""
+    lines = _LINE_BREAK.split(content or "")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 _TASK = re.compile(r"^\s*-\s+\[([ xX~])\]\s*(.*?)\s*$")
 _TASK_LIKE = re.compile(r"^\s*(?:[-*+]|[0-9]+\.)\s*\[([^\]]*)\]")
 _REVISION = re.compile(r"^Done-Criteria-Revision:\s*([1-9][0-9]*)\s*$")
@@ -79,13 +89,16 @@ def _visible_lines(content: str) -> list[tuple[int, str]]:
     fence_char = ""
     fence_len = 0
     in_comment = False
-    for line_no, raw in enumerate(content.splitlines(), 1):
+    for line_no, raw in enumerate(_markdown_lines(content), 1):
         fence = _FENCE.match(raw)
         if fence:
             token = fence.group(1)
             if not in_fence:
                 in_fence, fence_char, fence_len = True, token[0], len(token)
-            elif token[0] == fence_char and len(token) >= fence_len:
+            # CommonMark: only spaces or tabs may follow a closing fence, so
+            # an example ```python line inside a block keeps it open.
+            elif (token[0] == fence_char and len(token) >= fence_len
+                    and not raw[fence.end():].strip(" \t")):
                 in_fence = False
             continue
         if in_fence:
