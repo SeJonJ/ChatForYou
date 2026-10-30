@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-green)]([LICENSE](https://creativecommons.org/licenses/by-nc-sa/4.0/) )
 [![Electron](https://img.shields.io/badge/Electron-28.0.0-47848F.svg?logo=electron)](https://electronjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-16+-339933.svg?logo=node.js)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.13+-339933.svg?logo=node.js)](https://nodejs.org/)
 
 **ChatForYou Desktop** - 데스크톱에서 만나는 새로운 소통의 경험 🚀
 
@@ -44,7 +44,7 @@ ChatForYou_v2/
 
 ### Core Technologies
 - **Electron 28.0.0**: 크로스플랫폼 데스크톱 앱 프레임워크
-- **Node.js 16+**: JavaScript 런타임
+- **Node.js 22.13+**: JavaScript 런타임 (동기화가 실행하는 Vite 빌드 요구 사항)
 - **electron-builder**: 멀티플랫폼 빌드 도구
 - **electron-updater**: 자동 업데이트 시스템
 
@@ -64,7 +64,7 @@ ChatForYou_v2/
 
 ### 1. 사전 요구사항
 ```bash
-# Node.js 16+ 설치 확인
+# Node.js 22.13+ 설치 확인 (동기화가 nodejs-frontend 를 Vite 로 빌드한다)
 node --version
 
 # npm 설치 확인  
@@ -80,8 +80,11 @@ npm install -g sass
 git clone https://github.com/SeJonJ/ChatForYou.git
 cd ChatForYou_v2/chatforyou-desktop
 
-# 의존성 설치
+# 데스크톱 의존성 설치
 npm install
+
+# 프론트엔드 의존성 설치 — 동기화가 nodejs-frontend 를 빌드하므로 필요하다
+cd ../nodejs-frontend && npm install && cd ../chatforyou-desktop
 ```
 
 ### 3. 개발 모드 실행

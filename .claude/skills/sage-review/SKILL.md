@@ -424,7 +424,9 @@ CORE `[TASK]` 뒤에 다음을 추가로 지킨다:
 - **[CLASS]** 수정은 지적된 입력이 아니라 그 입력이 속한 **부류**를 닫아야 한다.
   1. 부류 경계를 한 줄로 적는다(예: "경로 case 비교" 이지 "이 파일 하나의 경로"가 아니다).
   2. 회귀는 부류의 양 끝을 덮는다 — 집합이면 증가/감소 양방향, 판정이면 관할/충돌 양쪽처럼
-     대칭되는 두 축을 최소한으로 삼는다.
+     대칭되는 두 축을 최소한으로 삼는다. 부류에 실패 형태가 여럿이면(예: 요청 대상 해석 실패
+     = 예외·null 반환·빈 값) 대칭 두 축 대신 각 형태를 하나씩 덮고, 3번의 실패 확인도 형태마다
+     한다.
   3. 제출 전 **수정하기 전 코드로 그 회귀를 돌려 실제로 실패하는지** 확인하고 결과를
      `[OUTPUT]` 표에 한 줄로 보고한다 — 실패하지 않는 회귀는 아무것도 고정하지 않은 것이므로
      그 자체가 finding 미해결로 취급된다.
@@ -478,10 +480,33 @@ lifecycle·correctness 렌즈는 위 두 렌즈에 한해 다음을 추가로 �
 패킷 규약·리뷰어 계약·peer 실패 처리는 CORE(`docs/agent/review-protocol.md` Review packet,
 `sage cross-check` 출력)를 따른다. 여기에는 이 프로젝트의 운영 규칙만 더한다.
 
-- peer 가 실패하면 `REVIEWER_BLOCK_REASON` 값과, `--on-peer-failure same-runtime` 으로 대신
-  진행했다면 사용자 승인 기록을 05 문서의 해당 라운드에 남긴다.
+- peer 가 실패해 `REVIEWER_STATUS: BLOCKED` 가 나오면 `REVIEWER_BLOCK_REASON` 을 05 문서의 해당
+  라운드에 남기고, 사용자에게 이번 사이클의 남은 라운드를 same-runtime 으로 진행할지 묻는다. 허가 단위는
+  **사이클**이다 — 허가하면 그 사이클의 이후 라운드는 다시 묻지 않고
+  `sage cross-check --on-peer-failure same-runtime` 으로 실행한다(peer 를 먼저 시도하고, 실패할 때만 자체
+  리뷰). 허가는 다음 사이클로 넘어가지 않는다.
+- 허가한 시점·사유와, 라운드마다 `REVIEWER_FALLBACK_REASON` 을 05 문서에 남긴다. 사람 허가 없이
+  same-runtime 으로 넘어가지 않는다.
+- 실패 사유가 `timeout` 으로 반복되면 라운드마다 peer 를 기다리지 말고, run 을 same_runtime 으로 다시
+  열지 사용자에게 묻는다(폴백 리뷰는 남은 시간의 절반만 받는다).
+- 사용자가 사이클 시작 전이나 도중에 "이번에는 교차 리뷰 없이 진행" 처럼 **명시**하면, 그 사이클은 처음부터
+  same-runtime 으로 진행한다. 이 경우 `--on-peer-failure` 를 쓰지 않는다(peer 가 살아 있으면 교차 리뷰를
+  해 버린다). 대신 이 워크트리의 `sage/project-profile.local.yaml` 에 `cross_model: { enabled: false }` 를
+  두고 `sage review` 로 리뷰하며, run 은 `--reviewer-requested same_runtime` 으로 연다. 06 을 쓰기 전에
+  로컬 값을 원래대로 되돌리고, 사용자 지시 원문을 05 문서에 남긴다.
 - `COMPLETE_DEGRADED` 나 `*_degraded` 라운드만으로 사이클을 닫지 않는다. **사이클당 최소
-  1라운드는 `REVIEWER_STATUS: COMPLETE` 인 교차 리뷰**로 끝나야 한다.
+  1라운드는 `REVIEWER_STATUS: COMPLETE` 인 교차 리뷰**로 끝나야 한다. 단 위의 사이클 단위 허가나 사용자
+  명시가 있으면 교차 리뷰 없이 닫을 수 있고, 05 잔여 위험에 "교차 리뷰 없음 — 독립성 제한" 을 기록한다.
 - peer 가 P1 급 결함을 놓쳤다고 판단되면, 다음 사이클에서 탐색 예산을 늘리기 전에 패킷의
   컨텍스트 지도(호출자·피호출자·저장소 시그니처)부터 보강한다.
+
+`feat_151_frontend_vite_esm_phase1` 사이클(2026-09-24, run 7개)에서 확인된 보강이 아래에
+이어진다. 라운드 범위·종료 판정·트리아지 기준은 CORE 리뷰 규칙을 따르고 여기서 다루지 않는다.
+
+### Review packet — 리뷰 중 검증 누적 (CORE Review packet 에 추가)
+
+- 리뷰 라운드 중 새로 돌린 실험(빌드·watch·스트레스 등)은 packet 본문이 아니라 그 라운드
+  delta 에 누적해 적는다(본문 고정 규칙 유지). 항목마다 실험 결과와 그 실험이 의존하는 파일을
+  적고, 리뷰어는 유효한 항목을 다시 돌리지 않는다.
+- 이후 재작업이 그 파일 중 하나라도 건드리면 해당 항목은 무효이고 다시 검증 대상이 된다.
 <!-- <<< SAGE OVERLAY v1 END -->

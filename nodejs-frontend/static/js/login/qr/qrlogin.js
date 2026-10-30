@@ -1,3 +1,6 @@
+// QR 로그인 생성·폴링 화면 모듈. 설정 값은 접근 모듈을 거쳐 읽는다.
+import { getApiBaseUrl, getBaseUrl } from '../../common/config.js';
+
 const QRLogin = {
     isInit: false,
     pollingCount: 0,
@@ -32,7 +35,7 @@ const QRLogin = {
     initQRLogin: function() {
         let self = this;
         console.log('[QR Login] 세션 생성 시작...');
-        let url = window.__CONFIG__.API_BASE_URL + '/login/qr/create';
+        let url = getApiBaseUrl() + '/login/qr/create';
         ajax(url, 'GET', true, '', function(response) {
             const { data } = response || {};
             console.log('[QR Login] 세션 생성 성공:', response);
@@ -122,7 +125,7 @@ const QRLogin = {
             return;
         }
 
-        const url = window.__CONFIG__.API_BASE_URL + '/login/qr/status/' + self.sessionId;
+        const url = getApiBaseUrl() + '/login/qr/status/' + self.sessionId;
         ajax(url, 'GET', false, '', function(response) {
             const { result, data } = response || {};
             console.log('[QR Login] 상태 확인 성공:', response);
@@ -224,7 +227,7 @@ const QRLogin = {
         let self = this;
         self.stopPolling();
         self.stopTimer();
-        window.location.href = window.__CONFIG__.BASE_URL + '/login/chatlogin.html';
+        window.location.href = getBaseUrl() + '/login/chatlogin.html';
     },
     /*
     * 다시 시도 버튼 클릭

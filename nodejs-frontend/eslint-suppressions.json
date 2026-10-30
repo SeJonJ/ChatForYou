@@ -19,11 +19,6 @@
       "count": 3
     }
   },
-  "server.js": {
-    "no-unused-vars": {
-      "count": 2
-    }
-  },
   "static/js/chatroom/socket.js": {
     "no-undef": {
       "count": 6
@@ -65,24 +60,11 @@
     }
   },
   "static/js/login/main.js": {
-    "no-undef": {
-      "count": 12
-    },
     "no-unused-vars": {
       "count": 1
     },
     "no-useless-escape": {
       "count": 2
-    }
-  },
-  "static/js/login/qr/qrlogin.js": {
-    "no-undef": {
-      "count": 4
-    }
-  },
-  "static/js/login/qr/qrscan.js": {
-    "no-undef": {
-      "count": 9
     }
   },
   "static/js/popup/announcement_popup.js": {
@@ -119,7 +101,7 @@
   },
   "static/js/roomlist/roomlist.js": {
     "no-undef": {
-      "count": 16
+      "count": 3
     },
     "no-unused-vars": {
       "count": 5

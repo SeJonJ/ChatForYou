@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const AutoUpdateManager = require('../../auto-update/auto-updater');
+const { createMainWebPreferences } = require('./web-preferences');
 
 // 빌드 환경 정보 로드 (.build-info.json)
 let buildEnv = 'prod';
@@ -244,19 +245,13 @@ function createMainWindow() {
         minHeight: 600,
         title: 'ChatForYou',
         icon: path.join(__dirname, '../static/images/logo/chatforyou_logo.png'),
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            enableRemoteModule: false,
-            preload: path.join(__dirname, 'preload.js'),
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-            autoplayPolicy: 'no-user-gesture-required'
-        },
+        webPreferences: createMainWebPreferences(),
         show: false,
         titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default'
     });
 
+    // file:// 페이지의 모듈 스크립트·fetch·API 호출은 GrantFileProtocolExtraPrivileges 퓨즈(기본 켜짐)에
+    // 기대어 동작한다. 패키징 시 build-scripts/verify-electron-fuses.js 가 이 퓨즈를 확인한다.
     mainWindow.loadFile(path.join(__dirname, '../templates/roomlist.html'));
     log.info('로컬 파일 로드: roomlist.html');
 

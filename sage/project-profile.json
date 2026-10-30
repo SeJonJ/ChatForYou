@@ -493,7 +493,7 @@
       "dry_rounds": 1,
       "budget_tokens": {
         "L2": 150000,
-        "L3": 600000
+        "L3": 3000000
       },
       "cross_model": "from_options.cross_model",
       "severity_block": [
@@ -592,7 +592,7 @@
     "commands": {
       "syntax": "bash scripts/test-verify-changes.sh",
       "build": "bash scripts/verify-changes.sh --level L2",
-      "test": "bash scripts/test-claude-hooks.sh && bash .codex/hooks/tests/run-tests.sh",
+      "test": "bash scripts/test-claude-hooks.sh && bash .codex/hooks/tests/run-tests.sh && bash scripts/verify-frontend-test.sh",
       "lint": "bash scripts/test-verify-doc-mapping.sh"
     },
     "acceptance": {

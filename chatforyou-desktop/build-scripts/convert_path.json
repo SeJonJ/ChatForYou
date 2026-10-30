@@ -25,6 +25,7 @@
       "js/": "static/js/"
     },
     "html": {
+      "/chatforyou/build/": "build/",
       "images/": "static/images/",
       "css/": "static/css/",
       "js/": "static/js/"

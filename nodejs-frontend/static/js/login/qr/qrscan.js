@@ -1,3 +1,6 @@
+// QR 스캔 인증 화면 모듈. 설정 값은 접근 모듈을 거쳐 읽는다.
+import { getApiBaseUrl, getBaseUrl, getGoogleOAuth } from '../../common/config.js';
+
 const QRScan = {
     isInit: false,
     sessionId: null,
@@ -21,9 +24,9 @@ const QRScan = {
         // Firebase 초기화
         if (!firebase.apps.length) {
             firebase.initializeApp({
-                projectId: window.__CONFIG__.GOOGLE_OAUTH.PROJECT_ID,
-                apiKey: window.__CONFIG__.GOOGLE_OAUTH.API_KEY,
-                authDomain: window.__CONFIG__.GOOGLE_OAUTH.AUTH_DOMAIN
+                projectId: getGoogleOAuth().PROJECT_ID,
+                apiKey: getGoogleOAuth().API_KEY,
+                authDomain: getGoogleOAuth().AUTH_DOMAIN
             });
         } else {
             firebase.app();
@@ -55,8 +58,8 @@ const QRScan = {
                  }
              },
              signInFlow: 'popup', // 팝업 방식 (모바일 친화적)
-             tosUrl: window.__CONFIG__.BASE_URL + '/login/terms.html', // 약관 URL (선택사항)
-             privacyPolicyUrl: window.__CONFIG__.BASE_URL + '/login/privacy.html' // 개인정보 처리방침 URL (선택사항)
+             tosUrl: getBaseUrl() + '/login/terms.html', // 약관 URL (선택사항)
+             privacyPolicyUrl: getBaseUrl() + '/login/privacy.html' // 개인정보 처리방침 URL (선택사항)
          });
     },
     authenticateSession: function(user) {
@@ -85,7 +88,7 @@ const QRScan = {
             });
 
             // 백엔드 API 호출
-            ajax(window.__CONFIG__.API_BASE_URL + '/login/qr/authenticate', 'POST', true, requestData, function(response) {
+            ajax(getApiBaseUrl() + '/login/qr/authenticate', 'POST', true, requestData, function(response) {
                 const { result, data } = response || {};
                 console.log('백엔드 인증 성공:', response);
                 if (result === 'SUCCESS' && data) {

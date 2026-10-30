@@ -8,13 +8,17 @@
 #       git diff 로는 drift 를 볼 수 없다. 현재 산출물을 임시 target에 복제한 뒤 그 복제본에서
 #       전체 sync를 실행하고 전후를 비교한다. 실제 Desktop target에서는 sync를 실행하지 않는다.
 #
+# 동기화 소스: nodejs-frontend/dist (vite build 산출물). dist 가 오래되면 web 원본을 고쳐도
+#       비교가 통과하므로, 비교 전에 nodejs-frontend 를 먼저 빌드해 dist 를 원본과 맞춘다.
+#       이 빌드는 파생물인 dist 만 다시 쓰고 Desktop 산출물은 건드리지 않는다.
+#
 # 사용:
 #   scripts/verify-desktop-sync.sh
 #
 # EXIT:
 #   0  → PASS (재sync 결과가 현재 산출물과 동일 = web↔desktop 동기 상태)
 #   1  → FAIL (drift = 현재 산출물이 web 최신과 불일치, 재sync 필요)
-#   3  → degrade (node 부재 / sync 실행 실패)
+#   3  → degrade (node·npm 부재 / 빌드 실패 / dist 부재 / sync 실행 실패)
 
 set -uo pipefail
 
@@ -24,6 +28,7 @@ PROJECT_ROOT="${CODEX_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)
 DESKTOP_DIR="$PROJECT_ROOT/chatforyou-desktop"
 SRC="$DESKTOP_DIR/src"
 FRONTEND_DIR="$PROJECT_ROOT/nodejs-frontend"
+FRONTEND_DIST="$FRONTEND_DIR/dist"
 EXTRA_BASELINE="$PROJECT_ROOT/scripts/desktop-sync-extra-baseline.txt"
 
 if ! command -v node >/dev/null 2>&1; then
@@ -38,7 +43,26 @@ if [ ! -d "$FRONTEND_DIR/static" ] || [ ! -d "$FRONTEND_DIR/templates" ]; then
     exit 3
 fi
 
-if [ ! -d "$SRC/static" ] || [ ! -d "$SRC/templates" ] || [ ! -d "$SRC/config" ]; then
+if ! command -v npm >/dev/null 2>&1; then
+    echo "- 판정: DEGRADE — npm 부재로 nodejs-frontend 빌드 불가"
+    exit 3
+fi
+
+BUILD_LOG=$(mktemp)
+if ! (cd "$FRONTEND_DIR" && npm run build >"$BUILD_LOG" 2>&1); then
+    echo "- 판정: DEGRADE — nodejs-frontend 빌드 실패 (npm run build)"
+    tail -n 20 "$BUILD_LOG" | sed 's/^/  /'
+    rm -f "$BUILD_LOG"
+    exit 3
+fi
+rm -f "$BUILD_LOG"
+
+if [ ! -d "$FRONTEND_DIST/static" ] || [ ! -d "$FRONTEND_DIST/templates" ] || [ ! -d "$FRONTEND_DIST/build" ]; then
+    echo "- 판정: DEGRADE — 빌드 후에도 nodejs-frontend/dist 구성 누락"
+    exit 3
+fi
+
+if [ ! -d "$SRC/static" ] || [ ! -d "$SRC/templates" ] || [ ! -d "$SRC/config" ] || [ ! -d "$SRC/build" ]; then
     echo "- 판정: FAIL — Desktop 동기화 산출물 누락"
     exit 1
 fi
@@ -65,6 +89,13 @@ cp "$DESKTOP_DIR/build-scripts/convert_path.json" "$TEMP_BUILD_SCRIPTS/convert_p
 cp "$DESKTOP_DIR/package.json" "$TEMP_DESKTOP/package.json"
 mkdir -p "$TEMP_SRC"
 ln -s "$FRONTEND_DIR" "$TEMP_ROOT/nodejs-frontend"
+# sync 는 이 목록에 있는 Desktop 전용 파일을 정리 대상에서 뺀다. 실제 sync 와 같은 목록을 보게 한다.
+mkdir -p "$TEMP_ROOT/scripts"
+if [ -f "$EXTRA_BASELINE" ]; then
+    cp "$EXTRA_BASELINE" "$TEMP_ROOT/scripts/desktop-sync-extra-baseline.txt"
+else
+    : > "$TEMP_ROOT/scripts/desktop-sync-extra-baseline.txt"
+fi
 
 # Desktop 전용 산출물은 명시된 baseline만 예상 결과에 포함한다.
 if [ -f "$EXTRA_BASELINE" ]; then
@@ -80,7 +111,8 @@ if [ -f "$EXTRA_BASELINE" ]; then
 
         source_path="$SRC/$relative_path"
         target_path="$TEMP_SRC/$relative_path"
-        if [ -e "$FRONTEND_DIR/$relative_path" ]; then
+        # 빌드 산출물과 겹치면 sync 가 덮어쓰고, web 원본과 겹치면 전환된 원본 경로를 Desktop 전용으로 숨긴다.
+        if [ -e "$FRONTEND_DIST/$relative_path" ] || [ -e "$FRONTEND_DIR/$relative_path" ]; then
             echo "- 판정: DEGRADE — Desktop 전용 baseline이 web 원본과 중복됨: $relative_path"
             exit 3
         fi
@@ -95,7 +127,7 @@ if [ -f "$EXTRA_BASELINE" ]; then
 fi
 
 # 복제한 임시 target에 전체 sync 실행. 실제 Desktop src와 backup은 접근하지 않는다.
-if ! (cd "$TEMP_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup >"$SYNC_LOG" 2>&1); then
+if ! (cd "$TEMP_DESKTOP" && node build-scripts/sync-frontend.js --skip-backup --skip-build >"$SYNC_LOG" 2>&1); then
     echo "- 판정: DEGRADE — 임시 target sync 실행 실패"
     sed -n '1,40p' "$SYNC_LOG" | sed 's/^/  /'
     exit 3
@@ -184,6 +216,7 @@ compare_tree() {
 # sync-engine 자체가 *.map을 복사 대상에서 제외하므로 비교에서도 방어적으로 제외한다.
 compare_tree static "$TEMP_SRC/static" "$SRC/static" '*.map' '.DS_Store'
 compare_tree templates "$TEMP_SRC/templates" "$SRC/templates" '.DS_Store'
+compare_tree build "$TEMP_SRC/build" "$SRC/build" '.DS_Store'
 compare_tree config "$EXPECTED_CONFIG" "$ACTUAL_CONFIG" '.DS_Store'
 
 if [ "$DRIFT_FOUND" -ne 0 ]; then

@@ -26,7 +26,7 @@
 2. **WebSocket 신호 처리**: `wsMessageHandlers` 맵 기반 구조가 jQuery DOM 이벤트와 강하게 결합
 3. **개발자 친숙도**: jQuery + 순수 JS 기반 유지가 현재 팀에 최적
 
-> **AI 코드 생성 금지 항목**: React 컴포넌트, Vue SFC, TypeScript, axios, import/export (브라우저 모듈)
+> **AI 코드 생성 금지 항목**: React 컴포넌트, Vue SFC, TypeScript, axios, import/export (브라우저 모듈 — 단 Vite 로 빌드하는 ES 모듈 전환 파일은 예외, §문법 제한 표 참고)
 
 ### Electron 고려 사항 (MANDATORY)
 `chatforyou-desktop`은 `nodejs-frontend`를 sync해서 사용한다. 모든 코드는 Electron 환경을 반드시 고려해야 한다.
@@ -37,7 +37,7 @@
       // Electron 전용 처리
   }
   ```
-- **API URL**: `window.__CONFIG__.API_BASE_URL` 사용 — 하드코딩 금지 (Electron config 자동 변환됨)
+- **API URL**: 하드코딩 금지 (Electron config 자동 변환됨). ES 모듈 전환 파일은 `static/js/common/config.js` 의 `getApiBaseUrl()` 을, classic 스크립트는 `window.__CONFIG__.API_BASE_URL` 을 쓴다
 - **isMobile()**: Electron에서 항상 `false` 반환 — 모바일 분기 추가 불필요
 - **파일 경로**: `window.location.href` 방식 그대로 사용 (Electron이 처리)
 - **Node.js API**: `window.require`, `window.process`, `window.__dirname` — 브라우저 코드에서 직접 사용 금지 (Electron 전용이므로 isElectron() 분기 안에서만)
@@ -290,7 +290,7 @@ window.__CONFIG__.API_BASE_URL + '/chatforyou/api/turn/credential'
 |---|---|
 | `async` / `await` | 기존 코드가 콜백/Promise 체인 기반 — 혼용 시 스타일 불일치 |
 | `class` 문법 | 객체 리터럴 모듈 패턴이 기본 — 신규 독립 모듈에만 허용 |
-| `import` / `export` | 브라우저 전역 스크립트 방식 유지 (모듈 번들러 없음) |
+| `import` / `export` | ES 모듈 전환 파일에서만 쓴다. Vite 로 빌드하는 파일은 `static/js/roomlist/roomlist.js`, `static/js/login/**`, `static/js/common/config.js` 이고, `static/js/error/script_500.js` 는 모듈 문법만 전환했으며 아직 빌드 엔트리가 아니어서 dist 에 포함되지 않는다. 나머지 classic 스크립트(`common/**` 공유 모듈, `popup/**`, `rtc/**`, `chatroom/**`)는 전역 스크립트 방식을 유지한다 |
 
 ---
 
@@ -484,8 +484,8 @@ if (recvMessage.type === 'newType') {
 - [ ] JSDoc 형식: what 1줄 + 필요시 WHY 1~2줄, 장황하지 않음. `@param`/`@returns`는 제약 있을 때만
 - [ ] 주석 자기 완결성: 사이클/설계 라벨(`D1`, `A1 계획 수용`, `후보 A`, `패턴 B` 등)·타 레이어 전략 인용·구현 히스토리 주석 없음 (§7.3 — 배경은 plan_docs/vault에)
 - [ ] SCSS 미수정 또는 불가피한 수정 시 변수 사용 확인
-- [ ] 유저 미승인 ES6 문법 미사용 (async/await, class, import)
-- [ ] Electron 환경 고려 (isElectron() 분기, window.__CONFIG__ 사용)
+- [ ] 유저 미승인 ES6 문법 미사용 (async/await, class, ES 모듈 전환 파일 밖의 import)
+- [ ] Electron 환경 고려 (isElectron() 분기, 설정은 전환 모듈이면 `common/config.js` 접근자, classic 스크립트면 window.__CONFIG__)
 - [ ] wsMessageHandlers 맵에 신규 이벤트 등록 여부 (WebSocket 관련 시)
 - [ ] alert 대신 showToast 활용
 ```

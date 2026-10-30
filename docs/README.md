@@ -55,9 +55,11 @@ ChatForYou v2는 WebRTC 기반 영상 회의 및 실시간 게임 플랫폼입�
 cd nodejs-frontend
 npm run local
 npm run prod
-npm run start
+npm run build   # vite build → dist (start·dev·Desktop sync·Docker 가 모두 dist 를 쓴다)
+npm run start   # prestart 로 build 후 dist 서빙
 npm run sass
-npm run dev
+npm run dev     # build 후 sass·vite build --watch·서버 동시 실행
+npm run test    # vitest run
 ```
 
 ### Backend

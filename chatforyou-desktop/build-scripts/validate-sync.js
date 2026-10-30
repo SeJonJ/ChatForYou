@@ -12,7 +12,8 @@ const crypto = require('crypto');
 class SyncValidator {
   constructor() {
     this.projectRoot = path.join(__dirname, '../..');
-    this.nodejsFrontendPath = path.join(this.projectRoot, 'nodejs-frontend');
+    // 데스크톱은 소스 트리가 아니라 빌드 산출물(dist)을 동기화받는다. 비교 기준도 dist 다.
+    this.nodejsFrontendPath = path.join(this.projectRoot, 'nodejs-frontend', 'dist');
     this.desktopSrcPath = path.join(__dirname, '../src');
     
     this.results = {
@@ -72,7 +73,9 @@ class SyncValidator {
       'src/static/images',
       'src/static/fonts',
       'src/templates',
-      'src/config'
+      'src/config',
+      // 모듈로 전환된 화면의 청크. 없으면 전환 화면이 빈 채로 패키징된다.
+      'src/build'
     ];
 
     for (const file of criticalFiles) {

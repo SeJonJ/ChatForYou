@@ -18,7 +18,7 @@ ChatForYou_v2/
 │   ├── src/main/java/       # Java 소스 코드
 │   ├── src/main/resources/  # 설정 파일
 │   └── build.gradle         # Gradle 빌드 설정
-├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.4)
+├── chatforyou-desktop/       # Electron 데스크톱 앱 (v1.1.5)
 │   ├── src/                 # Electron 소스 코드
 │   └── package.json
 └── README.md
@@ -127,7 +127,7 @@ This site is only for studying various functions using WebRTC and WebSocket tech
 https://github.com/SeJonJ/ChatForYou/wiki/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90
 
 ### 2. 사전 요구사항
-- **Node.js** 16+ 설치
+- **Node.js** 22.13+ 설치 (프론트 Vite 빌드 요구사항, `nodejs-frontend/.nvmrc`)
 - **Java 17** 설치
 - **Kurento Media Server** 설치
 - **TURN Server (coturn)** 설치
@@ -145,7 +145,7 @@ npm install
 # 로컬 환경 빌드
 npm run local
 
-# 서버 실행 (포트: 3000)
+# 서버 실행 (포트: 3000) — 시작 전에 Vite 빌드(dist)가 자동으로 실행된다
 npm run start
 ```
 
@@ -167,12 +167,15 @@ cd chatforyou-desktop
 # 의존성 설치
 npm install
 
-# 개발 모드 실행
+# 개발 모드 실행 (nodejs-frontend 를 빌드해 동기화한 뒤 앱을 띄운다)
 npm start
 
-# 프론트엔드 소스 동기화 (nodejs-frontend → desktop)
-npm run sync:frontend
+# 동기화만 실행
+node build-scripts/sync-frontend.js
 ```
+
+`npm start` 와 빌드는 `nodejs-frontend` 에서 `npm run build` 를 실행하므로,
+앞선 3단계(프론트엔드 실행)의 의존성 설치(`npm install`)가 끝나 있어야 한다.
 
 ### 6. 환경 설정
 

@@ -177,6 +177,7 @@ settings.local.json
 .claude/agent-memory/
 springboot-backend/.claude
 nodejs-frontend/.claude
+nodejs-frontend/.dist-build.lock
 
 ## Google AI Pro 관련
 .gemini/
