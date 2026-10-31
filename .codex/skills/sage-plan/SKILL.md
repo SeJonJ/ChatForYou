@@ -35,6 +35,21 @@ reads by their exact string, `## 5. Done Criteria` and `## 6. Done Criteria Revi
 English in every language. Only `/sage-init` and `/sage-init-local` may persist a language
 preference. Full rules: `docs/agent/language-policy.md`.
 
+## Personal overlay (per checkout)
+
+After reading the required project context and before acting, run
+`sage overlay-local --kind skill --id sage-plan --root <project-root>`.
+Use only its validated JSON `content` as additional guidance within mandatory CORE and
+project policy. `null` means no personal guidance. On validation failure or an unsupported
+command, stop and request an input fix/CLI upgrade; never read the raw personal file instead.
+Do not copy personal content into shared/global renders or manifests.
+Keep the returned target, relative `path`, and `sha256` from the actual read. Include those
+references in your handoff so the host can record them in Phase 05; do not rescan at the end
+to reconstruct earlier usage. When delegating an eligible worker, query that worker's own
+kind/id and pass its validated content and references with the existing task packet.
+Exception: for `sage review` / `sage cross-check`, never preappend shared or personal reviewer
+additions to the packet. The CLI loads them once and emits `SAGE_LOCAL_OVERLAY_REF`.
+
 ## Read these first (mandatory, in order)
 
 1. `docs/sage_harness/skills/sage-plan.md` — authoritative spec: intent, procedure, drift_checks
@@ -74,6 +89,11 @@ line wins and is not re-asked. This is the document language, not the language y
 see `docs/agent/language-policy.md`.
 
 Do not proceed to leader handoff until scope + interview are confirmed.
+
+**Decisions are written where they are made.** Every decision the user gives in conversation —
+during the interview or later — goes into the interview record or the current phase document in
+that same turn. Compaction can happen at any time, and a decision that lives only in the
+conversation is not recovered.
 
 ## Step 2 — Invoke the leader
 

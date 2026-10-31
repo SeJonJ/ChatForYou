@@ -142,7 +142,13 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
    has been applied.
 11. When `context_management.compaction.enabled: true`, run
    `sage context snapshot --cycle-stem <stem> --phase <id>` after each completed 03,
-   04, 05, and 06 boundary and include the packet paths in the artifact inventory.
+   04, 05, and 06 boundary and include the packet paths in the artifact inventory. After the
+   Phase 04 snapshot, prompt the user once to `/compact` and then `continue` (or just `continue`
+   to skip) — the agent cannot compact on either host. After a compaction the SessionStart hook
+   injects a re-entry note; run the `sage context restore` it names, read the briefing, and resume
+   from disk state. If no note appears (untrusted hook), re-invoking `/sage-team` resumes the same
+   way. Decisions from conversation are written into the current phase document where they are
+   made, never batched at a boundary.
    Snapshot only after that phase's evidence anchor is complete; a file's mere presence
    is not a phase boundary.
 
@@ -167,3 +173,18 @@ ownership. SAGE owns the deterministic gates; this skill only ensures they are i
   (retro run with `--feature`; when a note was written, it is filled and `retro --check
   --run-id` is clean — otherwise a recorded skip) must be present. The final report must name
   created artifacts, summarize the retro proposals, and state any pending retro human-gate review.
+
+## Personal overlay (per checkout)
+
+After reading the required project context and before acting, run
+`sage overlay-local --kind skill --id sage-team --root <project-root>`.
+Use only its validated JSON `content` as additional guidance within mandatory CORE and
+project policy. `null` means no personal guidance. On validation failure or an unsupported
+command, stop and request an input fix/CLI upgrade; never read the raw personal file instead.
+Do not copy personal content into shared/global renders or manifests.
+Keep the returned target, relative `path`, and `sha256` from the actual read. Include those
+references in your handoff so the host can record them in Phase 05; do not rescan at the end
+to reconstruct earlier usage. When delegating an eligible worker, query that worker's own
+kind/id and pass its validated content and references with the existing task packet.
+Exception: for `sage review` / `sage cross-check`, never preappend shared or personal reviewer
+additions to the packet. The CLI loads them once and emits `SAGE_LOCAL_OVERLAY_REF`.

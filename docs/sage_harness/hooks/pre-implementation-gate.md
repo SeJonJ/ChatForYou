@@ -40,6 +40,63 @@ sage_harness/hooks/pre_implementation_gate_core.py
 - The core has no filesystem or clock dependency. Plan candidate contents arrive in the snapshot,
   and the L3 review match arrives as an injected strategy_result.
 
+### Session risk declaration scope
+- `classify_risk` raises the computed risk to the session declaration (`declared_max`) — except
+  when every change (at least one) is confirmed outside the project, or every change is a closing
+  artifact (`_CLOSING_ARTIFACTS`: `.sage/knowledge_writeback_summary.md`). A declaration is about
+  this session's work; those writes get exactly the decision a session without a declaration gets.
+  `declared_l3` is switched off for them too. Mixed changes and zero changes are still raised.
+- "Confirmed outside" is the event field `outside_confirmed`, set by the adapter, never the path
+  string. `make_rel` compares strings and also returns `<outside-project>` for a project file
+  written through an alias or a case variant; `make_rel` itself is unchanged. The adapter records
+  the original path of every change it mapped outside and calls `_outside_confirmed`, which returns
+  false on any doubt: `realpath` of the unfolded path (so a link followed by `..` resolves through
+  the link) or its `abspath` lying under the root when compared case-insensitively, a regular file
+  with more than one hard link, or any lookup error other than "does not exist". Being wrong can only produce today's decision
+  (raised) or the undeclared one.
+- `decide` judges a raised input a second time with `declared_max=None` and returns the stricter
+  verdict (block > warn > ok). A declaration means "be more careful", but a raised risk can open the
+  phase-writing exemption or skip the L0 content warning branch and so end up looser. This
+  guarantees "declared ≥ undeclared" for every input; it does not compare one declared level with
+  another.
+- Declared levels are not ordered against each other, and the gap can open a block, not only a
+  warning. The cause is the intended deadlock exemption: a write that changes only phase documents
+  listed in that level's `pre_implementation_required` skips the missing-phase check. A higher
+  level with a longer list therefore exempts more. With a monotonic profile (L1 ⊆ L2 ⊆ L3, the
+  default template) only **writing a phase document that becomes required at the higher level**
+  can pass under the higher declaration while the lower one warns or blocks; source edits are not
+  affected, because they never get the exemption and the higher level's missing list contains the
+  lower one's. With a non-monotonic profile (a higher level requires less) the higher declaration
+  can also let through a source edit the lower one blocks. `sage validate` warns about such a
+  profile (`validate.pre_implementation_not_monotonic`); the gate itself is unchanged. Neither case
+  is looser than the undeclared verdict.
+
+### Unconfirmed outside paths
+- `make_rel` maps a project file written through a link, a case variant or a short name to
+  `<outside-project>`, so path risk rules and cycle checks are not applied to it. The mapping is not
+  changed. The adapter lists every original path it mapped outside for which `_outside_confirmed`
+  is false in `event["outside_unconfirmed"]`.
+- `decide` turns a passing verdict into `warn_path_outside_unconfirmed` (exit 0, the file is the
+  first such path, the reason lists up to three). A warning or a block keeps its key and exit code
+  and only carries `outside_unconfirmed`; `gate_text` then appends one extra line naming the paths
+  to whatever it renders, because a merged warning keeps only the first key and some keys do not
+  print their reason.
+- When an active override bypasses a block, the override notice goes to stderr only, which does not
+  reach the model on a passing call. The adapter therefore renders the same warning through the
+  non-blocking context channel (`hookSpecificOutput.additionalContext`) on both hosts.
+- It is a warning, not a block. A real outside path that cannot be confirmed (a hard link, a folder
+  that differs only in case, a lookup error) is warned about but never stopped. If the configured
+  project path is itself an alias, every edit warns — the message says to check that setting.
+  The post-tool logger and the other hooks that call `make_rel` are unchanged.
+- A risk-gated block (`block_cycle_binding`, `block_cycle_closed`,
+  `block_document_language_conflict`, `block_cycle_risk_declaration`, `block_phase_incomplete`,
+  `block_l3_no_plan`, `block_l3_strategy_unresolved`, `block_l3_review_evidence`,
+  `block_fast_cycle_terminal`) that exists only because of the declaration — computed risk
+  `none`/`L0`, not a phase write, and the undeclared verdict does not block — carries
+  `declaration_only: true` and `declared_risk`. The message adds both ways forward: clear the
+  declaration, or follow the guidance if the work really is at that level. Reconciliation keeps its
+  own source-aware hint.
+
 ## algorithm_delta — the strategy slot
 "Matching the L3 review doc" is a genuinely different algorithm per runtime, so both are preserved:
 - sage_harness/hooks/strategies/pre_implementation_gate/claude_grep_first.py (grep-first)
@@ -65,7 +122,13 @@ profile.pdca: { enabled, phases[{id,glob}], pre_implementation_required{L1,L2,L3
   snapshot.phase_docs = {id: [{path, content, recent}]}.
 - `cycle_binding` verifies that the markdown basename actually matching a configured phase glob
   and the `Cycle-Stem` declared exactly once are identical. The declaration must sit outside a
-  fenced code block. A file under a phase directory but outside the glob is not a cycle document.
+  fenced code block. As in CommonMark, a closing fence may be followed only by spaces or tabs: a
+  line such as ```` ```python ```` or ```` ``` end ```` inside an open block is content and does
+  not close it, and a Unicode space (U+00A0) after the fence does not count as a space. Lines end
+  only at LF, CR or CRLF; U+2028, U+0085, VT and FF are characters inside a line. The same
+  rule is shared by `Final Status`, Done Criteria and Fast evidence parsing, so the hook,
+  `sage review-loop`, `sage fast-cycle` and CI authority read the same lines. Fences inside list
+  items or block quotes and the opening fence's info string are not checked. A file under a phase directory but outside the glob is not a cycle document.
   A recursive `**` is read identically as zero or more path segments at the start, middle or end.
   A full Write or Add must contain the declaration; a partial Edit or Update may use the snapshot
   identity only when it does not touch the existing declaration. A deleted, duplicated or
@@ -101,8 +164,10 @@ profile.pdca: { enabled, phases[{id,glob}], pre_implementation_required{L1,L2,L3
      every gate, so the point is to stop new work on a long-lived branch from proceeding quietly
      with no plan document. The report document must be stem-bound: counting any 06 at all would
      make every stem look closed the moment the repository contains a single 06.
-     **There is exactly one exemption: at least one change, and all of them phase documents** —
-     correcting the 05 or 06 of a finished cycle is normal work. The binding origin is not an
+     **There is exactly one exemption: at least one change, and all of them phase documents or
+     closing artifacts** — correcting the 05 or 06 of a finished cycle, or writing the write-back
+     summary between 06 and `sage cycle clear`, is normal work. The missing-phase exemption keeps
+     the phase-documents-only predicate. The binding origin is not an
      exemption condition: an env declaration died with the shell and was harmless, but a file
      declaration survives across sessions, so a stale one would switch this block off entirely.
      Writing the exemption with `any()` would let a single documentation line mixed into a source
@@ -133,7 +198,9 @@ profile.pdca: { enabled, phases[{id,glob}], pre_implementation_required{L1,L2,L3
      evidence. Modifying 06 and another phase in the same change cannot be verified against the
      pre-write snapshot, so it is blocked and separate writes are required.
   4. Mandatory phases before implementation, on the exact current stem: a gap is
-     block_phase_incomplete at L2/L3 and warn_phase_incomplete at L1.
+     block_phase_incomplete at L2/L3 and warn_phase_incomplete at L1. Keep
+     `pre_implementation_required` monotonic (L1 ⊆ L2 ⊆ L3, an omitted level counts as empty);
+     `sage validate` warns otherwise.
   5. The Done Criteria gate: `off` or a missing key skips for backward compatibility, `advisory`
      WARNs and `enforce` BLOCKs. A Phase 00-only repair does not block itself. Mixing Phase 00 and
      01–06 into the same write makes the post-write revision unprovable from the pre-write
@@ -160,6 +227,15 @@ physical documents for the same stem also exist the ambiguity is not hidden. A s
 requires a clean active run in the strict-chain `.sage/fast_cycle.jsonl`, the exact stem, and a
 bound plan hash. A missing or corrupt audit, and a terminal or mismatched state, are blocked with
 `block_fast_cycle_audit` and are not overridable.
+
+When no run of this stem is active and the run named by `Fast-Audit-Run` is terminal with the same
+stem, that run goes through the same integrity and plan checks as an active one (opener contract,
+`chain_ok is True`, plan consistency, actual risk, policy floor); any failure is still
+`block_fast_cycle_audit`. A run that passes them is then split: closed as APPROVED after an APPROVED
+review, on a completed cycle, with only phase documents or closing artifacts changed — this returns
+the run state, so the composite 00 still covers the required phases; anything else (aborted, cycle
+not complete, other changes) is `block_fast_cycle_terminal`, not overridable, because an aborted
+cycle is not complete and the closed-cycle block does not stand in front of its source edits.
 
 A source edit under an active Fast run emits `warn_fast_cycle` without lowering the actual risk.
 Only the standard L3 pre-review strategy is replaced by the Fast review contract; the acceptance,

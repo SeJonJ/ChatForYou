@@ -77,6 +77,23 @@ blocked because they have no independent gate oracle. Project values belong to
 `sage/project-profile.yaml`, and rules belong to the conventions, critical-domain and
 project-local documents.
 
+## Project agent and skill renders: drafts placed by the CLI (exit 2)
+A project agent or skill render (`.claude|.codex/agents/<id>.md`, `.claude|.codex/skills/<id>/…`)
+is blocked like any other artifact, but its exit is different from a hook's. A hook's spec
+produces its artifacts, so "edit the spec and regenerate" works. An agent or skill goes the other
+way: `sage generate` extracts the spec from the two renders and overwrites it, so editing the spec
+never creates a render, and with only "edit the spec" as guidance `/sage-asset` had no way out —
+the guard blocked the render, generate failed on the missing render and pointed back to
+`/sage-asset`.
+
+The block itself does not change. The guard reports `guard.interpretive_render` with the asset
+kind and id, and points to drafts at `sage/asset_drafts/<kind>s/<id>/claude-render.md` and
+`codex-render.md` — outside every guarded pattern, so editing tools may write them — followed by
+`sage generate --kind <kind> --id <id> --from-drafts --write`, which places both renders through
+the CLI. The draft names must not be `claude.md`/`codex.md`: those are framework-document names
+and are blocked anywhere. On a codex host the placement still runs inside the sandbox, which keeps
+the workspace `.codex/` read-only; that is a host permission, not an exemption this guard grants.
+
 ## Scope note
 - The guard covers the agents, hooks and skills directories.
 - Guarding settings.json and hooks.json (the registration artifacts) is deferred, because

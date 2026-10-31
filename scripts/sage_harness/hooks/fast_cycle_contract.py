@@ -11,6 +11,16 @@ _HEADING = re.compile(r"(?m)^## Phase (00|01|02|03|04)\b.*$")
 _META = re.compile(r"(?m)^([A-Za-z][A-Za-z0-9 -]*):[ \t]*(.*?)\s*$")
 _RUN_ID = re.compile(r"^fc-[a-f0-9]{12}$")
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+# CommonMark 의 줄 끝은 LF·CR·CRLF 뿐이다(`str.splitlines()` 는 U+2028 등도 나눈다).
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def _markdown_lines(content):
+    """줄 끝을 LF·CR·CRLF 로만 나눈 줄 목록. 맨 끝 줄바꿈 뒤의 빈 조각은 `splitlines()` 처럼 뺀다."""
+    lines = _LINE_BREAK.split(content or "")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 @dataclass(frozen=True)
@@ -232,6 +242,44 @@ def parse_fast_plan(content: str) -> tuple[FastPlan | None, list[str]]:
     return FastPlan(metadata, sections, content), issues
 
 
+VIRTUAL_PHASES = ("01", "02", "03", "04")
+
+
+def virtual_phase_docs(phase00_docs, *, stem=None) -> tuple[dict, list[str]]:
+    """Fast 합본 00 을 가상 01~04 문서로 펼친다. 반환: `({phase: [doc, ...]}, issues)`.
+
+    06 게이트·CI 권위 판정·리뷰 close 가 **같은 문서**를 봐야 한다. 펼치는 방식이 자리마다 따로
+    있으면 한쪽은 Fast 문서를 읽고 다른 쪽은 「문서 없음」으로 거부한다 — 리뷰 close 만 이 펼치기를
+    거치지 않아 `next` 가 권한 잔여 승인을 `close` 가 막았다.
+
+    `stem` 을 주면 그 사이클의 합본만 본다. 다른 사이클의 깨진 합본이 이 사이클의 판정을 막으면
+    안 된다. 파싱 문제가 있는 합본은 펼치지 않고 문제를 돌려준다 — 오류를 삼킬지는 호출부가 정한다.
+
+    가상 문서에는 `path`·`content`·`virtual_fast` 와, 원본에 있으면 `recent` 만 싣는다. 원본 dict 를
+    통째로 복사하면 호출부가 붙인 다른 키가 가상 문서로 새어 나간다.
+    """
+    out, issues = {}, []
+    for doc in phase00_docs or []:
+        plan, parse_issues = parse_fast_plan(doc.get("content") or "")
+        if plan is None or plan.metadata.get("Cycle-Mode") != "FAST":
+            continue
+        if stem is not None and plan.metadata.get("Cycle-Stem") != stem:
+            continue
+        if parse_issues:
+            issues.extend(parse_issues)
+            continue
+        header = (f"Cycle-Stem: `{plan.metadata.get('Cycle-Stem', '')}`\n"
+                  f"Risk Level: {plan.metadata.get('Risk Level', '')}\n")
+        for phase in VIRTUAL_PHASES:
+            virtual = {"path": doc.get("path"),
+                       "content": header + plan.sections.get(phase, "")}
+            if "recent" in doc:
+                virtual["recent"] = doc["recent"]
+            virtual["virtual_fast"] = True
+            out.setdefault(phase, []).append(virtual)
+    return out, issues
+
+
 def open_issues(plan: FastPlan, *, stem: str, level: str, lens_count: int,
                 reason: str, minimum_rounds: int, lenses: list[str],
                 require_pending_phase4: bool = True) -> list[str]:
@@ -320,13 +368,16 @@ def evidence_marker_issues(content: str, *, fast_run_id: str, loop_run_id: str) 
     in_fence = False
     fence_char = ""
     fence_len = 0
-    for raw in (content or "").splitlines():
+    for raw in _markdown_lines(content):
         match = _FENCE.match(raw)
         if match:
             token = match.group(1)
             if not in_fence:
                 in_fence, fence_char, fence_len = True, token[0], len(token)
-            elif token[0] == fence_char and len(token) >= fence_len:
+            # CommonMark: only spaces or tabs may follow a closing fence, so
+            # an example ```python line inside a block keeps it open.
+            elif (token[0] == fence_char and len(token) >= fence_len
+                    and not raw[match.end():].strip(" \t")):
                 in_fence = False
             continue
         if in_fence or raw.startswith("\t") or re.match(r"^ {4,}", raw):

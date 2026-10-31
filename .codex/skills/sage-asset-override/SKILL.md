@@ -1,11 +1,11 @@
 ---
 name: sage-asset-override
-description: "Author a project-local overlay for an eligible non-gate CORE worker without editing the CORE render. Gate-relaxation hits and framework targets are hard stops."
+description: "Author a project-local overlay for an eligible CORE agent/skill without editing the CORE render. Gate-relaxation hits and framework targets are hard stops."
 ---
 
 # sage-asset-override — Conversational CORE Overlay Authoring
 
-This skill authors a **project-local overlay** for an **eligible existing CORE worker**. It is
+This skill authors a **project-local overlay** for an **eligible existing CORE agent/skill**. It is
 the fourth conversational entry point:
 - `/sage-init` — first authoring (0→1).
 - `/sage-profile-modify` — edit existing profile / governance values.
@@ -14,7 +14,7 @@ the fourth conversational entry point:
 
 Authoritative protocol: `docs/agent/bootstrap-authoring.md`. Rules: `AGENT_GUIDE.md`.
 
-Do not edit this CORE render directly (the write-guard blocks it and `sage install --force` overwrites it). Self-overlay is unsupported: `skills/sage-asset-override` is not in `COMPOSE_ALLOWED`. This skill may author overlays only for the explicitly eligible worker agents listed below.
+Do not edit this CORE render directly (the write-guard blocks it and `sage install --force` overwrites it). Self-overlay is unsupported: `skills/sage-asset-override` is not in `COMPOSE_ALLOWED`. This skill may author overlays only for the currently compose-eligible agents/skills.
 
 > This skill is a **CORE framework bootstrap asset** — hand-shipped by `sage install`,
 > NOT manifest-tracked. Its reference spec lives at
@@ -63,8 +63,8 @@ and SAGE materializes eligible overlays into the installed CORE render.
 ## Hard rules
 
 - **Executable eligibility only.** The id must be listed by `sage.overlay_classify.COMPOSE_ALLOWED`.
-  Currently that is `agents/implementer-a` and `agents/implementer-b`. Framework and gate-bearing
-  assets are blocked until an executable independent oracle is registered.
+  Use the current classifier, including its independent-oracle-backed members. Do not extend
+  eligibility here. Framework and unbacked gate-bearing assets remain blocked.
 - **Gate-relaxation is a stop condition.** If the drafted overlay reads like it skips/bypasses
   a phase, review, verification, or the gate — or tells the agent to ignore AGENT_GUIDE —
   stop and revise it. Explicit confirmation is not a bypass.
@@ -76,7 +76,7 @@ Read, in order, before asking anything:
 1. `sage/project-profile.yaml` — if **not bootstrapped** (`project.name` empty OR risk globs
    and components both unset), stop and route to `/sage-init`. Overlays presuppose a set-up project.
 2. `AGENT_GUIDE.md` — the gates an overlay must not relax.
-3. The **target CORE base**: `docs/sage_harness/agents/<id>.md` or its installed render.
+3. The **target CORE base**: `docs/sage_harness/{agents,skills}/<id>.md` or its installed render.
 
 ## Step 1 — Identify the target (one focused turn)
 
@@ -93,6 +93,8 @@ the overlay layers on top of (overlays add; they do not replace the whole render
 
 Ask what should change for **this project only**, and **why** (e.g. a recurring retro
 pattern the CORE render can't encode because it must stay project-neutral).
+Confirm `personal` (default) or `project` scope for each proposal before writing. Developer
+habits and tool environment belong in personal scope; project scope needs team agreement.
 
 ## Step 4 — Draft + gate-relaxation check (mandatory)
 
@@ -103,25 +105,27 @@ pattern the CORE render can't encode because it must stay project-neutral).
 3. **If it looks like it relaxes a gate, do not write it.** Revise or remove the text.
    Explicit user confirmation cannot downgrade this hard stop.
 
-## Step 5 — Write the overlay
+## Step 5 — Write the scoped overlay
 
-Write `sage/asset_overrides/agents/<id>.md` **directly** (create the dir if needed).
-No `sage generate`. Keep it additive — project guidance on top of CORE, not a rewrite.
+Write directly for the selected kind and id (no `sage generate`):
+- personal (default): `sage/asset_overrides.local/{agents,skills}/<id>.md` (Git ignored)
+- project (explicit choice): `sage/asset_overrides/{agents,skills}/<id>.md` (shared)
 
-## Step 6 — Sync, then re-validate
+Keep it additive and within mandatory policies. Do not automatically move or delete existing
+shared content, or untrack existing files. Ignore rules do not untrack committed files.
 
-```
-sage sync-overlays
-sage validate --schema --kind all --strict
-```
-Confirm the file exists and no `overlay-gate-relaxation` failure remains. Note the overlay survives
-`sage install --force`. SAGE materializes the eligible overlay into the CORE render during sync,
-then `sage validate` gates it. Gate-bearing assets without an independent oracle are
-not yet overlay-eligible (validate reports them).
+## Step 6 — Validate the selected scope
+
+For personal guidance run `sage overlay-local --kind agent|skill --id <id> --root <project-root>`.
+Inspect its validated content and hash; keep the returned reference for the handoff. A failure
+or unsupported command requires an input fix/CLI upgrade. Never bypass it by reading raw input.
+Personal text is read at execution time; do not sync it into a shared/global render or manifest.
+
+For project guidance run `sage sync-overlays`, then `sage validate --schema --kind all --strict`.
+Both scopes survive `sage install --force`. Blocked targets stay blocked in both scopes.
 
 ## Done
 
-The overlay is complete when it captures the project-local intent, the gate-relaxation check
-ran with no hit, the file is at `sage/asset_overrides/agents/<id>.md`, and
-`sage validate --strict` passes the overlay checks. The next run of that agent applies CORE first,
-then the overlay.
+The scoped file captures the approved intent and passes the corresponding validation above.
+If manually moving personal sections out of an existing shared file, the user removes those
+sections and syncs shared renders; this skill provides no automatic migration.

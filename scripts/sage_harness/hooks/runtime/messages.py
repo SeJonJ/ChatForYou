@@ -193,6 +193,8 @@ def _gate_record(decision, profile, language=DEFAULT_LANGUAGE):
         "block_phase_incomplete": ("BLOCK", risk, True,
                              _phase_incomplete_hint(decision, language)),
         "warn_phase_incomplete": ("WARN", "L1", False, None),
+        # 확인 안 된 밖 경로. 경고만 낸다 — 경로 판정은 그대로라 다음 행동은 hint 하나다.
+        "warn_path_outside_unconfirmed": ("WARN", "", True, None),
         "block_cycle_risk_declaration": (
             "BLOCK", "PDCA", True,
             _cycle_risk_declaration_hint(decision, language)),
@@ -237,6 +239,7 @@ def _gate_record(decision, profile, language=DEFAULT_LANGUAGE):
         "warn_report_with_l3_waiver": ("WARN", "PDCA", False, None),
         "block_report_waiver_audit_failure": ("BLOCK", "PDCA", False, None),
         "block_fast_cycle_audit": ("BLOCK", "FAST", False, None),
+        "block_fast_cycle_terminal": ("BLOCK", "FAST", False, None),
         "warn_fast_cycle": ("WARN", risk, False, None),
         "block_cycle_stem_audit_failure": ("BLOCK", "PDCA", False, None),
         "block_gate_runtime_error": ("BLOCK", "PDCA", False, None),
@@ -294,6 +297,20 @@ def gate_text(decision, profile, runtime, language=DEFAULT_LANGUAGE):
     if hint:
         hint = hint.replace("{rv}", _review_cmd(runtime))
         line += (" | " if runtime == "codex" else "\n  → ") + hint
+    if sev == "BLOCK" and decision.get("declaration_only"):
+        # 선언 때문에만 생긴 차단이다. 두 갈래를 함께 준다 — 기본 템플릿은 위험 glob 이 비어
+        # 있어 진짜 작업도 계산 위험도가 0이므로, 해제만 권하면 정당한 선언을 지우게 만든다.
+        declared = _i18n.frag(language, "hint.declaration_only").replace(
+            "{level}", str(decision.get("declared_risk") or ""))
+        line += (" | " if runtime == "codex" else "\n  → ") + declared
+    unconfirmed = decision.get("outside_unconfirmed") or []
+    if unconfirmed and decision.get("message_key") != "warn_path_outside_unconfirmed":
+        # 다른 경고·차단과 겹친 경로 진단. 판정 키는 그쪽 것이라 여기서 따로 붙인다.
+        paths = ", ".join(str(path) for path in unconfirmed[:3])
+        if len(unconfirmed) > 3:
+            paths += f" (+{len(unconfirmed) - 3})"
+        line += ((" | " if runtime == "codex" else "\n  → ")
+                 + _i18n.frag(language, "gate.outside_unconfirmed").replace("{paths}", paths))
     if sev == "BLOCK":
         # 차단 뒤에는 항상 다음에 칠 것이 있어야 한다. hint 는 "무엇이 잘못됐나" 를 설명하고
         # `Next:` 는 "지금 무엇을 치면 되나" 를 준다 — 둘은 다른 물건이다. code 도 함께 낸다:
@@ -311,22 +328,23 @@ def gate_text(decision, profile, runtime, language=DEFAULT_LANGUAGE):
     return f"{notice}\n{line}" if notice else line
 
 
-def declared_capture_text(level, runtime):
-    core = f"[Risk 선언 포착] 이번 세션 작업 레벨: {level} — 소스 수정 시 해당 레벨 게이트가 적용됩니다."
+def declared_capture_text(level, runtime, language=DEFAULT_LANGUAGE):
+    # 잡힌 사실과 지우는 법을 함께 낸다 — 자연어 포착은 오포착이 날 수 있고, 그때 사용자가 볼
+    # 수 있는 것은 이 한 줄뿐이다.
+    core = _i18n.frag(language, "capture.declared").replace("{level}", str(level))
     return core if runtime == "codex" else f"ℹ️  {core}"
 
 
-def declared_ambiguous_text(runtime):
-    core = ("[Risk 선언 미포착] 여러 레벨이 함께 언급돼 선언으로 보지 않았습니다 — "
-            "적용하려면 레벨 하나만 적어주세요.")
+def declared_ambiguous_text(runtime, language=DEFAULT_LANGUAGE, key="risk_declaration_ambiguous"):
+    # 포착하지 않은 이유 두 가지 — 여러 레벨이 함께 나옴, 표식이 코드 블록 뒤에 있음.
+    core = _i18n.frag(language, "capture.marker_position" if key == "risk_declaration_marker_position"
+                      else "capture.ambiguous")
     return core if runtime == "codex" else f"ℹ️  {core}"
 
 
-def declared_clear_text(runtime, existed=True):
+def declared_clear_text(runtime, existed=True, language=DEFAULT_LANGUAGE):
     # 지울 것이 없었는데 "지웠습니다" 로 안내하면 사용자가 원인 파악에 헤맨다.
-    core = ("[Risk 선언 해제] 이번 세션의 위험도 선언을 지웠습니다"
-            if existed else "[Risk 선언 해제] 이번 세션에는 위험도 선언이 없었습니다")
-    core += " — 이후 판정은 경로·내용 계산만 씁니다."
+    core = _i18n.frag(language, "capture.cleared" if existed else "capture.clear_none")
     return core if runtime == "codex" else f"ℹ️  {core}"
 
 

@@ -168,6 +168,9 @@ or infer N/A reasons as part of a profile change.
 | `review_loop.enabled` → false | Phase 05 reverts to single-pass review |
 | lower `review_loop.max_iterations[L3]` | fewer rework rounds before BLOCKED (e.g. 1 ≈ single-pass) |
 | lower `review_loop.budget_tokens` | the loop may BLOCK earlier on budget |
+| change `review_loop.max_cycle_rounds` | the cycle (every run of one stem) asks the user (`ASK CYCLE_CAP`) sooner or later; absent = default L3 5 · L2 3. It asks, it never auto-approves |
+| change `review_loop.converge_on` to `blocking` | runs opened afterwards approve once no blocking finding is left (`CONVERGED_RESIDUAL`, recorded as reduced assurance `REDUCED_BY_POLICY`) and stop on every critical P2 for the developer's decision; non-blocking findings get local fixes only. Runs already open keep `all`. Opt-in — confirm the user wants lower assurance for faster convergence |
+| change `review_loop.critical_p2` | which P2 categories stop the loop for a developer decision under `blocking`; absent = the six engine defaults. A non-empty list of lowercase ids |
 | narrow `review_loop.severity_block` | lower-severity findings no longer block APPROVED |
 | `review_loop.early_completion.enabled` → true | the loop may close before convergence on a user authorization; the verdict stays `APPROVED` but carries `Review-Assurance: REDUCED_BY_USER_AUTHORIZATION` (loosened) |
 | raise/lower `early_completion.minimum_completed_rounds` | changes how few rounds an authorized early close may stand on (engine floor 1) |

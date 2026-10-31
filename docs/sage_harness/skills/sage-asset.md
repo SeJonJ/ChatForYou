@@ -31,16 +31,18 @@ assets), then hand off to `sage generate` to extract and register.
    convention_doc), runtime_bindings; for hook also the deterministic check logic.
 4. Author the source:
    - hook: spec docs/sage_harness/hooks/<id>.md + sage_harness/hooks/<id>_core.py
-   - agent/skill: BOTH renders — claude (.claude/agents/<id>.md | .claude/skills/<id>/SKILL.md)
-     AND codex (.codex/agents/<id>.md | .codex/skills/<id>/SKILL.md), semantically equivalent.
+   - agent/skill: BOTH renders as drafts — sage/asset_drafts/<kind>s/<id>/claude-render.md
+     AND codex-render.md, semantically equivalent. The render paths are write-guarded; for
+     modify, copy the current renders into the drafts first.
 5. Handoff: new hook → `sage generate --kind hook --id <id> --write --target both`;
-   agent/skill → `sage generate --kind <kind> --id <id> --write`
-   (skill that codex must discover: add `--deploy-codex`).
+   agent/skill → `sage generate --kind <kind> --id <id> --from-drafts --write`
+   (modify: add `--replace`; skill that codex must discover: add `--deploy-codex`; on a
+   codex host run it with approval outside the sandbox, which keeps `.codex/` read-only).
 6. Verify: `sage validate --check --schema --kind all`; never bypass a FAIL.
 
 ## advisory_scope
-- role_boundary: does not edit generated artifacts to change assets (edit spec/render
-  then regenerate); does not bypass validate FAIL; does not author single-runtime
+- role_boundary: does not edit generated artifacts to change assets (edit the hook spec,
+  or write agent/skill render drafts, then regenerate); does not bypass validate FAIL; does not author single-runtime
   interpretive assets (codex included — both renders required)
 - hook contract: lowercase kebab id, structured frontmatter bindings for both hosts,
   `CONTRACT_VERSION` in the core, and first registration with `--target both`

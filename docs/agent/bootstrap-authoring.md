@@ -388,10 +388,15 @@ The same loop applies to introducing a new hook/agent/skill after bootstrap, and
 the **`/sage-asset` skill** drives it conversationally:
 - **hook**: author the spec under `docs/sage_harness/hooks/<id>.md` + the canonical
   `sage_harness/hooks/<id>_core.py`, then `sage generate --kind hook --write`.
-- **agent/skill** (interpretive): author BOTH runtime renders (`.claude/...` and
-  `.codex/...` — codex included), then `sage generate --kind <agent|skill> --id <id>
-  --write` reverse-extracts spec+claims and registers them (render_hash for both
-  runtimes). It fails closed if either render is missing.
+- **agent/skill** (interpretive): author BOTH runtime renders — codex included — as
+  drafts at `sage/asset_drafts/<kind>s/<id>/claude-render.md` and `codex-render.md`.
+  The render paths themselves are write-guarded. Then `sage generate --kind <agent|skill>
+  --id <id> --from-drafts --write` extracts spec+claims from the drafts, places both
+  renders (both or neither), registers them (render_hash for both runtimes); the drafts stay
+  until you delete them. It fails closed if either draft is missing, the id is a CORE asset, or a
+  render already exists — to modify, copy the current renders into the drafts and add
+  `--replace`. On a codex host, run the placement with approval outside the sandbox,
+  which keeps `.codex/` read-only.
   - For a skill codex must discover, add `--deploy-codex` (copies the repo-canonical
     `.codex/skills/<id>/SKILL.md` to `$CODEX_HOME/skills/<prefix>-<id>/`; the manifest
     still tracks only the repo canonical). codex-host + non-empty `project.prefix` required.

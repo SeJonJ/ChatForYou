@@ -20,6 +20,27 @@ them working in the belief that they declared a level. A wrong capture is cleare
 with `위험도 선언 해제` (or `risk 선언 취소`). Clearing runs through the same sentence filter, so a
 question (`해제해야 하나요?`) or a negation (`해제하지 마`) does not trigger it.
 
+An exact one-line marker is an additional channel: a whole line `SAGE-RISK: L0`–`L3` or
+`SAGE-RISK: clear` (case-insensitive, up to three leading spaces), **before the first code fence** in
+the prompt and not on an indented code line. Any line containing a fence shape (three or more
+backticks or tildes) ends the region where markers are read; nothing after it is tracked. Judging
+where a fence closes — character, length, trailing text, list and quote context, relative
+indentation — produced a new counterexample in every review round, and getting it wrong runs a
+pasted example as a declaration or a clear. A marker is normally written at the top, and the
+natural-language rules still read the whole prompt — unless the prompt contains a marker line in a
+position that is not read: then nothing changes and the user is told to move it to the top
+(`risk_declaration_marker_position`). Someone who wrote a marker meant the marker channel; falling
+back to the natural-language rules would let an example sentence inside the code block clear or
+lower the declaration. When a prompt has a marker, the natural-language rules are not consulted; two
+different marker values are rejected as ambiguous.
+
+The prompt a host passes to UserPromptSubmit is not always typed by a person: Claude Code hands a
+subagent's final report back as a prompt wrapped in `<agent-message …>` … `</agent-message>`.
+Envelopes at the **start** of the prompt (`agent-message`, `task-notification`) are removed before
+anything is judged; the closing tag must sit at column zero, which the host's indentation of the
+report body reserves for the host. An unclosed leading envelope makes the whole prompt a no-op. A tag
+anywhere else is not an envelope, so a person's example in a code block does not erase their marker.
+
 At the start of UserPromptSubmit handling this also calls the write-once helper of
 `session-start-snapshot`, so that a missing or delayed SessionStart can fall back to the first
 prompt as the Phase 06 baseline. It takes an exclusive first-opportunity claim: it never
@@ -43,7 +64,8 @@ sage_harness/hooks/capture_declared_risk_core.py  →  decide(event) -> decision
 - Shared algorithm: two risk-level regex patterns; rejection on strong question or hypothetical
   markers combined with a sentence-final ending; rejection of multiple declared levels; the clear
   pattern with an immediately following negation excluded; session sanitize; a two-day cleanup
-  declaration; state {level, ts, excerpt}.
+  declaration; state {level, ts, source(explicit|natural), excerpt}. Readers use only `level`, so a
+  state file written before `source` existed stays valid.
 - Sentence-final endings (`나요`, `가요` and the like) are only recognised at the **end** of a
   sentence. Matching them without that boundary catches ordinary verbs such as `지나가요` and
   throws away a legitimate declaration in the same sentence.
@@ -59,6 +81,8 @@ sage_harness/hooks/capture_declared_risk_core.py  →  decide(event) -> decision
 - Standard decision: { kind, action(capture|clear|noop), level, session_key, state_file, state, cleanup, exit_code, message_key }
 - action=clear: the adapter deletes state_file, ignoring its absence. The core never touches files.
 - message_key=risk_declaration_ambiguous: the ambiguity rejection notice. The state file is left alone.
+- message_key=risk_declaration_marker_position: a marker line sits after the first code fence. The
+  state file is left alone and the position notice is rendered.
 - Three adapter responsibilities:
   1. Extract input: runtime stdin JSON → the standard event.
   2. Render output: claude plain text, codex hookSpecificOutput JSON. The message text is part of
@@ -87,6 +111,9 @@ sage_harness/hooks/tests/test_capture_declared_risk.py
   precedence over capture.
 - Ambiguity notice: shown on both runtimes, and not shown for unrelated prompts or hypothetical
   questions.
+- test_declared_risk_scope.py: host envelopes (the observed `agent-message` shape, an indented fake
+  closing tag, an unclosed envelope, a tag outside the start), the explicit marker and the
+  before-the-first-fence rule (including the list, quote and over-indented fence counterexamples), the recorded source, and the capture, ambiguity and clear notices naming both ways out.
 - Adapter end-to-end exit, state and output snapshots for claude and codex.
 - Timestamp determinism by pinning now_utc through SAGE_NOW_UTC.
 - test_hook_runtime.py and test_stop_compliance_report.py cover the UserPromptSubmit baseline
